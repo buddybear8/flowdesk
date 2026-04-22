@@ -2,12 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { buildFlowAlerts, computeFlowStats } from "@/lib/mock/flow-alerts";
 import type { FlowAlert } from "@/lib/types";
 
+const ALLOWED_TYPES = ["ALL", "SWEEP", "FLOOR", "BLOCK", "SINGLE"] as const;
+const ALLOWED_SIDES = ["ALL", "CALL", "PUT"] as const;
+const ALLOWED_CONFS = ["ALL", "HIGH", "MOD", "LOW"] as const;
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const type = searchParams.get("type");
-  const side = searchParams.get("side");
-  const minPrem = Number(searchParams.get("minPrem") ?? 0);
-  const conf = searchParams.get("conf");
+  const rawType = searchParams.get("type") ?? "ALL";
+  const type = ALLOWED_TYPES.includes(rawType as typeof ALLOWED_TYPES[number]) ? rawType : "ALL";
+  const rawSide = searchParams.get("side") ?? "ALL";
+  const side = ALLOWED_SIDES.includes(rawSide as typeof ALLOWED_SIDES[number]) ? rawSide : "ALL";
+  const minPrem = Math.max(0, Math.min(1_000_000_000, Number(searchParams.get("minPrem") ?? 0)));
+  if (isNaN(minPrem)) {
+    return NextResponse.json({ error: "Invalid minPrem" }, { status: 400 });
+  }
+  const rawConf = searchParams.get("conf") ?? "ALL";
+  const conf = ALLOWED_CONFS.includes(rawConf as typeof ALLOWED_CONFS[number]) ? rawConf : "ALL";
   if (process.env.USE_MOCK_DATA === "true") {
     let alerts: FlowAlert[] = buildFlowAlerts();
     if (type && type !== "ALL") alerts = alerts.filter(a => a.type === type);

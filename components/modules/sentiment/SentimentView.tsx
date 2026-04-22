@@ -661,8 +661,7 @@ function IndividualView({ analyst }: { analyst: AnalystDisplayRow }) {
               </div>
               <div
                 style={{ fontSize: 11, color: "var(--color-text-secondary)", lineHeight: 1.45 }}
-                dangerouslySetInnerHTML={{ __html: p.body.replace(/<span class="cashtag">/g, `<span style="color:#185FA5;font-weight:500">`) }}
-              />
+              >{renderPostBody(p.body)}</div>
               <div style={{ fontSize: 9, color: "var(--color-text-tertiary)", marginTop: 2 }}>{p.likes}</div>
             </div>
           ))}

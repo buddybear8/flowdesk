@@ -4,8 +4,11 @@ import type { DarkPoolPrint } from "@/lib/types";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const rankMin = Number(searchParams.get("rankMin") ?? 1);
-  const rankMax = Number(searchParams.get("rankMax") ?? 100);
+  const rankMin = Math.max(1, Math.min(10000, Number(searchParams.get("rankMin") ?? 1)));
+  const rankMax = Math.max(1, Math.min(10000, Number(searchParams.get("rankMax") ?? 100)));
+  if (isNaN(rankMin) || isNaN(rankMax) || rankMin > rankMax) {
+    return NextResponse.json({ error: "Invalid rankMin/rankMax" }, { status: 400 });
+  }
   const hideETF = searchParams.get("hideETF") === "true";
   const regularHour = searchParams.get("regularHour") !== "false";
   const extendedHour = searchParams.get("extendedHour") !== "false";
