@@ -3,9 +3,10 @@
 import { usePathname, useSearchParams } from "next/navigation";
 
 const MODULES: Record<string, { label: string; tabs: string[] }> = {
-  watches:    { label: "Daily watches",     tabs: ["Hit list", "Criteria config"] },
-  sentiment:  { label: "Sentiment tracker", tabs: ["Overview", "Analyst intelligence"] },
-  gex:        { label: "Options GEX",       tabs: ["GEX overview", "By strike", "By expiry", "Vanna & charm", "Key levels"] },
+  watches:      { label: "Daily watches",     tabs: ["Hit list", "Criteria config"] },
+  sentiment:    { label: "Sentiment tracker", tabs: ["Overview", "Analyst intelligence"] },
+  "market-tide":{ label: "Market Pulse",       tabs: [] },
+  gex:          { label: "Options GEX",       tabs: ["GEX overview", "By strike", "By expiry", "Vanna & charm", "Key levels"] },
   flow:       { label: "Flow alerts",       tabs: ["Live feed", "Sweep scanner", "0DTE flow", "Unusual activity"] },
   darkpool:   { label: "Dark pools",        tabs: ["Ranked feed", "DP levels"] },
   watchlists: { label: "Watchlists",        tabs: [] },

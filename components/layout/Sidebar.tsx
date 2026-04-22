@@ -12,11 +12,12 @@ type NavEntry = {
 };
 
 const MODULES: NavEntry[] = [
-  { href: "/watches",   label: "Daily watches",     icon: "🔥",   badge: { text: "new", variant: "green" } },
-  { href: "/sentiment", label: "Sentiment tracker", icon: "👑" },
-  { href: "/gex",       label: "Options GEX",       icon: "⚡" },
-  { href: "/flow",      label: "Flow alerts",       icon: "📈",   badge: { text: "18", variant: "red" } },
-  { href: "/darkpool",  label: "Dark pools",        icon: "🌊" },
+  { href: "/watches",     label: "Daily watches",     icon: "🔥",   badge: { text: "new", variant: "green" } },
+  { href: "/sentiment",   label: "Sentiment tracker", icon: "👑" },
+  { href: "/market-tide", label: "Market Pulse",       icon: "🌀" },
+  { href: "/gex",         label: "Options GEX",       icon: "⚡" },
+  { href: "/flow",        label: "Flow alerts",       icon: "📈",   badge: { text: "18", variant: "red" } },
+  { href: "/darkpool",    label: "Dark pools",        icon: "🌊" },
 ];
 
 const ACCOUNT: NavEntry[] = [
