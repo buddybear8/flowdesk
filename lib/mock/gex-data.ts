@@ -26,7 +26,7 @@ const TICKERS = {
   TSLA: { ...SPY_RAW, spot: 247.60, atm: 248, cWall: 270, pWall: 230, flip: 244, maxPain: 247, o1Label: "$2.1B", o2Label: "4,200", d1Label: "$140M", d2Label: "280,000" },
 };
 
-export function buildGEXPayload(ticker: string = "SPY"): GEXPayload {
+export function buildGEXPayload(ticker: string = "SPY", _expiry?: string, _strikes?: number): GEXPayload {
   const t = (TICKERS as Record<string, typeof SPY_RAW>)[ticker.toUpperCase()] ?? SPY_RAW;
 
   const strikes: GEXLevel[] = t.strikes.map((strike, i) => {
