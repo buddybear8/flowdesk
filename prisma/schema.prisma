@@ -1,0 +1,78 @@
+// FlowDesk Prisma schema — PRD Section 3.5 (dark pool historical DB)
+// + stored criteria config (Section 6) + sentiment snapshots cache (Section 7).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Dark pool historical prints ----------
+
+model DarkPoolPrint {
+  id            BigInt   @id @default(autoincrement())
+  executedAt    DateTime @map("executed_at")
+  ticker        String   @db.VarChar(10)
+  price         Decimal  @db.Decimal(12, 4)
+  size          Int
+  premium       Decimal  @db.Decimal(16, 2)
+  volume        BigInt?
+  exchangeId    Int?     @map("exchange_id")
+  trfId         Int?     @map("trf_id")
+  isEtf         Boolean  @default(false) @map("is_etf")
+  isExtended    Boolean  @default(false) @map("is_extended")
+  allTimeRank   Int?     @map("all_time_rank")
+  percentile    Decimal? @db.Decimal(5, 2)
+
+  @@index([ticker, executedAt(sort: Desc)])
+  @@index([allTimeRank])
+  @@map("dark_pool_prints")
+}
+
+// ---------- Stored Daily Watches criteria config ----------
+
+model WatchesCriteria {
+  id              Int      @id @default(1)
+  minPremium      Int      @default(700000) @map("min_premium")
+  confFilter      String   @default("HIGH_MOD") @map("conf_filter")
+  execTypes       String[] @default(["SWEEP", "FLOOR", "BLOCK", "SINGLE"]) @map("exec_types")
+  maxAlerts       Int      @default(20) @map("max_alerts")
+  excludeSectors  String[] @default([]) @map("exclude_sectors")
+  requireDp       Boolean  @default(false) @map("require_dp")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("watches_criteria")
+}
+
+// ---------- Sentiment snapshots (pre-computed daily) ----------
+
+model SentimentSnapshot {
+  id           BigInt   @id @default(autoincrement())
+  snapshotAt   DateTime @map("snapshot_at")
+  ticker       String   @db.VarChar(10)
+  mentions     Int
+  velocityPct  Float    @map("velocity_pct")
+  bullPct      Float    @map("bull_pct")
+  bearPct      Float    @map("bear_pct")
+  neutralPct   Float    @map("neutral_pct")
+  sentiment    String   // BULL | BEAR | MIX
+
+  @@index([snapshotAt(sort: Desc)])
+  @@index([ticker])
+  @@map("sentiment_snapshots")
+}
+
+// ---------- Cached AI summaries ----------
+
+model AiSummary {
+  id          BigInt   @id @default(autoincrement())
+  kind        String   // "sentiment" | "gex-{ticker}"
+  generatedAt DateTime @map("generated_at")
+  body        String   @db.Text
+
+  @@index([kind, generatedAt(sort: Desc)])
+  @@map("ai_summaries")
+}

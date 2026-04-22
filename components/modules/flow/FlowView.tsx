@@ -1,0 +1,553 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { clsx } from "clsx";
+import type { FlowAlert } from "@/lib/types";
+
+type FilterState = {
+  type: "ALL" | "CALL" | "PUT";
+  side: "ALL" | "BUY" | "SELL";
+  sent: "ALL" | "BULLISH" | "BEARISH";
+  exec: "ALL" | "SWEEP" | "FLOOR" | "SINGLE" | "BLOCK";
+  prem: "ALL" | "500K" | "1M" | "5M";
+  conf: "ALL" | "HIGH" | "MED";
+  rule: string;
+  ticker: string;
+  sweepOnly: boolean;
+  dte: string;
+};
+
+const INITIAL_FILTER: FilterState = {
+  type: "ALL", side: "ALL", sent: "ALL", exec: "ALL", prem: "ALL", conf: "ALL",
+  rule: "ALL", ticker: "", sweepOnly: false, dte: "ALL",
+};
+
+type SortKey = "time" | "prem" | "size";
+
+function fmtP(v: number): string {
+  const a = Math.abs(v);
+  const s = v < 0 ? "-" : "";
+  if (a >= 1e6) return s + "$" + (a / 1e6).toFixed(1) + "M";
+  if (a >= 1e3) return s + "$" + Math.round(a / 1e3) + "K";
+  return s + "$" + a;
+}
+
+export function FlowView() {
+  const [alerts, setAlerts] = useState<FlowAlert[]>([]);
+  const [filter, setFilter] = useState<FilterState>(INITIAL_FILTER);
+  const [sortKey, setSortKey] = useState<SortKey>("time");
+
+  useEffect(() => {
+    fetch("/api/flow").then(r => r.json()).then(r => setAlerts(r.alerts ?? []));
+  }, []);
+
+  const rows = useMemo(() => {
+    let r = [...alerts];
+    if (filter.type !== "ALL") r = r.filter(x => x.type === filter.type);
+    if (filter.side !== "ALL") r = r.filter(x => x.side === filter.side);
+    if (filter.sent !== "ALL") r = r.filter(x => x.sentiment === filter.sent);
+    if (filter.exec !== "ALL") r = r.filter(x => x.exec === filter.exec);
+    if (filter.conf !== "ALL") r = r.filter(x => x.confidence === filter.conf);
+    if (filter.prem === "500K") r = r.filter(x => x.premium >= 500_000);
+    if (filter.prem === "1M") r = r.filter(x => x.premium >= 1_000_000);
+    if (filter.prem === "5M") r = r.filter(x => x.premium >= 5_000_000);
+    if (filter.sweepOnly) r = r.filter(x => x.exec === "SWEEP");
+    if (filter.rule !== "ALL") r = r.filter(x => x.rule.startsWith(filter.rule));
+    if (filter.ticker) r = r.filter(x => x.ticker.startsWith(filter.ticker));
+    if (sortKey === "prem") r.sort((a, b) => b.premium - a.premium);
+    else if (sortKey === "size") r.sort((a, b) => b.size - a.size);
+    return r;
+  }, [alerts, filter, sortKey]);
+
+  const calls = rows.filter(r => r.type === "CALL").length;
+  const puts = rows.filter(r => r.type === "PUT").length;
+  const totalPrem = rows.reduce((s, r) => s + r.premium, 0);
+
+  return (
+    <div className="flex flex-1 overflow-hidden">
+      {/* LEFT FILTER PANEL */}
+      <FilterPanel filter={filter} setFilter={setFilter} />
+
+      {/* FEED AREA */}
+      <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
+        {/* Stats bar */}
+        <div
+          className="flex items-center flex-wrap px-[12px] py-[7px] flex-shrink-0 bg-bg-primary"
+          style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
+        >
+          <StatGroup><SV color="#185FA5">{rows.length}</SV><SL>&nbsp;ALERTS</SL></StatGroup>
+          <StatGroup><SV color="#3B6D11">{calls}</SV><SL>&nbsp;CALLS</SL><SV color="#A32D2D" style={{ marginLeft: 4 }}>{puts}</SV><SL>&nbsp;PUTS</SL></StatGroup>
+          <StatGroup><SV color="#185FA5">{fmtP(totalPrem)}</SV><SL>&nbsp;PREMIUM</SL></StatGroup>
+          <StatGroup last><SV color="#854F0B">{puts > 0 ? (calls / puts).toFixed(2) : "—"}</SV><SL>&nbsp;C/P RATIO</SL></StatGroup>
+        </div>
+
+        {/* Toolbar */}
+        <div
+          className="flex items-center gap-[7px] px-[12px] py-[6px] bg-bg-primary flex-shrink-0"
+          style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
+        >
+          <input
+            placeholder="Filter ticker..."
+            onInput={e => setFilter(f => ({ ...f, ticker: (e.target as HTMLInputElement).value.toUpperCase() }))}
+            style={{
+              fontSize: 11,
+              padding: "4px 8px",
+              borderRadius: 8,
+              border: "0.5px solid var(--color-border-secondary)",
+              background: "var(--color-background-secondary)",
+              color: "var(--color-text-primary)",
+              outline: "none",
+              width: 130,
+            }}
+          />
+          <select
+            value={sortKey}
+            onChange={e => setSortKey(e.target.value as SortKey)}
+            style={{
+              fontSize: 10,
+              padding: "3px 6px",
+              borderRadius: 8,
+              border: "0.5px solid var(--color-border-secondary)",
+              background: "var(--color-background-primary)",
+              color: "var(--color-text-secondary)",
+              outline: "none",
+              marginLeft: "auto",
+              cursor: "pointer",
+            }}
+          >
+            <option value="time">Sort: Time ↓</option>
+            <option value="prem">Sort: Premium ↓</option>
+            <option value="size">Sort: Size ↓</option>
+          </select>
+        </div>
+
+        {/* Table */}
+        <div className="flex-1 overflow-y-auto">
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                {["Time", "Ticker", "Type", "Side", "Sentiment", "Exec", "Contract", "Size", "OI", "Premium", "Spot", "Rule", "Conf."].map(h => (
+                  <Th key={h}>{h}</Th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr
+                  key={r.id}
+                  className={r.isNew ? "row-flash" : ""}
+                  style={{
+                    borderBottom: "0.5px solid var(--color-border-tertiary)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{r.time}</Td>
+                  <Td style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-primary)" }}>{r.ticker}</Td>
+                  <Td><Badge type={r.type === "CALL" ? "call" : "put"}>{r.type}</Badge></Td>
+                  <Td><Badge type={r.side === "BUY" ? "buy" : "sell"}>{r.side}</Badge></Td>
+                  <Td><span style={{ fontSize: 10, fontWeight: 500, color: r.sentiment === "BULLISH" ? "#3B6D11" : "#A32D2D" }}>{r.sentiment}</span></Td>
+                  <Td>
+                    <Badge
+                      type={
+                        r.exec === "SWEEP" ? "sweep"
+                        : r.exec === "FLOOR" ? "floor"
+                        : r.exec === "BLOCK" ? "block"
+                        : "single"
+                      }
+                    >
+                      {r.exec}
+                    </Badge>
+                    {r.multiLeg && (
+                      <span
+                        style={{
+                          fontSize: 8,
+                          padding: "1px 4px",
+                          borderRadius: 3,
+                          background: "#185FA5",
+                          color: "white",
+                          marginLeft: 3,
+                        }}
+                      >
+                        ML
+                      </span>
+                    )}
+                  </Td>
+                  <Td style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-primary)" }}>{r.contract}</Td>
+                  <Td style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+                    {r.size.toLocaleString()}<span style={{ fontSize: 9, color: "var(--color-text-tertiary)" }}> cts</span>
+                  </Td>
+                  <Td style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{r.oi.toLocaleString()}</Td>
+                  <Td
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: r.sentiment === "BEARISH" && r.side === "SELL" ? "#A32D2D" : "#3B6D11",
+                    }}
+                  >
+                    {fmtP(r.premium)}
+                  </Td>
+                  <Td style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>${r.spot.toFixed(2)}</Td>
+                  <Td style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{r.rule}</Td>
+                  <Td><ConfBadge conf={r.confidence} /></Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Left filter panel ----------
+
+function FilterPanel({ filter, setFilter }: { filter: FilterState; setFilter: React.Dispatch<React.SetStateAction<FilterState>> }) {
+  return (
+    <aside
+      className="flex w-[210px] flex-shrink-0 flex-col overflow-hidden bg-bg-primary"
+      style={{ borderRight: "0.5px solid var(--color-border-tertiary)" }}
+    >
+      <div
+        className="flex items-center justify-between px-[12px] py-[9px] flex-shrink-0"
+        style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
+      >
+        <span className="text-[12px] font-medium text-text-primary">Filters</span>
+        <button
+          onClick={() => setFilter(INITIAL_FILTER)}
+          className="cursor-pointer rounded-full"
+          style={{
+            fontSize: 10,
+            color: "var(--color-text-info)",
+            padding: "2px 7px",
+            border: "0.5px solid var(--color-border-info)",
+          }}
+        >
+          Reset
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto px-[12px] py-[10px]">
+        <ChipSec label="Type" value={filter.type} onChange={v => setFilter(f => ({ ...f, type: v as FilterState["type"] }))}
+          opts={[["ALL", "All types", "sel"], ["CALL", "Calls", "sel-g"], ["PUT", "Puts", "sel-r"]]} />
+        <ChipSec label="Side" value={filter.side} onChange={v => setFilter(f => ({ ...f, side: v as FilterState["side"] }))}
+          opts={[["ALL", "All", "sel"], ["BUY", "Buy", "sel-g"], ["SELL", "Sell", "sel-r"]]} />
+        <ChipSec label="Sentiment" value={filter.sent} onChange={v => setFilter(f => ({ ...f, sent: v as FilterState["sent"] }))}
+          opts={[["ALL", "All", "sel"], ["BULLISH", "Bullish", "sel-g"], ["BEARISH", "Bearish", "sel-r"]]} />
+        <ChipSec label="Execution" value={filter.exec} onChange={v => setFilter(f => ({ ...f, exec: v as FilterState["exec"] }))}
+          opts={[["ALL", "All", "sel"], ["SWEEP", "Sweep", "sel-a"], ["FLOOR", "Floor", "sel"], ["SINGLE", "Single", "sel"], ["BLOCK", "Block", "sel"]]} />
+        <Divider />
+        <ChipSec label="Min premium" value={filter.prem} onChange={v => setFilter(f => ({ ...f, prem: v as FilterState["prem"] }))}
+          opts={[["ALL", "Any", "sel"], ["500K", "≥ $500K", "sel"], ["1M", "≥ $1M", "sel"], ["5M", "≥ $5M", "sel"]]} />
+        <ChipSec label="Confidence" value={filter.conf} onChange={v => setFilter(f => ({ ...f, conf: v as FilterState["conf"] }))}
+          opts={[["ALL", "All", "sel"], ["HIGH", "High", "sel-g"], ["MED", "Medium", "sel-a"]]} />
+        <SelectSec label="Expiry (DTE)" value={filter.dte} onChange={v => setFilter(f => ({ ...f, dte: v }))}
+          opts={[{ v: "ALL", l: "All expirations" }, { v: "0", l: "0DTE" }, { v: "7", l: "≤ 7 days" }, { v: "30", l: "≤ 30 days" }]} />
+        <SelectSec label="Rule / alert type" value={filter.rule} onChange={v => setFilter(f => ({ ...f, rule: v }))}
+          opts={[
+            { v: "ALL", l: "All rules" },
+            { v: "Repeated Hits", l: "Repeated hits" },
+            { v: "Floor Trade", l: "Floor trade" },
+            { v: "Unusual Activity", l: "Unusual activity" },
+            { v: "Block Print", l: "Block print" },
+            { v: "Large Hedge", l: "Large hedge" },
+          ]} />
+        <Divider />
+        <div className="mb-[12px]">
+          <FpLabel>Quick toggles</FpLabel>
+          <TogRow
+            checked={filter.sweepOnly}
+            onChange={v => setFilter(f => ({ ...f, sweepOnly: v }))}
+            label="Sweep only"
+          />
+          <TogRow checked={false} onChange={() => {}} label="OTM only" />
+          <TogRow checked={false} onChange={() => {}} label="Size > OI" />
+        </div>
+        <div className="mb-[12px]">
+          <FpLabel>Size range</FpLabel>
+          <div style={{ display: "flex", gap: 5, marginTop: 4 }}>
+            <RangeIn placeholder="Min" />
+            <RangeIn placeholder="Max" />
+          </div>
+        </div>
+        <div className="mb-[12px]">
+          <FpLabel>IV range (%)</FpLabel>
+          <div style={{ display: "flex", gap: 5, marginTop: 4 }}>
+            <RangeIn placeholder="Min IV" />
+            <RangeIn placeholder="Max IV" />
+          </div>
+        </div>
+        <div className="mb-[12px]">
+          <FpLabel>Sector</FpLabel>
+          <FpSelect>
+            <option>All sectors</option>
+            <option>Technology</option>
+            <option>Financials</option>
+            <option>Energy</option>
+            <option>Healthcare</option>
+          </FpSelect>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function ChipSec({
+  label,
+  value,
+  onChange,
+  opts,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  opts: [string, string, "sel" | "sel-g" | "sel-r" | "sel-a"][];
+}) {
+  return (
+    <div className="mb-[12px]">
+      <FpLabel>{label}</FpLabel>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+        {opts.map(([v, l, selCls]) => {
+          const selected = value === v;
+          const selStyles: Record<string, { bg: string; border: string; color: string }> = {
+            sel: { bg: "#E6F1FB", border: "#185FA5", color: "#0C447C" },
+            "sel-g": { bg: "#EAF3DE", border: "#3B6D11", color: "#27500A" },
+            "sel-r": { bg: "#FCEBEB", border: "#A32D2D", color: "#791F1F" },
+            "sel-a": { bg: "#FAEEDA", border: "#854F0B", color: "#633806" },
+          };
+          const s = selStyles[selCls]!;
+          return (
+            <span
+              key={v}
+              onClick={() => onChange(v)}
+              className="cursor-pointer select-none rounded-full"
+              style={{
+                fontSize: 10,
+                padding: "2px 8px",
+                border: `0.5px solid ${selected ? s.border : "var(--color-border-secondary)"}`,
+                background: selected ? s.bg : "var(--color-background-primary)",
+                color: selected ? s.color : "var(--color-text-secondary)",
+                fontWeight: selected ? 500 : undefined,
+              }}
+            >
+              {l}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SelectSec({
+  label,
+  value,
+  onChange,
+  opts,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  opts: { v: string; l: string }[];
+}) {
+  return (
+    <div className="mb-[12px]">
+      <FpLabel>{label}</FpLabel>
+      <FpSelect value={value} onChange={e => onChange(e.target.value)}>
+        {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+      </FpSelect>
+    </div>
+  );
+}
+
+function FpLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        fontSize: 9,
+        fontWeight: 500,
+        color: "var(--color-text-tertiary)",
+        textTransform: "uppercase",
+        letterSpacing: ".06em",
+        marginBottom: 5,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function FpSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      style={{
+        width: "100%",
+        fontSize: 10,
+        padding: "4px 6px",
+        borderRadius: 8,
+        border: "0.5px solid var(--color-border-secondary)",
+        background: "var(--color-background-secondary)",
+        color: "var(--color-text-secondary)",
+        outline: "none",
+        cursor: "pointer",
+        marginTop: 4,
+        ...props.style,
+      }}
+    />
+  );
+}
+
+function RangeIn(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      style={{
+        width: "100%",
+        fontSize: 10,
+        padding: "4px 6px",
+        borderRadius: 8,
+        border: "0.5px solid var(--color-border-secondary)",
+        background: "var(--color-background-secondary)",
+        color: "var(--color-text-primary)",
+        outline: "none",
+      }}
+    />
+  );
+}
+
+function TogRow({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <label
+      className="flex items-center gap-[6px] cursor-pointer"
+      style={{ fontSize: 10, color: "var(--color-text-secondary)", padding: "3px 0" }}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={e => onChange(e.target.checked)}
+        style={{ cursor: "pointer", width: 11, height: 11 }}
+      />
+      {label}
+    </label>
+  );
+}
+
+function Divider() {
+  return <div style={{ height: "0.5px", background: "var(--color-border-tertiary)", margin: "8px 0" }} />;
+}
+
+// ---------- Misc ----------
+
+function StatGroup({ children, last }: { children: React.ReactNode; last?: boolean }) {
+  return (
+    <div
+      className="flex items-center gap-[4px]"
+      style={{
+        fontSize: 11,
+        paddingRight: 12,
+        marginRight: 12,
+        borderRight: last ? "none" : "0.5px solid var(--color-border-tertiary)",
+        marginLeft: last ? "auto" : undefined,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SV({ color, children, style }: { color: string; children: React.ReactNode; style?: React.CSSProperties }) {
+  return <span style={{ fontWeight: 500, color, ...style }}>{children}</span>;
+}
+
+function SL({ children }: { children: React.ReactNode }) {
+  return <span style={{ color: "var(--color-text-tertiary)", fontSize: 10 }}>{children}</span>;
+}
+
+function Th({ children }: { children: React.ReactNode }) {
+  return (
+    <th
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 2,
+        background: "var(--color-background-primary)",
+        padding: "6px 10px",
+        textAlign: "left",
+        fontSize: 9,
+        fontWeight: 500,
+        color: "var(--color-text-tertiary)",
+        textTransform: "uppercase",
+        letterSpacing: ".05em",
+        borderBottom: "0.5px solid var(--color-border-tertiary)",
+        whiteSpace: "nowrap",
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Td({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <td style={{ padding: "6px 10px", verticalAlign: "middle", whiteSpace: "nowrap", ...style }}>
+      {children}
+    </td>
+  );
+}
+
+function Badge({ type, children }: { type: "call" | "put" | "buy" | "sell" | "sweep" | "floor" | "single" | "block"; children: React.ReactNode }) {
+  const styles: Record<typeof type, { bg: string; color: string }> = {
+    call:   { bg: "#EAF3DE", color: "#27500A" },
+    put:    { bg: "#FCEBEB", color: "#791F1F" },
+    buy:    { bg: "#EAF3DE", color: "#27500A" },
+    sell:   { bg: "#FCEBEB", color: "#791F1F" },
+    sweep:  { bg: "#FAEEDA", color: "#633806" },
+    floor:  { bg: "#EEEDFE", color: "#3C3489" },
+    single: { bg: "#F1EFE8", color: "#5F5E5A" },
+    block:  { bg: "#E6F1FB", color: "#0C447C" },
+  };
+  const { bg, color } = styles[type];
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 9,
+        fontWeight: 500,
+        padding: "2px 6px",
+        borderRadius: 3,
+        background: bg,
+        color,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function ConfBadge({ conf }: { conf: string }) {
+  const styles: Record<string, { bg: string; color: string }> = {
+    HIGH: { bg: "#EAF3DE", color: "#27500A" },
+    MED:  { bg: "#FAEEDA", color: "#633806" },
+    MOD:  { bg: "#FAEEDA", color: "#633806" },
+    LOW:  { bg: "#FCEBEB", color: "#791F1F" },
+  };
+  const s = styles[conf] ?? styles.MED!;
+  return (
+    <span
+      style={{
+        fontSize: 9,
+        fontWeight: 500,
+        padding: "2px 6px",
+        borderRadius: 3,
+        background: s.bg,
+        color: s.color,
+        display: "inline-flex",
+      }}
+    >
+      {conf}
+    </span>
+  );
+}

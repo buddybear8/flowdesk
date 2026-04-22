@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-background-primary: #FFFFFF;
+  --color-background-secondary: #F6F5F2;
+  --color-background-tertiary: #EFEDE8;
+  --color-background-info: #E6F1FB;
+  --color-text-primary: #1A1918;
+  --color-text-secondary: #6B6965;
+  --color-text-tertiary: #9B9890;
+  --color-text-info: #185FA5;
+  --color-border-tertiary: rgba(0, 0, 0, 0.10);
+  --color-border-secondary: rgba(0, 0, 0, 0.18);
+  --color-border-info: #185FA5;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --border-radius-xl: 16px;
+}
+
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  background: var(--color-background-primary);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* New row flash animation for live feeds */
+@keyframes row-flash {
+  0% { background-color: var(--color-background-info); }
+  100% { background-color: transparent; }
+}
+
+.row-flash {
+  animation: row-flash 0.8s ease-out;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.blink {
+  animation: blink 1.4s infinite;
+}
