@@ -16,6 +16,8 @@ export type ExecType = "SWEEP" | "FLOOR" | "SINGLE" | "BLOCK";
 export type SentimentPill = "BULL" | "BEAR" | "MIX";
 export type GammaRegime = "POSITIVE" | "NEGATIVE";
 
+// 11 GICS sectors (for equities) + 4 ETF asset classes (for non-equity tickers
+// like SPY / GLD / TLT / UVXY). Locked v1.2.2.
 export type Sector =
   | "Technology"
   | "Communication"
@@ -27,7 +29,11 @@ export type Sector =
   | "Industrials"
   | "Materials"
   | "Real Estate"
-  | "Utilities";
+  | "Utilities"
+  | "Index"
+  | "Commodities"
+  | "Bonds"
+  | "Volatility";
 
 // ---------- 1. FlowAlert (Module 4) ----------
 
@@ -149,14 +155,14 @@ export interface HitListItem {
   dpAge?: "today" | "yesterday";
   dpPrem?: number;
   thesis: string;
-  sector: string;
+  sector: Sector;
   contracts: HitListContract[];
   peers: HitListPeer[];
   theme: HitListTheme;
 }
 
 export interface SectorFlow {
-  sector: string;
+  sector: Sector;
   netPremium: number;
 }
 
@@ -166,7 +172,7 @@ export interface HitListPayload {
     sentiment: Direction;
     totalPremLabel: string;     // "$57.4M"
     callPutLabel: string;       // "86/14"
-    leadSector: string;
+    leadSector: Sector;
   };
   hits: HitListItem[];
   sectorFlow: SectorFlow[];

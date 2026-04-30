@@ -38,7 +38,7 @@ export function buildHitList(): HitListItem[] {
       contract: "$25C Jul 17",
       dpConf: false,
       thesis: "Call spread structure. Institutional accumulation.",
-      sector: "Financial Ser.",
+      sector: "Financials",
       contracts: [
         { strikeLabel: "$25C", expiryLabel: "Jul 17", premiumLabel: "$3.6M", rule: "Large Floor Trade — Call Spread", vOiLabel: "42.1x" },
       ],
@@ -59,6 +59,7 @@ export function buildHitList(): HitListItem[] {
       dpPrem: 4_200_000,
       thesis: "Ascending call strikes across 4 consecutive sweeps.",
       sector: "Commodities",
+      // ↑ ETF asset class (non-GICS) — see lib/types Sector union
       contracts: [
         { strikeLabel: "$425C", expiryLabel: "May 1", premiumLabel: "$1.4M", rule: "Repeated Hits Sweep", vOiLabel: "18.2x" },
         { strikeLabel: "$430C", expiryLabel: "May 1", premiumLabel: "$1.2M", rule: "Repeated Hits", vOiLabel: "14.7x" },
@@ -133,12 +134,12 @@ export function buildWatchesPayload(): HitListPayload {
   const hits = buildHitList();
   const sectorFlow: SectorFlow[] = [
     { sector: "Technology", netPremium: 23_600_000 },
-    { sector: "Financial Ser.", netPremium: 6_500_000 },
+    { sector: "Financials", netPremium: 6_500_000 },
     { sector: "Commodities", netPremium: 3_300_000 },
-    { sector: "Healthcare", netPremium: 2_500_000 },
+    { sector: "Health Care", netPremium: 2_500_000 },
     { sector: "Industrials", netPremium: 2_400_000 },
     { sector: "Communication", netPremium: -3_000_000 },
-    { sector: "Consumer D.", netPremium: -760_000 },
+    { sector: "Consumer Discretionary", netPremium: -760_000 },
   ];
 
   return {

@@ -1,6 +1,6 @@
 # FlowDesk — Build Progress
 
-Last updated: 2026-04-29
+Last updated: 2026-04-29 (v1.2.2 doc round)
 
 ---
 
@@ -84,7 +84,7 @@ Last updated: 2026-04-29
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Prisma schema | ⚠️ Partial | Has `DarkPoolPrint`, `WatchesCriteria`, `SentimentSnapshot`, `AiSummary`. Per ARCHITECTURE §3 still need: `FlowAlert`, `GexSnapshot`, `MarketTideBar`, `NetImpactDaily`, `XPost`, `AnalystProfile` |
+| Prisma schema | ⚠️ Partial | Has `DarkPoolPrint`, `WatchesCriteria`, `SentimentSnapshot`, `AiSummary`. Per ARCHITECTURE §3 still need: `FlowAlert`, `GexSnapshot`, `MarketTideBar`, `NetImpactDaily`, `XPost`, `AnalystProfile`, `User`, `TickerMetadata`, `HitListDaily`, `DivergenceAlert` |
 | Database migrations | ⬜ Not run | `npx prisma migrate deploy` needed against Railway Postgres once schema is complete |
 | `USE_MOCK_DATA` flag | ✅ Wired | All 6 API routes check this env var before hitting live sources |
 | Live UW API integration | ⬜ Not started | Token placeholder in `.env.local` |
@@ -92,6 +92,10 @@ Last updated: 2026-04-29
 | Live Anthropic (AI summaries) | ⬜ Not started | Key placeholder in `.env.local` |
 | S3 → Postgres dark-pool history import | ⬜ Not started | Polygon extraction is a separate workstream; this codebase only consumes S3 files via `import-darkpool-history.ts` |
 | Retention sweeps (60d flow / 30d DP except top-100 perpetual) | ⬜ Not started | Two cron sweeps to add at 03:00 ET (PRD §3.5 / ARCHITECTURE §2.1) |
+| Auth (Auth.js v5 + Whop OAuth) | ⬜ Not started | Free Whop product, OAuth app + Vercel env vars (`WHOP_CLIENT_ID/SECRET/PRODUCT_ID`, `NEXTAUTH_URL/SECRET`); 3-line `auth()` check on every `/api/*` route |
+| `Sector` enum + `ticker_metadata` table | ✅ Type tightened | Mocks normalized; `refresh-ticker-metadata` worker job not yet built |
+| `hit-list-compute` daily job | ⬜ Not started | 07:30 ET; writes to `hit_list_daily`; same-day rebuild on criteria save |
+| `divergence_alerts` materialization | ⬜ Not started | Inside the 07:00 ET ai-summarizer batch per PRD §7 rule |
 
 ---
 
@@ -141,10 +145,23 @@ scripts/
 - **`websocket-server` Dockerfile EXPOSEs 8080** but `src/index.ts` doesn't read `process.env.PORT` yet — Railway injects PORT and the server must bind to it.
 - **TS target ES2022/CommonJS** — switch to ESM if the rest of the stack expects it.
 
-### Open questions
+### Open questions (v1.2.2 status)
 
-- **Single worker vs multi-service architecture** — ARCHITECTURE.md specs a single Node + node-cron worker; the `services/` and `lambdas/` scaffolding here imply a multi-service Clerk/Redis/WS design. Pick one before live-data work proceeds. Recommendation: single worker (UW has no push channel; Clerk overkill for single-user). If single worker wins, `lambdas/sentiment-batch` and `lambdas/hitlist-compute` move into `worker/src/jobs/`; `services/websocket-server` and `services/data-ingestion` get deleted; `lambdas/dp-ranking` and `scripts/backfill-darkpool.ts` stay (they're the Polygon-sourced S3 import path that runs out-of-band).
-- Does the Next.js app stay on Vercel or move to Railway too? Recommendation: stay on Vercel.
+**Closed in v1.2.2:**
+- ✅ Single worker vs multi-service → **single worker (option A)** locked. `services/websocket-server` and `services/data-ingestion` stay dormant. `lambdas/sentiment-batch`, `lambdas/hitlist-compute`, `lambdas/dp-ranking`, `scripts/backfill-darkpool.ts` move to `worker/src/jobs/` once worker is stood up.
+- ✅ Next.js app deployment → **stays on Vercel**.
+- ✅ API authentication → **Auth.js v5 + Whop OAuth provider** (PRD §13 / ARCHITECTURE §6 Phase F). Whop manages access list via free product/access pass.
+- ✅ Sector enum → **expanded to 15 values** (11 GICS + 4 ETF asset classes). Tightened from `string` in `lib/types/index.ts`.
+- ✅ Hit list compute → **daily 07:30 ET worker job** writing to `hit_list_daily`; criteria save triggers same-day rebuild.
+- ✅ Divergence rule → **|Δsentiment| ≥ 30 + opposite price direction over 3 trading days**, severity tiered red/amber/green.
+- ✅ Dark Pools "Intraday only" toggle → **time-of-day window** filter (09:30–16:00 ET).
+- ✅ AI prompt templates → **locked in PRD §3.4** (sentiment summary + per-ticker GEX explanation).
+- ✅ GEX key levels → **worker computes** call wall / put wall / gamma flip; max pain from UW if available.
+- ✅ Disaster recovery → **Railway 4-day daily snapshots** accepted.
+
+**Still open:**
+- Top Net Impact source — preferred is a UW endpoint exposing the bid/ask formula directly; fallback is worker aggregation. Confirm with UW support.
+- UW multi-user license posture — Basic tier is for single-user; ~100-user company deployment likely needs a team/enterprise agreement. Confirm with UW sales.
 
 ---
 
@@ -163,15 +180,18 @@ scripts/
 
 ## What's Left Before Live Data
 
-1. **Resolve open architecture question** — single worker vs multi-service (see Open questions above).
-2. **Add the 6 missing Prisma models** — `FlowAlert`, `GexSnapshot`, `MarketTideBar`, `NetImpactDaily`, `XPost`, `AnalystProfile` per ARCHITECTURE §3.
-3. **Create Railway Postgres service** and run `npx prisma migrate deploy`.
-4. **Set environment variables in Railway worker + Vercel** — `UW_API_TOKEN`, `X_BEARER_TOKEN`, `ANTHROPIC_API_KEY`, `DATABASE_URL`, `TZ=America/New_York`, plus AWS S3 vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `DARKPOOL_S3_BUCKET`, `DARKPOOL_S3_PREFIX`) for the historical DP import. Vercel only needs `DATABASE_URL` (public URL) + `USE_MOCK_DATA=false` + `NEXT_PUBLIC_APP_URL`.
-5. **Stand up the worker** with `node-cron` schedules per ARCHITECTURE §6 — UW polling (flow / GEX / DP / market tide), Net Impact aggregation, X-batch (06:00 ET), AI-summary batch (07:00 ET, sentiment + per-ticker GEX explanations), retention sweeps (03:00 ET), S3 dark-pool history import (02:00 ET).
-6. **Implement retention enforcement** — 60-day flow sweep, conditional 30-day DP sweep that preserves top-100 ranked rows in perpetuity.
-7. **Replace mock branches** in each `route.ts` with Prisma reads.
-8. **Add authentication to API routes** before flipping `USE_MOCK_DATA=false`.
-9. **Build secondary tab views** — Criteria config, Sweep scanner, 0DTE flow, Unusual activity, DP levels.
-10. **Wire the Market Pulse period toggle** to the UW `market-tide` interval param.
-11. **Confirm Top Net Impact source with UW** — preferred is a UW endpoint exposing the bid/ask formula directly (PRD §11); fallback is worker-side aggregation.
-12. **Lock the AI summary prompt template** before the first 07:00 ET batch run.
+1. **Add the 10 missing Prisma models** — `FlowAlert`, `GexSnapshot`, `MarketTideBar`, `NetImpactDaily`, `XPost`, `AnalystProfile`, `User`, `TickerMetadata`, `HitListDaily`, `DivergenceAlert` per ARCHITECTURE §3.
+2. **Create Railway Postgres service** and run `npx prisma migrate deploy`.
+3. **Set environment variables in Railway worker** — `UW_API_TOKEN`, `X_BEARER_TOKEN`, `ANTHROPIC_API_KEY`, `DATABASE_URL`, `TZ=America/New_York`, plus AWS S3 vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `DARKPOOL_S3_BUCKET`, `DARKPOOL_S3_PREFIX`).
+4. **Set environment variables in Vercel** — `DATABASE_URL` (public URL), `USE_MOCK_DATA=false`, `NEXT_PUBLIC_APP_URL`, plus auth: `WHOP_CLIENT_ID`, `WHOP_CLIENT_SECRET`, `WHOP_PRODUCT_ID`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`.
+5. **Stand up the single Node worker** on Railway per ARCHITECTURE §6 — UW polling (flow / GEX / DP / market tide), Net Impact aggregation (5m mkt), X-batch (06:00 ET), AI-summary batch (07:00 ET, sentiment + per-ticker GEX explanations + divergence alerts), hit-list-compute (07:30 ET), refresh-ticker-metadata (05:30 ET), retention sweeps (03:00 ET), S3 dark-pool history import (02:00 ET).
+6. **Move scaffolding to worker** — relocate `lambdas/sentiment-batch`, `lambdas/hitlist-compute`, `lambdas/dp-ranking` into `worker/src/jobs/`. Delete `services/websocket-server` and `services/data-ingestion` (option A doesn't use them).
+7. **Implement retention enforcement** — 60-day flow sweep, conditional 30-day DP sweep that preserves top-100 ranked rows in perpetuity.
+8. **Implement the prompt files** — `worker/src/prompts/sentiment.ts` and `worker/src/prompts/gex.ts` per the templates locked in PRD §3.4.
+9. **Implement `lib/sector-overrides.ts`** for ETFs UW returns no sector for (SPY → "Index", GLD → "Commodities", TLT → "Bonds", UVXY → "Volatility", etc.).
+10. **Replace mock branches** in each `route.ts` with Prisma reads.
+11. **Stand up Auth.js v5 with Whop OAuth provider** per ARCHITECTURE §6 Phase F — create free Whop product/access pass, configure OAuth app, install Auth.js v5 + `@auth/prisma-adapter`, implement custom Whop provider, gate every `/api/*` route with the 3-line `auth()` check, build the `/login` page.
+12. **Build secondary tab views** — Criteria config, Sweep scanner, 0DTE flow, Unusual activity, DP levels.
+13. **Wire the Market Pulse period toggle** to the UW `market-tide` interval param.
+14. **Confirm Top Net Impact source with UW** — preferred is a UW endpoint exposing the bid/ask formula directly (PRD §11); fallback is worker-side aggregation.
+15. **Confirm UW multi-user license posture** before onboarding past initial-user testing.

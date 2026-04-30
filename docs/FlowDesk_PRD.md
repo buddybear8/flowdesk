@@ -1,7 +1,8 @@
 # FlowDesk — Product Requirements Document
-### Trading Intelligence Dashboard · v1.2.1 · April 2026
+### Trading Intelligence Dashboard · v1.2.2 · April 2026
 
-*Revised Apr 29, 2026 — v1.2.1 locks decisions from the architecture review: UW Basic tier confirmed, Vanna/Charm pill toggle removed from V1, X API v2 used directly (xAI Grok dropped), historical DP ranking restored via Polygon-sourced S3 import, GEX AI explanation pre-computed daily, top 10 by |Net Impact|, retention rules locked (60-day flow, 30-day DP except perpetual top 100), Confidence enum normalized to HIGH/MED/LOW.*  
+*Revised Apr 29, 2026 (later) — v1.2.2 locks the remaining open questions: Auth.js v5 with Whop OAuth provider for access management (each user gets their own session), Sector enum expanded to 15 values (11 GICS + 4 ETF asset classes) and tightened from `string`, hit list moves to a daily 07:30 ET worker job with same-day-rebuild on criteria save, divergence trigger rule defined (|Δsentiment| ≥ 30 + opposite price direction over 3 days), Dark Pools "Intraday only" toggle = 09:30–16:00 ET time-window filter, AI prompt templates locked, single-worker option-A architecture confirmed.*  
+*Prior v1.2.1 (Apr 29, 2026) locked UW Basic tier, removed Vanna/Charm pill toggle, switched sentiment to X API direct, restored historical DP ranking via Polygon-sourced S3 import, locked retention rules and Confidence enum.*  
 *Prior v1.2 (Apr 23, 2026) added Market Pulse and reflected the live Vercel deployment + security hardening landed 2026-04-22.*
 
 ---
@@ -152,8 +153,53 @@ Until that tipping point is reached, the $50/mo is not spent.
 
 **Purpose:** Pre-market AI summaries for Sentiment tracker and GEX AI explanation modal  
 **Model:** `claude-haiku-4-5` (cost-optimised)  
-**Cadence:** Once daily pre-market batch + on-demand for GEX modal  
-**Cost estimate:** ~$1/mo for 50 tickers/day pre-market
+**Cadence:** Once daily pre-market batch (07:00 ET) — both sentiment summary and per-ticker GEX explanations are generated in the same batch run  
+**Cost estimate:** ~$1–3/mo for 50 tickers/day pre-market + 5 GEX explanations
+
+#### Prompt templates (locked v1.2.2)
+
+Two prompts are executed per daily batch. Templates live at `worker/src/prompts/sentiment.ts` and `worker/src/prompts/gex.ts` and are version-controlled in this repo.
+
+**Sentiment summary prompt:**
+```
+SYSTEM:
+You are FlowDesk's pre-market analyst. Generate a 120–160 word summary of overnight
+sentiment for the date provided. Tone: terse, factual, like a Bloomberg morning
+email. No hedging language. No bullet points. Single paragraph. Do not name
+analysts or include direct quotes.
+
+INPUTS (passed as a structured JSON object):
+- date                     ISO date string
+- overall_score            0–100 integer
+- trend_vs_yesterday       signed integer (points)
+- top_velocity_movers      [{ ticker, velocity_pct, sentiment }]   ≤ 8 rows
+- divergence_alerts        [{ ticker, type, severity, description }]
+- sector_breakdown         [{ name, bull_pct }]
+- new_entrants             [{ ticker, sentiment }]
+- biggest_flips            [{ ticker, delta_pts }]
+```
+Output is stored in `ai_summaries` with `kind="sentiment-{YYYY-MM-DD}"`.
+
+**Per-ticker GEX explanation prompt:**
+```
+SYSTEM:
+You are FlowDesk's GEX analyst. Generate a structured explanation of today's
+gamma exposure for the ticker provided. Output 4 short paragraphs in this order:
+(1) regime, (2) gamma flip distance + implications, (3) key levels (call wall,
+put wall, max pain), (4) actionable read for the session. Total 200–280 words.
+Plain English; no jargon left undefined on first use.
+
+INPUTS:
+- ticker                   uppercase symbol
+- date                     ISO date string
+- regime                   "POSITIVE" | "NEGATIVE"
+- spot                     number
+- key_levels               { call_wall, put_wall, gamma_flip, max_pain }
+- net_gex_oi               number
+- net_gex_dv               number
+- top_strikes              [{ strike, combined }]   ≤ 5 rows by |combined|
+```
+Output is stored in `ai_summaries` with `kind="gex-{TICKER}-{YYYY-MM-DD}"`. The frontend modal renders the body plus a header note: *"Static summary as of market open — regime and key levels may change throughout the trading day."*
 
 ### 3.5 Dark pool data source
 
@@ -346,6 +392,15 @@ For each ticker in the hit list:
 2. If any rows found: `dpConf = true`, expose `dpRank` (lowest rank number = best), `dpAge` ("today" or "yesterday"), `dpPrem`
 3. Otherwise: `dpConf = false`
 
+### Compute cadence (locked v1.2.2)
+
+The hit list is **computed once per trading day, pre-market**. Key points:
+
+- **Schedule:** worker job `hit-list-compute` runs at **07:30 ET Mon–Fri**, after the 06:00 ET X batch and 07:00 ET AI summary batch. Reads `flow_alerts` from the prior session, applies `WatchesCriteria`, joins DP confluence from `dark_pool_prints`, scores by actionability, and writes the top-20 to a new `hit_list_daily` Postgres table (one row per hit, indexed by `(date, rank)`).
+- **API read path:** `/api/watches` becomes a simple `findMany` against `hit_list_daily WHERE date = today()` ordered by `rank`. No on-demand recomputation, no joins at request time.
+- **Same-day criteria changes:** `POST /api/admin/criteria` (the criteria-config save endpoint) **triggers an immediate hit-list rebuild for the current trading day** (~50ms inline). Saved criteria apply same-day rather than waiting until tomorrow's 07:30 ET batch.
+- **Mid-day flow:** new flow alerts that arrive after 07:30 ET do NOT update the hit list until the next morning's batch. This is by design — the hit list is a curated pre-market starting point, not a live ticker.
+
 ---
 
 ## 7. Module 2 — Sentiment tracker
@@ -431,12 +486,35 @@ Right column (two stacked cards):
 ### Data pipeline
 
 Sentiment data is pre-computed once daily pre-market:
-1. Query xAI/X API for cashtag mentions across last 24h for watchlist tickers + tracked analysts
+1. Query X API v2 for cashtag mentions across last 24h for watchlist tickers + tracked analysts
 2. Classify each post as bullish/bearish/neutral using Claude Haiku
 3. Compute mention velocity = (today's count) / (7-day rolling avg)
-4. Store results in PostgreSQL `sentiment_snapshots` table
-5. Classify analyst calls and compute 5-day forward accuracy
-6. Frontend reads from DB cache, does not call X API directly
+4. Apply the divergence rule (next subsection) to flag tickers where sentiment and price disagree
+5. Store results in PostgreSQL `sentiment_snapshots` and `divergence_alerts` tables
+6. Classify analyst calls and compute 5-day forward accuracy
+7. Frontend reads from DB cache, does not call X API directly
+
+### Divergence trigger rule (locked v1.2.2)
+
+For each ticker on the watchlist, during the 07:00 ET batch:
+
+```
+Δsentiment_pts = today_score − yesterday_score                   (both in 0..100)
+Δprice_pct_3d  = (today_close − close_3d_ago) / close_3d_ago × 100
+
+If |Δsentiment_pts| ≥ 30 AND sign(Δsentiment_pts) ≠ sign(Δprice_pct_3d):
+    severity = "red"   if |Δsentiment_pts| ≥ 40
+    severity = "amber" otherwise
+    emit divergence alert (sentiment vs. price disagreement)
+
+Else if |Δsentiment_pts| ≥ 20 AND sign(Δsentiment_pts) = sign(Δprice_pct_3d):
+    severity = "green"
+    emit confirmation alert (sentiment confirms price; not a divergence proper)
+```
+
+Rationale: ≥30 pts of single-day sentiment movement against a 3-day price trend is the threshold where the noise-vs-signal boundary kicks in for our watchlist size. The 30 / 40 / 20 thresholds are tunable in `worker/src/jobs/sentiment-batch.ts` after the first week of live data lands.
+
+Severity drives the dot color in the Divergence alerts card (red / amber / green per PRD §7 Overview tab).
 
 ---
 
@@ -590,7 +668,7 @@ Two-panel: **left filter panel** (200px fixed) + **feed area** (flex-1).
 
 **Filters section (toggle switches, iOS-style):**
 - Hide ETFs (default OFF)
-- Intraday only (default OFF)
+- Intraday only (default OFF) — **time-of-day window filter** (locked v1.2.2): when ON, restricts to prints with `executed_at` between 09:30 ET and 16:00 ET. Implementation uses `EXTRACT(... AT TIME ZONE 'America/New_York')` on the timestamp; the worker also denormalizes a boolean `is_intraday` field at insert time for index-friendly queries. (Distinct from the `is_extended` flag used by the Extended hour toggle below — `is_extended` reflects UW's classification, while Intraday is a hard time-window cut.)
 - Regular hour (default ON)
 - Extended hour (default ON)
 
@@ -835,6 +913,53 @@ Domain:             Vercel-provided subdomain
 
 See Section 15.
 
+### Authentication & access (locked v1.2.2)
+
+The tool is access-gated. Every `/api/*` route — and the UI shell itself — requires an authenticated session before serving data. **Each user has their own login.** Architecture:
+
+```
+┌─ User browser ─┐                              ┌─ Whop dashboard ─┐
+│                │  1. click "Sign in with Whop"│ Free product /   │
+│  /login        │ ───────────────────────────► │  access pass for │
+│                │                              │  FlowDesk        │
+│                │  2. OAuth redirect           │                  │
+│                │ ◄─────────────────────────── │                  │
+│                │     w/ auth code             │                  │
+│                │                              └──────────────────┘
+│                │  3. POST code → /api/auth/callback/whop
+│                │ ───────────────────────────►
+│                │                              ┌─ Vercel ─────────┐
+│                │  4. session cookie set       │ Auth.js v5       │
+│                │ ◄─────────────────────────── │ + Whop provider  │
+│                │                              │                  │
+│  any /api/* ───┼───── cookie verified ──────► │ route handler    │
+│                │ ◄────── 200 / data ────────  │                  │
+└────────────────┘                              └──────────────────┘
+```
+
+**Pieces:**
+1. **Whop product** — a free Whop product/access pass that you control. Granting/revoking a Whop membership is the only thing you ever do to manage who can use FlowDesk; no allowlists in code.
+2. **Auth.js v5 (NextAuth) with a custom Whop OAuth provider** — runs on Vercel inside the existing Next.js app. ~30 lines of provider config.
+3. **`User` table in Postgres** — tracks `whopMembershipId, email, isActive, createdAt, lastLoginAt`. Populated/refreshed at OAuth callback time (no webhook handler needed).
+4. **Session middleware** on every API route handler — 3-line check at the top of each route:
+   ```ts
+   const session = await auth();
+   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+   ```
+5. **Session refresh re-checks Whop membership** every ~5 minutes — when access is revoked in Whop, the user's session terminates within ~5 minutes regardless of cookie expiry.
+
+**What "authentication" gates here:**
+- UW redistribution license posture — only Whop-authorized users see UW data
+- Backend resource hygiene — random visitors can't DoS Vercel/Postgres
+- Audit trail — every API call carries `session.user.email`, structured-logged
+- Per-user state (watchlists, alerts) — keyed by `User.id`
+
+**What it does *not* gate:** UW rate limits — those are 100% controlled by the worker's polling cadence, not by user request volume. Adding users does not increase UW API load.
+
+**Cost:** Whop free for the creator on free products. Auth.js is open-source.
+
+**Sandbox phase:** until Whop is wired, `USE_MOCK_DATA=true` plus the existing public Vercel URL acts as the demo environment. Auth lands at the same time as live data wiring (see §17 punch list).
+
 ### Mock data strategy for sandbox
 
 `/lib/mock/` is populated with the following fixtures (all built, v1.2):
@@ -940,6 +1065,16 @@ NEXT_PUBLIC_APP_URL=https://flowdesk.vercel.app
 USE_MOCK_DATA=true    # true = use mock fixtures; false = hit Postgres
 TZ=America/New_York   # worker only — required so node-cron expressions use ET
 
+# ─── Required for auth (Vercel only) ─────────────────────────
+# Auth.js (NextAuth v5) with a Whop OAuth provider (locked v1.2.2 — see §11
+# "Architecture & access" + ARCHITECTURE.md §1). Whop is the source of truth
+# for who can access the tool; access is managed via a free Whop product.
+WHOP_CLIENT_ID=your_whop_oauth_client_id
+WHOP_CLIENT_SECRET=your_whop_oauth_client_secret
+WHOP_PRODUCT_ID=your_gated_product_or_access_pass_id
+NEXTAUTH_URL=https://flowdesk.vercel.app          # canonical site URL
+NEXTAUTH_SECRET=                                   # cookie-encryption key — generate with `openssl rand -base64 32`
+
 # ─── Required for historical DP backfill (worker only) ───────
 # The Polygon→S3 extraction is handled outside this codebase. The worker
 # reads pre-extracted dark-pool prints from S3 and imports them into
@@ -975,29 +1110,23 @@ Store all secrets in Vercel environment variables (not committed to git).
 - ~~AI explanation caching~~ → **pre-computed daily** in 07:00 ET batch (§3.4 / §8); modal shows static-as-of-market-open header note.
 - ~~Analyst data sourcing~~ → **X API v2 Basic confirmed**, used directly (xAI Grok dropped).
 
+**Resolved in v1.2.2:**
+- ~~SPX vs SPY for GEX~~ → **SPY-only for V1.** SPX deferred (post-V1 iteration; requires verified-exchange feed not on UW).
+- ~~API authentication~~ → **Auth.js v5 with Whop OAuth provider.** Each user gets an authenticated session (encrypted browser cookie); every `/api/*` route 401s without one. Whop manages the access list via a free product/access pass — see §13 "Authentication & access" and ARCHITECTURE.md §1.
+- ~~Disaster recovery~~ → **Railway default 4-day daily snapshots** accepted. Revisit only if scope grows.
+- ~~Single worker vs multi-service~~ → **Single worker (option A)** confirmed. The `services/websocket-server` + `services/data-ingestion` scaffolding stays dormant; `lambdas/sentiment-batch`, `lambdas/hitlist-compute`, `lambdas/dp-ranking`, and `scripts/backfill-darkpool.ts` move into `worker/src/jobs/` once worker is stood up.
+- ~~Sector enum strict vs freeform~~ → **Strict union, expanded to 15 values** (11 GICS + 4 ETF asset classes: Index / Commodities / Bonds / Volatility). `HitListItem.sector` and `SectorFlow.sector` tightened from `string` to `Sector`. Determined per ticker via UW's classification (primary) with a `lib/sector-overrides.ts` map for ETFs UW returns no sector for; cached in a `ticker_metadata` Postgres table refreshed daily by `refresh-ticker-metadata` (05:30 ET).
+- ~~Dark Pools "Intraday only" toggle~~ → **Time-of-day window** (option b): `executed_at` between 09:30 ET and 16:00 ET. See §10.
+- ~~Divergence alert trigger rule~~ → **|Δsentiment| ≥ 30 + opposite price direction over 3 trading days**, severity tiered red/amber/green. See §7.
+- ~~Hit-list ranking location~~ → **Worker job** (`hit-list-compute`, daily 07:30 ET). API reads from `hit_list_daily` table. `POST /api/admin/criteria` triggers same-day rebuild. See §6.
+- ~~GEX key levels~~ → **Worker computes** call wall / put wall / gamma flip from per-strike rows. Max pain comes from UW's `/options-volume` if available, otherwise computed locally. See §8.
+- ~~AI summary prompt template~~ → **Locked.** Sentiment summary + per-ticker GEX explanation prompts documented in §3.4 with structured input schemas; templates live at `worker/src/prompts/{sentiment,gex}.ts`.
+
 **Still open:**
 
-1. **SPX vs SPY for GEX:** V1 ships **SPY only**. SpotGamma's Periscope tool uses verified SPX exchange data not available via UW. UW's SPX GEX uses reported tape data. Re-evaluate adding SPX once V1 MVP is live with real data flowing.
+1. **Top Net Impact source:** confirm with UW support whether `/api/option-trades/flow-alerts` rows include `*_bid_premium` / `*_ask_premium` per row, or whether `/api/screener/option-contracts` is the right source. If neither exposes the bid/ask split, the worker's fallback aggregation (§11) needs a different input shape.
 
-2. **API authentication:** Before flipping `USE_MOCK_DATA=false`, the Vercel API routes need at least an API key header so random visitors can't hammer the endpoints and burn the UW quota. NextAuth single-user (email magic link) is the recommended path.
-
-3. **Disaster recovery / PITR:** Railway's default 4-day daily snapshots — sufficient for personal tool? Bumping retention or switching to a vendor with true PITR adds cost.
-
-4. **Single worker vs multi-service architecture:** ARCHITECTURE.md specifies a single Node worker with `node-cron`. Repo also contains scaffolding for a Clerk-authenticated WebSocket server + Redis-backed data-ingestion service + named lambdas. Decision pending on which to keep.
-
-5. **Sector enum strict vs freeform:** `Sector` is a strict union of 11 GICS sectors but `HitListItem.sector` is typed `string`, allowing mocks like `"Index"` / `"Commodities"` / `"Financial Ser."` through.
-
-6. **Dark Pools "Intraday only" toggle semantics:** filter by `is_extended=false` or by time-of-day window?
-
-7. **Divergence alert trigger rule:** PRD §7 lists divergence alerts but doesn't define when one fires. Need a codified threshold + price-window rule.
-
-8. **Hit-list ranking — route handler vs worker job:** compute on-demand at API request time with a 5-min cache, or materialize via a `hit_list_daily` table updated by a worker cron?
-
-9. **GEX key levels — UW response or worker computation:** assume worker derives call wall / put wall / gamma flip from per-strike rows; confirm whether UW returns max pain anywhere.
-
-10. **AI summary prompt template:** locked input shape and output length not yet documented. Lock before live wiring so daily output stays consistent.
-
-11. **Top Net Impact source:** confirm with UW support whether `/api/option-trades/flow-alerts` rows include `*_bid_premium` / `*_ask_premium` per row, or whether `/api/screener/option-contracts` is the right source. If neither exposes the bid/ask split, the worker's fallback aggregation needs a different input.
+2. **UW multi-user license:** UW Basic tier is licensed for personal/single-user use. A Whop-managed access list (potentially scaling to ~100 internal company users) likely requires a team or enterprise agreement with UW. Confirm with UW sales before moving past initial-user testing.
 
 ### Iteration priorities after sandbox demo
 
@@ -1040,7 +1169,7 @@ Store all secrets in Vercel environment variables (not committed to git).
 
 | Module | Route | Core built | Sub-tabs built | Consumes API | Notes |
 |---|---|---|---|---|---|
-| Daily watches | `/watches` | ✅ | Hit list only | `/api/watches` | Detail panel with functional "Return to overview" — left panel expands to fill when detail dismissed |
+| Daily watches | `/watches` | ✅ | Hit list only | `/api/watches` | Detail panel with functional "Return to overview" — left panel expands to fill when detail dismissed · v1.2.2: hit list compute moves to a daily 07:30 ET worker job writing to `hit_list_daily`; criteria save triggers same-day rebuild |
 | Sentiment tracker | `/sentiment` | ✅ | Overview + Analyst intelligence | `/api/sentiment?view=…` | 8 analyst chips, sort pills, aggregate/individual toggle |
 | Market Pulse *(new v1.2)* | `/market-tide` | ✅ | N/A (single page) | `/api/market-tide` | Stacked: tide line chart (dual Y) + Top Net Impact horizontal bars. Period toggle UI-only |
 | Options GEX | `/gex` | ✅ | N/A (single page) | `/api/gex` | Dual-series bar chart (OI + DV), 240px details panel · Vanna/Charm pill toggle removed in v1.2.1 (returns post-V1) |
@@ -1090,21 +1219,24 @@ Security hardening landed 2026-04-22:
 - **`npm audit` clean** — zero critical / high / moderate vulnerabilities after the Next 14.2.15 → 16.2.x migration
 - Patched CVEs include middleware auth bypass (CVE-2025-29927) and five Next.js DoS-class advisories (image optimizer remotePatterns, RSC deserialization, HTTP request smuggling, `next/image` disk cache exhaustion, Server Components DoS)
 
-**Still open:** API authentication — none of the six routes require auth right now. Needed before `USE_MOCK_DATA` is flipped off (otherwise the live API becomes a free proxy for the UW subscription).
+**Still open:** API authentication — none of the six routes require auth right now. **Locked design (v1.2.2):** Auth.js v5 with a Whop OAuth provider; access list managed in Whop via a free product/access pass. Each user gets an authenticated session cookie; every `/api/*` route 401s without one. Implementation lands alongside live-data wiring per §13 "Authentication & access".
 
 ### What's left before live data (punch list)
 
 1. Wire API keys in Railway worker + Vercel env: `UW_API_TOKEN`, `X_BEARER_TOKEN`, `ANTHROPIC_API_KEY`, `DATABASE_URL`, plus AWS S3 vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `DARKPOOL_S3_BUCKET`) for the historical DP import
-2. Provision Railway PostgreSQL, add the 6 missing Prisma models (`FlowAlert`, `GexSnapshot`, `MarketTideBar`, `NetImpactDaily`, `XPost`, `AnalystProfile`) per ARCHITECTURE §3, run `npx prisma migrate deploy`
-3. Resolve single-worker vs multi-service architecture decision (still open) and stand up the worker
+2. Provision Railway PostgreSQL; add the 9 missing Prisma models (`FlowAlert`, `GexSnapshot`, `MarketTideBar`, `NetImpactDaily`, `XPost`, `AnalystProfile`, `User`, `TickerMetadata`, `HitListDaily`, `DivergenceAlert`) per ARCHITECTURE §3; run `npx prisma migrate deploy`
+3. Stand up the single Node worker on Railway with the locked option-A architecture (PRD §13 + ARCHITECTURE §1); move `lambdas/sentiment-batch`, `lambdas/hitlist-compute`, `lambdas/dp-ranking` into `worker/src/jobs/`
 4. Implement the S3-to-Postgres dark-pool history import job
 5. Implement retention sweeps (60-day flow, 30-day DP for ranks > 100, perpetual for top 100)
-6. Replace mock branches in each `route.ts` with Prisma reads
-7. Add authentication to API routes before flipping `USE_MOCK_DATA=false`
-8. Build secondary tab views: Criteria config, Sweep scanner, 0DTE flow, Unusual activity, DP levels
-9. Wire Market Pulse period toggle to the UW `market-tide` interval param
-10. Confirm Top Net Impact endpoint availability with UW (or implement fallback aggregation per §11 formula)
-11. Lock the AI summary prompt template before first Anthropic batch run
+6. Implement the hit-list-compute job (07:30 ET daily) writing to `hit_list_daily`; wire `POST /api/admin/criteria` to trigger same-day rebuild
+7. Implement the refresh-ticker-metadata job (05:30 ET daily) populating `ticker_metadata`
+8. Replace mock branches in each `route.ts` with Prisma reads
+9. **Stand up Auth.js v5 with the Whop OAuth provider** per §13 "Authentication & access"; wire 401 middleware on every `/api/*` route; flip `USE_MOCK_DATA=false`
+10. Create the free Whop product/access pass; configure `WHOP_CLIENT_ID` / `WHOP_CLIENT_SECRET` / `WHOP_PRODUCT_ID` in Vercel env
+11. Build secondary tab views: Criteria config, Sweep scanner, 0DTE flow, Unusual activity, DP levels
+12. Wire Market Pulse period toggle to the UW `market-tide` interval param
+13. Confirm Top Net Impact endpoint availability with UW (or use the fallback aggregation per §11 formula)
+14. Confirm UW multi-user license posture before onboarding past initial-user testing
 
 ---
 
@@ -1140,6 +1272,12 @@ Defined in `/lib/types/index.ts` (plus `/lib/mock/market-tide-data.ts` for the M
 
 `Direction` (BULLISH/BEARISH), `Confidence` (HIGH/MED/LOW), `OptionType` (CALL/PUT), `Side` (BUY/SELL), `ExecType` (SWEEP/FLOOR/SINGLE/BLOCK), `Sector`, `SentimentPill` (BULL/BEAR/MIX), `GammaRegime` (POSITIVE/NEGATIVE).
 
+`Sector` (locked v1.2.2 — strict union of 15 values):
+- **11 GICS sectors** (equities): Technology · Communication · Consumer Discretionary · Consumer Staples · Energy · Financials · Health Care · Industrials · Materials · Real Estate · Utilities
+- **4 ETF asset classes** (non-equity tickers): Index · Commodities · Bonds · Volatility
+
+`HitListItem.sector`, `HitListPayload.sessionMeta.leadSector`, and `SectorFlow.sector` are tightened from `string` to `Sector`. Per-ticker classification comes from UW's flow-alerts response when available, with a `lib/sector-overrides.ts` map for ETFs UW returns no sector for. The mapping is cached in `ticker_metadata` (refreshed daily by the worker).
+
 ---
 
-*Document prepared: April 29, 2026 · FlowDesk v1.2.1 PRD (revision of v1.2 — locks UW Basic tier, removes Vanna/Charm pill toggle, switches sentiment to X API direct, restores historical DP ranking via Polygon-sourced S3 import, locks retention rules, normalizes Confidence enum, top 10 by |Net Impact|)*
+*Document prepared: April 29, 2026 · FlowDesk v1.2.2 PRD (revision of v1.2.1 — locks Auth.js + Whop access management, expands Sector enum to 15 values, moves hit list to a daily worker job, locks divergence rule + AI prompt templates, confirms single-worker option-A architecture)*

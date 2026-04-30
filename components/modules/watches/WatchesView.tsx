@@ -190,7 +190,7 @@ export function WatchesView() {
           </div>
           {payload.sectorFlow.map(s => (
             <div key={s.sector} className="flex items-center gap-[6px] mb-[3px]">
-              <span style={{ fontSize: 10, color: "var(--color-text-secondary)", width: 100, textAlign: "right", flexShrink: 0 }}>{s.sector}</span>
+              <span style={{ fontSize: 10, color: "var(--color-text-secondary)", width: 100, textAlign: "right", flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.sector}</span>
               <div className="flex-1 overflow-hidden" style={{ height: 5, background: "var(--color-background-secondary)", borderRadius: 3 }}>
                 <div
                   style={{

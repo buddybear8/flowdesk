@@ -1,16 +1,24 @@
 # FlowDesk — Live Architecture & Railway Setup
-### From mock sandbox to a live data pipeline · v1.2 · Apr 2026
+### From mock sandbox to a live data pipeline · v1.3 · Apr 2026
 
 This doc scopes what needs to stand up to flip `USE_MOCK_DATA=false` and
 serve real data from Unusual Whales, X API v2, and Anthropic. Paired with
 the PRD at [./FlowDesk_PRD.md](./FlowDesk_PRD.md).
 
-**v1.2 update (Apr 29, 2026):** locks the architecture-review decisions —
-60-day flow retention, split DP retention (perpetual top-100 / 30 days
-otherwise), Polygon historical DP backfill consumed via S3, GEX AI
-explanations pre-computed in the daily 07:00 ET batch, X API v2 used
-directly. Adds retention-sweep crons, the S3 import job, and corrects a
-node-cron expression bug in the v1.1 schedule list.
+**v1.3 update (Apr 29, 2026 later):** locks single-worker option A as the
+chosen architecture (vs the multi-service alternative). Adds the
+authentication layer — Auth.js v5 with a Whop OAuth provider, gated by a
+free Whop product/access pass. Adds a `hit-list-compute` daily job
+(07:30 ET) and a `refresh-ticker-metadata` daily job (05:30 ET). Adds
+`User`, `TickerMetadata`, `HitListDaily`, and `DivergenceAlert` Prisma
+models. Documents the divergence trigger rule that the AI batch applies.
+
+**v1.2 update (Apr 29, 2026):** locks 60-day flow retention, split DP
+retention (perpetual top-100 / 30 days otherwise), Polygon historical DP
+backfill consumed via S3, GEX AI explanations pre-computed in the daily
+07:00 ET batch, X API v2 used directly. Adds retention-sweep crons, the
+S3 import job, and corrects a node-cron expression bug in the v1.1
+schedule list.
 
 **v1.1 (Apr 2026):** switched cloud host from AWS to **Railway**.
 Railway is a managed PaaS (like a modern Heroku) — one dashboard handles
@@ -24,43 +32,66 @@ For a single-user personal tool, that trade-off is correct.
 ## 1. System overview
 
 ```
-                         ┌─────────────────────────────────────┐
-                         │      Vercel (Next.js frontend)      │
-                         │  https://flowdesk-puce.vercel.app   │
-                         └───────────┬─────────────────────────┘
-                                     │ HTTPS + TLS to DB
-                                     ▼
-                         ┌─────────────────────────┐
-                         │  Railway: Postgres 16   │  managed DB
-                         │  (DATABASE_URL)         │  connection pooling built-in
-                         └───────────▲─────────────┘
-                                     │ writes
-                         ┌───────────┴─────────────┐
-                         │  Railway: flowdesk-     │  single long-running
-                         │  worker (Node service)  │  service with node-cron
-                         │                         │  managing 3 schedules:
-                         │  • uw-poll   30s (mkt)  │
-                         │              5m (off)   │
-                         │  • x-batch   06:00 ET   │
-                         │  • ai-summ   07:00 ET   │
-                         └───────────┬─────────────┘
-                                     │ reads env vars
-              ┌──────────────────────┼──────────────────────┐
-              ▼                      ▼                      ▼
-   ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-   │ Unusual Whales   │  │   X API v2       │  │ Anthropic Claude │
-   │ api.unusual      │  │  api.x.com       │  │ api.anthropic    │
-   │ whales.com       │  │                  │  │  .com            │
-   └──────────────────┘  └──────────────────┘  └──────────────────┘
+   ┌─ User browser ──────────────────────────────────────────────┐
+   │                                                              │
+   │                                  1. "Sign in with Whop" ────►┼─► Whop OAuth
+   │                                                              │   (whop.com)
+   │   3. session cookie set ◄── 2. OAuth code exchange ◄─────────┤
+   │                                                              │
+   │   (any /api/* with cookie)                                   │
+   └────────────────┬─────────────────────────────────────────────┘
+                    │
+                    ▼
+   ┌─────────────────────────────────────────────────────────────┐
+   │   Vercel (Next.js frontend + API routes)                     │
+   │   https://flowdesk-puce.vercel.app                           │
+   │                                                              │
+   │   ┌─ Auth.js v5 (NextAuth) + Whop OAuth provider ─┐         │
+   │   │  • verifies session cookie on every /api/* req │         │
+   │   │  • re-checks Whop membership every ~5 min      │         │
+   │   │  • 401 if session missing or revoked          │         │
+   │   └────────────────────────────────────────────────┘         │
+   └────────────────┬─────────────────────────────────────────────┘
+                    │ Prisma (HTTPS + TLS)
+                    ▼
+        ┌─────────────────────────┐
+        │  Railway: Postgres 16   │  managed DB
+        │  (DATABASE_URL)         │  connection pooling built-in
+        └───────────▲─────────────┘
+                    │ writes
+        ┌───────────┴─────────────┐
+        │  Railway: flowdesk-     │  single long-running Node service
+        │  worker                 │  with node-cron managing schedules:
+        │                         │  • uw-poll              30s mkt / 5m off
+        │                         │  • market-tide          5m mkt
+        │                         │  • net-impact           5m mkt (offset 30s)
+        │                         │  • x-batch              06:00 ET
+        │                         │  • ai-summarizer        07:00 ET
+        │                         │  • hit-list-compute     07:30 ET
+        │                         │  • refresh-ticker-meta  05:30 ET
+        │                         │  • s3-darkpool-import   02:00 ET
+        │                         │  • retention-sweeps     03:00 ET
+        └───────────┬─────────────┘
+                    │
+       ┌────────────┼────────────┬──────────────┬──────────────┐
+       ▼            ▼            ▼              ▼              ▼
+   ┌────────┐  ┌────────┐  ┌──────────┐  ┌────────────┐  ┌──────────┐
+   │ UW     │  │ X v2   │  │ Anthropic│  │ AWS S3     │  │ Whop     │
+   │ flow,  │  │ posts  │  │ Haiku    │  │ DP history │  │ OAuth +  │
+   │ GEX,   │  │        │  │          │  │ (Polygon-  │  │ member-  │
+   │ DP,    │  │        │  │          │  │  sourced)  │  │ ship API │
+   │ tide   │  │        │  │          │  │            │  │ (Vercel) │
+   └────────┘  └────────┘  └──────────┘  └────────────┘  └──────────┘
 ```
 
 **Design principles**
 
 1. **Pull, don't push.** UW doesn't offer a WebSocket; polling is the only option. The poller runs on Railway (not Vercel) so Vercel's function-duration limits don't constrain freshness.
 2. **Single source of truth.** Everything polled lands in Postgres. Vercel reads from Postgres, never calls upstream APIs directly. Reasons: (a) keeps UW / X rate limits manageable, (b) gives us a time-series we can backtest against, (c) insulates the UI from upstream outages.
-3. **One worker, scheduled internally.** Rather than deploying three separate Lambdas + cron triggers (the AWS approach), we run **one long-lived Node service** that uses `node-cron` to trigger each job at the right cadence. Simpler deploy, same outcome, cheaper on Railway's pricing model.
-4. **Connection pooling handled by Railway.** Railway's Postgres includes built-in pooling — no RDS Proxy equivalent to provision.
-5. **Single provider.** Everything (DB + worker + env-var secrets) lives in one Railway project. Logs, metrics, and deploys are managed from one dashboard.
+3. **One worker, scheduled internally** *(option A — locked v1.3)*. Rather than deploying three separate Lambdas + cron triggers (the AWS approach), we run **one long-lived Node service** that uses `node-cron` to trigger each job at the right cadence. Simpler deploy, same outcome, cheaper on Railway's pricing model. *Rejected alternative:* the multi-service "Clerk + Redis + websocket-server + data-ingestion" scaffolding under `services/` stays dormant; no real-time push channel exists upstream (UW is poll-only) so a WebSocket fan-out adds complexity without value at our scale.
+4. **Authenticated frontend, decoupled from backend rate limits.** Each user authenticates via Whop OAuth (Auth.js v5, see §6 Phase F). Adding users does NOT increase UW API load — only the worker polls UW, at a fixed cadence. Auth gates UW redistribution license posture, backend resource hygiene, audit, and per-user state.
+5. **Connection pooling handled by Railway.** Railway's Postgres includes built-in pooling — no RDS Proxy equivalent to provision.
+6. **Single provider for backend.** Everything (DB + worker + env-var secrets) lives in one Railway project. Logs, metrics, and deploys are managed from one dashboard. Vercel hosts the frontend + auth; Whop is the access-management source of truth.
 
 ---
 
@@ -288,6 +319,76 @@ model AiSummary {
 
 // ─── User config (already in v1.2 schema) ─────────────────────
 // WatchesCriteria — kept as-is
+
+// ─── Auth (Auth.js v5 + Whop OAuth) — added v1.3 ──────────────
+model User {
+  id                  String   @id @default(cuid())
+  whopMembershipId    String   @unique @map("whop_membership_id")
+  email               String   @unique
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  lastLoginAt         DateTime? @map("last_login_at")
+  membershipCheckedAt DateTime? @map("membership_checked_at")
+  @@index([email])
+  @@map("users")
+}
+
+// Auth.js standard tables (Session, Account, VerificationToken) generated by
+// the Prisma adapter. Documented here for completeness; their exact shape
+// matches @auth/prisma-adapter@^2's schema.
+
+// ─── Ticker reference table — added v1.3 ──────────────────────
+model TickerMetadata {
+  ticker     String   @id @db.VarChar(10)
+  sector     String   @db.VarChar(32)        // matches `Sector` union (PRD §18)
+  name       String?
+  isEtf      Boolean  @default(false) @map("is_etf")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  @@map("ticker_metadata")
+}
+
+// ─── Daily hit list — added v1.3 ──────────────────────────────
+model HitListDaily {
+  id                BigInt   @id @default(autoincrement())
+  date              DateTime @db.Date
+  rank              Int                                          // 1..20
+  ticker            String   @db.VarChar(10)
+  price             Decimal  @db.Decimal(12, 4)
+  direction         String   @db.VarChar(4)                     // UP|DOWN
+  confidence        String   @db.VarChar(4)                     // HIGH|MED|LOW
+  premium           Decimal  @db.Decimal(16, 2)
+  contract          String
+  dpConf            Boolean  @map("dp_conf")
+  dpRank            Int?     @map("dp_rank")
+  dpAge             String?  @map("dp_age")                     // "today"|"yesterday"
+  dpPrem            Decimal? @db.Decimal(16, 2) @map("dp_prem")
+  thesis            String   @db.Text
+  sector            String   @db.VarChar(32)
+  actionabilityScore Decimal @db.Decimal(8, 4) @map("actionability_score")
+  contracts         Json
+  peers             Json
+  theme             Json
+  @@unique([date, rank])
+  @@index([date(sort: Desc)])
+  @@map("hit_list_daily")
+}
+
+// ─── Divergence alerts — added v1.3 ───────────────────────────
+// Materialized by the 07:00 ET ai-summarizer batch per the rule in PRD §7.
+model DivergenceAlert {
+  id              BigInt   @id @default(autoincrement())
+  generatedAt     DateTime @map("generated_at")
+  ticker          String   @db.VarChar(10)
+  sentimentDir    String   @db.VarChar(8) @map("sentiment_dir")  // BULLISH|BEARISH
+  priceDir        String   @db.VarChar(8) @map("price_dir")      // BULLISH|BEARISH
+  deltaSentimentPts Int    @map("delta_sentiment_pts")
+  deltaPricePct3d Decimal  @db.Decimal(8, 4) @map("delta_price_pct_3d")
+  severity        String   @db.VarChar(6)                        // red|amber|green
+  description     String
+  @@index([generatedAt(sort: Desc)])
+  @@index([ticker, generatedAt(sort: Desc)])
+  @@map("divergence_alerts")
+}
 ```
 
 Run `npx prisma migrate dev --name live_data_schema` once the DB is reachable.
@@ -469,11 +570,13 @@ Create `worker/src/index.ts`:
 
 ```ts
 import cron from "node-cron";
-import { pollFlowAlerts, pollGex, pollDarkPool, pollMarketTide, computeNetImpact } from "./uw.js";
-import { runXBatch } from "./x.js";
-import { runAiSummary } from "./ai.js";
-import { runFlowRetentionSweep, runDpRetentionSweep } from "./retention.js";
-import { importDarkpoolHistory } from "./s3-import.js";
+import { pollFlowAlerts, pollGex, pollDarkPool, pollMarketTide, computeNetImpact } from "./jobs/uw.js";
+import { runXBatch } from "./jobs/x.js";
+import { runAiSummary } from "./jobs/ai-summarizer.js";
+import { runFlowRetentionSweep, runDpRetentionSweep } from "./jobs/retention.js";
+import { importDarkpoolHistory } from "./jobs/s3-import.js";
+import { computeHitList } from "./jobs/hit-list-compute.js";
+import { refreshTickerMetadata } from "./jobs/refresh-ticker-metadata.js";
 
 // node-cron uses 6-field expressions (sec min hour DOM month DOW). TZ=America/New_York
 // is set as a service env var so all expressions below resolve in ET.
@@ -482,8 +585,10 @@ const offHours5m       = "0 */5 0-8,16-23 * * 1-5"; // every 5 min outside marke
 const marketGex60s     = "*/60 * 9-15 * * 1-5";     // every 60s, market hours, per watched ticker
 const marketTide5m     = "0 */5 9-15 * * 1-5";      // every 5 min, market hours (UW returns 5-min buckets)
 const netImpact5m      = "30 */5 9-15 * * 1-5";     // every 5 min at :30 (offset 30s after tide poll lands)
+const daily530amET     = "0 30 5 * * 1-5";          // 05:30 ET Mon–Fri — refresh ticker_metadata
 const daily6amET       = "0 0 6 * * 1-5";           // 06:00 ET Mon–Fri — X batch
-const daily7amET       = "0 0 7 * * 1-5";           // 07:00 ET Mon–Fri — sentiment + GEX explanation batch
+const daily7amET       = "0 0 7 * * 1-5";           // 07:00 ET Mon–Fri — sentiment + GEX explanation batch + divergence alerts
+const daily730amET     = "0 30 7 * * 1-5";          // 07:30 ET Mon–Fri — hit-list-compute (after AI summary lands)
 const daily3amET       = "0 0 3 * * 1-5";           // 03:00 ET Mon–Fri — retention sweeps
 const daily2amET       = "0 0 2 * * 1-5";           // 02:00 ET Mon–Fri — pull new S3 DP history files
 
@@ -501,11 +606,20 @@ cron.schedule(marketTide5m, pollMarketTide);
 // during market hours; writes top 10 by |Net Impact| to net_impact_daily.
 cron.schedule(netImpact5m, computeNetImpact);
 
+// Refresh ticker_metadata (PRD §18 — 11 GICS sectors + 4 ETF asset classes)
+cron.schedule(daily530amET, refreshTickerMetadata);
+
 // X API daily batch
 cron.schedule(daily6amET, runXBatch);
 
-// AI summary batch — sentiment + per-ticker GEX explanations
+// AI summary batch — sentiment + per-ticker GEX explanations + divergence alerts
 cron.schedule(daily7amET, runAiSummary);
+
+// Hit list compute — daily 07:30 ET (PRD §6). Reads flow_alerts + dark_pool_prints,
+// applies WatchesCriteria, ranks by actionability, writes top-20 to hit_list_daily.
+// Also exposed as an HTTP endpoint inside the worker so /api/admin/criteria can
+// trigger a same-day rebuild after a config save (option ii).
+cron.schedule(daily730amET, computeHitList);
 
 // Retention sweeps (PRD §3.5 / ARCHITECTURE §2.1)
 cron.schedule(daily3amET, () => Promise.all([runFlowRetentionSweep(), runDpRetentionSweep()]));
@@ -680,6 +794,126 @@ Already configured in Phase A2 via Railway's usage cap. If you'd like a lower th
 
 ---
 
+### Phase F · Authentication via Auth.js v5 + Whop OAuth (30 min)
+
+Locked architecture (v1.3): every `/api/*` route requires an authenticated session. The user's identity is verified by Whop; sessions are signed cookies issued by Auth.js v5 running inside the Vercel app. There is no separate auth service to deploy.
+
+**F1. Create the Whop product/access pass**
+
+1. Sign up at https://whop.com as a creator
+2. Dashboard → **Apps & Products** → **Create new** → **Free product/membership**
+3. Name: "FlowDesk access"
+4. Copy the **Product ID** — this is `WHOP_PRODUCT_ID`
+5. Settings → **OAuth** → create an OAuth app
+   - Redirect URI: `https://flowdesk-puce.vercel.app/api/auth/callback/whop` (use your real domain)
+   - Copy the **Client ID** (`WHOP_CLIENT_ID`) and **Client Secret** (`WHOP_CLIENT_SECRET`)
+
+**F2. Install Auth.js v5 in the Next.js app**
+
+```bash
+cd "/Users/Stefan/Documents/Coding/Champagne Room Software/flowdesk"
+npm install next-auth@beta @auth/prisma-adapter
+```
+
+**F3. Add the Whop OAuth provider**
+
+Auth.js doesn't ship with Whop as a built-in provider; we add it as a custom OAuth provider. Skeleton at `lib/auth.ts`:
+
+```ts
+import NextAuth from "next-auth";
+import { PrismaAdapter } from "@auth/prisma-adapter";
+import { prisma } from "./prisma";
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  adapter: PrismaAdapter(prisma),
+  providers: [
+    {
+      id: "whop",
+      name: "Whop",
+      type: "oauth",
+      authorization: {
+        url: "https://whop.com/oauth/authorize",
+        params: { scope: "user:read membership:read", response_type: "code" },
+      },
+      token: "https://api.whop.com/api/v5/oauth/token",
+      userinfo: "https://api.whop.com/api/v5/me",
+      clientId: process.env.WHOP_CLIENT_ID,
+      clientSecret: process.env.WHOP_CLIENT_SECRET,
+      profile(profile) {
+        return { id: profile.id, email: profile.email, whopMembershipId: profile.id };
+      },
+    },
+  ],
+  session: { strategy: "database", maxAge: 30 * 24 * 60 * 60 },
+  callbacks: {
+    async signIn({ user, account, profile }) {
+      // Verify the user's Whop membership covers WHOP_PRODUCT_ID.
+      const res = await fetch(
+        `https://api.whop.com/api/v5/me/memberships?product_id=${process.env.WHOP_PRODUCT_ID}`,
+        { headers: { Authorization: `Bearer ${account?.access_token}` } }
+      );
+      if (!res.ok) return false;
+      const { data } = await res.json();
+      const active = data?.some((m: any) => m.status === "active");
+      return Boolean(active);
+    },
+  },
+});
+```
+
+> Verify the Whop OAuth endpoint paths against current Whop docs at provisioning time — the URLs above match v5 of the Whop API as of April 2026.
+
+**F4. Add the catch-all auth route**
+
+`app/api/auth/[...nextauth]/route.ts`:
+
+```ts
+export { GET, POST } from "@/lib/auth";
+```
+
+**F5. Gate every other API route**
+
+Add the 3-line check at the top of `app/api/{watches,sentiment,market-tide,gex,flow,darkpool}/route.ts`:
+
+```ts
+import { auth } from "@/lib/auth";
+const session = await auth();
+if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+```
+
+**F6. Add the `/login` page**
+
+`app/login/page.tsx` — minimal Next.js page with a "Sign in with Whop" button that calls `signIn("whop")`.
+
+**F7. Set Vercel env vars**
+
+```bash
+vercel env add WHOP_CLIENT_ID production
+vercel env add WHOP_CLIENT_SECRET production
+vercel env add WHOP_PRODUCT_ID production
+vercel env add NEXTAUTH_URL production    # https://flowdesk-puce.vercel.app
+vercel env add NEXTAUTH_SECRET production # output of: openssl rand -base64 32
+```
+
+**F8. Periodic membership re-check**
+
+Auth.js runs the `signIn` callback only on initial login. To revoke access mid-session when a Whop membership lapses, add a `session` callback that refreshes `users.membershipCheckedAt` every ~5 minutes and re-hits the Whop memberships endpoint:
+
+```ts
+session: {
+  async session({ session, user }) {
+    if (!user.membershipCheckedAt || Date.now() - user.membershipCheckedAt.getTime() > 5 * 60 * 1000) {
+      const stillActive = await checkWhopMembership(user.whopMembershipId);
+      if (!stillActive) throw new Error("Membership revoked");
+      await prisma.user.update({ where: { id: user.id }, data: { membershipCheckedAt: new Date() } });
+    }
+    return session;
+  },
+},
+```
+
+**Cost:** Whop is free for free products. Auth.js is open-source. No new line items.
+
 ### What AWS would have been (for comparison)
 
 This doc originally walked through 8 phases of AWS setup (account hardening, IAM, VPC, security groups, RDS, Secrets Manager, Lambda + EventBridge, CloudWatch). Railway collapses that to 4 phases because:
@@ -699,18 +933,21 @@ What you trade: no granular IAM policies, less detailed metrics than CloudWatch,
 - [ ] Phase B1: Add Postgres service to the project
 - [ ] Phase B2: Install `psql` locally
 - [ ] Phase B3: Test connection via `DATABASE_PUBLIC_URL`
-- [ ] Phase B4: Update `prisma/schema.prisma` with §3 additions
+- [ ] Phase B4: Update `prisma/schema.prisma` with §3 additions (FlowAlert, GexSnapshot, MarketTideBar, NetImpactDaily, DarkPoolPrint, XPost, SentimentSnapshot, AnalystProfile, AiSummary, **User, TickerMetadata, HitListDaily, DivergenceAlert**)
 - [ ] Phase B5: `npx prisma migrate deploy` against Railway Postgres
-- [ ] Phase C1: Scaffold `worker/` directory in the repo
-- [ ] Phase C1: Implement `uw.ts`, `x.ts`, `ai.ts` polling jobs
+- [ ] Phase C1: Scaffold `worker/` directory in the repo; move `lambdas/sentiment-batch`, `lambdas/hitlist-compute`, `lambdas/dp-ranking` into `worker/src/jobs/`
+- [ ] Phase C1: Implement all job files: `uw.ts`, `x.ts`, `ai-summarizer.ts`, `retention.ts`, `s3-import.ts`, `hit-list-compute.ts`, `refresh-ticker-metadata.ts`
+- [ ] Phase C1: Implement `worker/src/prompts/sentiment.ts` and `worker/src/prompts/gex.ts` per PRD §3.4 templates
 - [ ] Phase C3: Commit + push
-- [ ] Phase C4: Create the worker service on Railway, reference Postgres DB, set env vars, set root dir to `worker/`
+- [ ] Phase C4: Create the worker service on Railway, reference Postgres DB, set env vars (UW, X, Anthropic, AWS S3, TZ), set root dir to `worker/`
 - [ ] Phase C5: Confirm `[worker] started` log and first data rows land in Postgres
-- [ ] Add authentication to API routes (API key header or NextAuth single-user) before flipping `USE_MOCK_DATA` off
-- [ ] Phase D5: Rewrite each `app/api/*/route.ts` to read from Postgres (remove the 501 branch)
+- [ ] Phase D5: Rewrite each `app/api/*/route.ts` to read from Postgres (remove the 501 branch); add the 3-line `auth()` check at the top
+- [ ] **Phase F1: Create the free Whop product/access pass + OAuth app**
+- [ ] **Phase F2–F8: Install Auth.js v5, add Whop OAuth provider, gate all `/api/*` routes, build `/login` page, set Whop + NEXTAUTH env vars in Vercel**
 - [ ] Phase D2–D3: Set `DATABASE_URL` + `USE_MOCK_DATA=false` in Vercel, redeploy
 - [ ] Phase E: Sentry + UptimeRobot (optional)
 - [ ] Confirm Railway usage stays inside the $25 cap after a full week
+- [ ] Confirm UW multi-user license posture before onboarding past initial-user testing (PRD §16)
 
 ---
 
@@ -719,12 +956,15 @@ What you trade: no granular IAM policies, less detailed metrics than CloudWatch,
 **Resolved in v1.2.1:**
 - ~~X API tier~~ → **Basic ($100/mo) confirmed**, used directly (no xAI Grok layer).
 - ~~Data retention~~ → **60d flow / 30d DP except perpetual top-100 per ticker** (see §2.1).
-- ~~Top Net Impact source~~ → preferred path is a UW endpoint exposing the bid/ask formula (PRD §11); fallback is worker-side aggregation. Confirm with UW support whether `/api/option-trades/flow-alerts` rows include `*_bid_premium` / `*_ask_premium`.
+
+**Resolved in v1.3:**
+- ~~Single worker vs multi-service~~ → **Single worker (option A)** locked. The `services/websocket-server` + `services/data-ingestion` scaffolding stays dormant; lambdas move to `worker/src/jobs/`.
+- ~~Authentication on Next.js API routes~~ → **Auth.js v5 with Whop OAuth provider** (Phase F). Whop manages the access list via a free product/access pass. Each user gets a session cookie; every `/api/*` route 401s without one.
+- ~~Disaster recovery~~ → **Railway default 4-day daily snapshots** accepted.
+- ~~GEX key levels~~ → **Worker computes** call wall / put wall / gamma flip from per-strike rows. Max pain comes from UW's `/options-volume` if available, otherwise computed locally.
+- ~~AI summary prompt templates~~ → **Locked.** See PRD §3.4 for the full sentiment + per-ticker GEX templates. Files live at `worker/src/prompts/{sentiment,gex}.ts`.
 
 **Still open:**
 
-1. **Single worker vs multi-service architecture.** This doc specs the single-worker model. The repo also contains scaffolding for `services/websocket-server` (Clerk + Redis + ws) and `services/data-ingestion`. Resolve before standing up the worker — the recommendation is single-worker since UW has no push channel and a personal tool doesn't need Clerk.
-2. **Authentication on the Next.js API routes.** Before flipping to live data, at least an API key header is needed so random visitors can't hammer the endpoints and burn the UW quota. NextAuth single-user (email magic link) is the recommended path.
-3. **Disaster recovery.** Railway's default 4-day daily snapshots — fine for a personal tool. Bump retention only if it ever matters.
-4. **GEX key levels in production.** UW does not expose call wall / put wall / gamma flip directly; the worker derives them from per-strike rows. Confirm whether UW returns max pain anywhere (likely in `/options-volume`) before computing it locally.
-5. **AI summary prompt template.** Lock the input schema and target output length for both `kind="sentiment-{date}"` and `kind="gex-{TICKER}-{date}"` before the first 07:00 ET batch run, so output stays consistent across days.
+1. **Top Net Impact source.** Preferred path is a UW endpoint exposing the bid/ask formula (PRD §11); fallback is worker-side aggregation. Confirm with UW support whether `/api/option-trades/flow-alerts` rows include `*_bid_premium` / `*_ask_premium`.
+2. **UW multi-user license.** Basic tier is licensed for personal/single-user use. A Whop-managed access list (potentially scaling to ~100 internal company users) likely requires a team or enterprise agreement with UW. Confirm with UW sales before moving past initial-user testing.
