@@ -9,7 +9,7 @@
 // ---------- Enums / primitive aliases ----------
 
 export type Direction = "BULLISH" | "BEARISH";
-export type Confidence = "HIGH" | "MED" | "MOD" | "LOW";
+export type Confidence = "HIGH" | "MED" | "LOW";
 export type OptionType = "CALL" | "PUT";
 export type Side = "BUY" | "SELL";
 export type ExecType = "SWEEP" | "FLOOR" | "SINGLE" | "BLOCK";

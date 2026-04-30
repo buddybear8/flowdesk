@@ -22,5 +22,5 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ prints });
   }
 
-  return NextResponse.json({ error: "Live Polygon feed not wired yet" }, { status: 501 });
+  return NextResponse.json({ error: "Live UW dark-pool feed not wired yet" }, { status: 501 });
 }

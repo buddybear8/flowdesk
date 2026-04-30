@@ -84,6 +84,15 @@ export function buildMarketTide(): MarketTideSnapshot {
 
 // =============================================================
 // Top Net Impact Chart — per-ticker net premium snapshot
+//
+// Net Impact = (call_ask_premium - call_bid_premium)
+//            + (put_bid_premium - put_ask_premium)
+// i.e. aggressive call buying minus aggressive put buying.
+// Bullish flow → positive; bearish flow → negative.
+//
+// The 10 tickers with the largest |Net Impact| during the same calendar
+// day are selected (so a fully-bearish tape still surfaces 10 names).
+// Display order: most-positive → most-negative for chart readability.
 // =============================================================
 
 export interface NetImpactRow {
@@ -110,16 +119,6 @@ export function buildNetImpact(): NetImpactSnapshot {
       { ticker: "MRVL", netPremium: 31_000_000 },
       { ticker: "LITE", netPremium: 26_000_000 },
       { ticker: "BA",   netPremium: 22_000_000 },
-      { ticker: "MSFT", netPremium: 19_000_000 },
-      { ticker: "GOOG", netPremium: 16_000_000 },
-      { ticker: "PLTR", netPremium: 14_000_000 },
-      { ticker: "CRWV", netPremium: 12_000_000 },
-      { ticker: "NVDA", netPremium: 10_000_000 },
-      { ticker: "BE",   netPremium: 8_000_000 },
-      { ticker: "ARM",  netPremium: 5_000_000 },
-      { ticker: "UNH",  netPremium: 3_500_000 },
-      { ticker: "TQQQ", netPremium: 1_200_000 },
-      { ticker: "IWM",  netPremium: -21_000_000 },
       { ticker: "TSLA", netPremium: -46_000_000 },
       { ticker: "CAR",  netPremium: -58_000_000 },
     ],
