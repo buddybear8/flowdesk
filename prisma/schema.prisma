@@ -1,5 +1,17 @@
-// FlowDesk Prisma schema — PRD Section 3.5 (dark pool historical DB)
-// + stored criteria config (Section 6) + sentiment snapshots cache (Section 7).
+// FlowDesk Prisma schema — V1 (v1.2.3 / ARCHITECTURE v1.4)
+//
+// Models below are grouped by purpose:
+//   1. Live polled data        — FlowAlert, GexSnapshot, DarkPoolPrint,
+//                                MarketTideBar, NetImpactDaily
+//   2. Reference / config      — TickerMetadata, WatchesCriteria
+//   3. Computed daily artifacts — HitListDaily, AiSummary
+//   4. Auth (Auth.js v5 + Whop) — User, Account, Session, VerificationToken
+//   5. 🗄 Archived in v1.2.3    — SentimentSnapshot (commented at file end);
+//                                see ARCHITECTURE §3 for XPost,
+//                                AnalystProfile, DivergenceAlert which were
+//                                never added.
+//
+// References: docs/FlowDesk_PRD.md · docs/ARCHITECTURE.md §3.
 
 generator client {
   provider = "prisma-client-js"
@@ -10,69 +22,298 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ---------- Dark pool historical prints ----------
+// ═══════════════════════════════════════════════════════════════
+// 1. Live polled data
+// ═══════════════════════════════════════════════════════════════
 
+// Raw flow alerts polled from UW /api/option-trades/flow-alerts.
+// Polling cadence: 30s mkt / 5m off (ARCHITECTURE §2.1).
+// Retention: 60 days (enforced by flow-retention-sweep cron at 03:00 ET).
+model FlowAlert {
+  id         String   @id // UW's alert id
+  capturedAt DateTime @map("captured_at") // when we polled it
+  time       DateTime // alert timestamp per UW
+  ticker     String   @db.VarChar(10)
+  type       String   @db.VarChar(4) // CALL | PUT
+  side       String   @db.VarChar(4) // BUY | SELL
+  sentiment  String   @db.VarChar(8) // BULLISH | BEARISH
+  exec       String   @db.VarChar(8) // SWEEP | FLOOR | SINGLE | BLOCK
+  multiLeg   Boolean  @map("multi_leg")
+  contract   String // "$145P May 15"
+  strike     Decimal  @db.Decimal(12, 4)
+  expiry     DateTime @db.Date
+  size       Int
+  oi         Int
+  premium    Decimal  @db.Decimal(16, 2)
+  spot       Decimal  @db.Decimal(12, 4)
+  rule       String
+  confidence String   @db.VarChar(4) // HIGH | MED | LOW (v1.2.1 enum)
+  sector     String   @db.VarChar(32) // matches `Sector` union (PRD §18)
+
+  @@index([capturedAt(sort: Desc)])
+  @@index([ticker, capturedAt(sort: Desc)])
+  @@map("flow_alerts")
+}
+
+// Per-ticker GEX snapshot. Polling cadence: 60s per watched ticker during
+// market hours (ARCHITECTURE §2.1). Per-strike rows stored as JSON to keep
+// row count manageable (~5 tickers × 1 row/min × 6.5h = ~2K rows/day).
+// Retention: 30 days.
+model GexSnapshot {
+  id          BigInt   @id @default(autoincrement())
+  capturedAt  DateTime @map("captured_at")
+  ticker      String   @db.VarChar(10)
+  asOf        DateTime @map("as_of") // UW's stated timestamp
+  spot        Decimal  @db.Decimal(12, 4)
+  netGexOI    Decimal  @map("net_gex_oi") @db.Decimal(20, 2)
+  netGexDV    Decimal  @map("net_gex_dv") @db.Decimal(20, 2)
+  gammaRegime String   @map("gamma_regime") @db.VarChar(10) // POSITIVE | NEGATIVE
+  callWall    Decimal  @map("call_wall") @db.Decimal(12, 4)
+  putWall     Decimal  @map("put_wall") @db.Decimal(12, 4)
+  gammaFlip   Decimal  @map("gamma_flip") @db.Decimal(12, 4)
+  maxPain     Decimal  @map("max_pain") @db.Decimal(12, 4)
+  strikes     Json // GEXLevel[] from PRD §18
+
+  @@index([ticker, capturedAt(sort: Desc)])
+  @@map("gex_snapshots")
+}
+
+// Dark pool prints — populated by both:
+//   (a) live UW polling: GET /api/darkpool/recent every 30s during mkt
+//   (b) historical Polygon-sourced S3 backfill (out-of-band; see PRD §3.5)
+// Retention rule (v1.2.1):
+//   - rank ≤ 100 (top 100 per ticker): retained in PERPETUITY
+//   - rank > 100 / null:               30-day rolling window
+// Enforced by dp-retention-sweep cron at 03:00 ET.
 model DarkPoolPrint {
-  id            BigInt   @id @default(autoincrement())
-  executedAt    DateTime @map("executed_at")
-  ticker        String   @db.VarChar(10)
-  price         Decimal  @db.Decimal(12, 4)
-  size          Int
-  premium       Decimal  @db.Decimal(16, 2)
-  volume        BigInt?
-  exchangeId    Int?     @map("exchange_id")
-  trfId         Int?     @map("trf_id")
-  isEtf         Boolean  @default(false) @map("is_etf")
-  isExtended    Boolean  @default(false) @map("is_extended")
-  allTimeRank   Int?     @map("all_time_rank")
-  percentile    Decimal? @db.Decimal(5, 2)
+  id         BigInt   @id @default(autoincrement())
+  uwId       String?  @unique @map("uw_id") // UW's print id when present
+  executedAt DateTime @map("executed_at")
+  ticker     String   @db.VarChar(10)
+  price      Decimal  @db.Decimal(12, 4)
+  size       Int
+  premium    Decimal  @db.Decimal(16, 2)
+  volume     BigInt?
+  exchangeId Int?     @map("exchange_id") // 4 = dark pool (PRD §10)
+  trfId      Int?     @map("trf_id")
+  isEtf      Boolean  @default(false) @map("is_etf")
+  isExtended Boolean  @default(false) @map("is_extended")
+  isIntraday Boolean  @default(true) @map("is_intraday") // 09:30-16:00 ET (PRD §10 Q15)
+  rank       Int? // computed against top-100 corpus or pass-through
+  percentile Decimal? @db.Decimal(5, 2) // 0–100
 
   @@index([ticker, executedAt(sort: Desc)])
-  @@index([allTimeRank])
+  @@index([rank])
+  @@index([isIntraday, executedAt(sort: Desc)])
   @@map("dark_pool_prints")
 }
 
-// ---------- Stored Daily Watches criteria config ----------
+// 5-min Market Tide buckets from UW /api/market/market-tide?interval_5m=1.
+// Polling cadence: 5m during market hours.
+// Retention: 30 days.
+model MarketTideBar {
+  id             BigInt   @id @default(autoincrement())
+  bucketStart    DateTime @map("bucket_start") // 5-min bucket start (UTC)
+  spyPrice       Decimal  @map("spy_price") @db.Decimal(12, 4)
+  netCallPremium Decimal  @map("net_call_premium") @db.Decimal(20, 2)
+  netPutPremium  Decimal  @map("net_put_premium") @db.Decimal(20, 2)
+  volume         BigInt
 
+  @@unique([bucketStart])
+  @@index([bucketStart(sort: Desc)])
+  @@map("market_tide_bars")
+}
+
+// Top Net Impact daily snapshots — top 10 tickers by |Net Impact| per day,
+// computed every 5 min during market hours from intraday flow. Formula:
+//   Net Impact = (call_ask_premium − call_bid_premium)
+//              + (put_bid_premium  − put_ask_premium)
+// See PRD §11. Latest row per (snapshotDate, ticker) replaces prior intraday.
+model NetImpactDaily {
+  id           BigInt   @id @default(autoincrement())
+  snapshotDate DateTime @map("snapshot_date") @db.Date
+  ticker       String   @db.VarChar(10)
+  netPremium   Decimal  @map("net_premium") @db.Decimal(16, 2)
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([snapshotDate, ticker])
+  @@index([snapshotDate, netPremium(sort: Desc)])
+  @@map("net_impact_daily")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 2. Reference / config
+// ═══════════════════════════════════════════════════════════════
+
+// Per-ticker reference. Populated daily by refresh-ticker-metadata cron at
+// 05:30 ET — pulls from UW ticker info, falls back to lib/sector-overrides.ts
+// for ETFs UW returns no sector for (SPY → Index, GLD → Commodities, etc.).
+// `sector` matches the `Sector` union in lib/types/index.ts (15 values:
+// 11 GICS + 4 ETF asset classes — PRD §18).
+model TickerMetadata {
+  ticker    String   @id @db.VarChar(10)
+  sector    String   @db.VarChar(32)
+  name      String?
+  isEtf     Boolean  @default(false) @map("is_etf")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("ticker_metadata")
+}
+
+// Daily Watches criteria config (PRD §6). Single-row table — id always 1.
 model WatchesCriteria {
-  id              Int      @id @default(1)
-  minPremium      Int      @default(700000) @map("min_premium")
-  confFilter      String   @default("HIGH_MOD") @map("conf_filter")
-  execTypes       String[] @default(["SWEEP", "FLOOR", "BLOCK", "SINGLE"]) @map("exec_types")
-  maxAlerts       Int      @default(20) @map("max_alerts")
-  excludeSectors  String[] @default([]) @map("exclude_sectors")
-  requireDp       Boolean  @default(false) @map("require_dp")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id             Int      @id @default(1)
+  minPremium     Int      @default(700000) @map("min_premium")
+  confFilter     String   @default("HIGH_MED") @map("conf_filter") // HIGH | HIGH_MED | ALL
+  execTypes      String[] @default(["SWEEP", "FLOOR", "BLOCK", "SINGLE"]) @map("exec_types")
+  maxAlerts      Int      @default(20) @map("max_alerts")
+  excludeSectors String[] @default([]) @map("exclude_sectors")
+  requireDp      Boolean  @default(false) @map("require_dp")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@map("watches_criteria")
 }
 
-// ---------- Sentiment snapshots (pre-computed daily) ----------
+// ═══════════════════════════════════════════════════════════════
+// 3. Computed daily artifacts
+// ═══════════════════════════════════════════════════════════════
 
-model SentimentSnapshot {
-  id           BigInt   @id @default(autoincrement())
-  snapshotAt   DateTime @map("snapshot_at")
-  ticker       String   @db.VarChar(10)
-  mentions     Int
-  velocityPct  Float    @map("velocity_pct")
-  bullPct      Float    @map("bull_pct")
-  bearPct      Float    @map("bear_pct")
-  neutralPct   Float    @map("neutral_pct")
-  sentiment    String   // BULL | BEAR | MIX
+// Materialized hit list (PRD §6). Worker job hit-list-compute runs at
+// 07:30 ET daily; POST /api/admin/criteria triggers same-day rebuild.
+// Up to 20 rows per (date, rank). Queryable as: WHERE date = today().
+model HitListDaily {
+  id                 BigInt   @id @default(autoincrement())
+  date               DateTime @db.Date
+  rank               Int // 1..20
+  ticker             String   @db.VarChar(10)
+  price              Decimal  @db.Decimal(12, 4)
+  direction          String   @db.VarChar(4) // UP | DOWN
+  confidence         String   @db.VarChar(4) // HIGH | MED | LOW
+  premium            Decimal  @db.Decimal(16, 2)
+  contract           String
+  dpConf             Boolean  @map("dp_conf")
+  dpRank             Int?     @map("dp_rank")
+  dpAge              String?  @map("dp_age") // "today" | "yesterday"
+  dpPrem             Decimal? @map("dp_prem") @db.Decimal(16, 2)
+  thesis             String   @db.Text
+  sector             String   @db.VarChar(32)
+  actionabilityScore Decimal  @map("actionability_score") @db.Decimal(8, 4)
+  contracts          Json // HitListContract[]
+  peers              Json // HitListPeer[]
+  theme              Json // HitListTheme
 
-  @@index([snapshotAt(sort: Desc)])
-  @@index([ticker])
-  @@map("sentiment_snapshots")
+  @@unique([date, rank])
+  @@index([date(sort: Desc)])
+  @@map("hit_list_daily")
 }
 
-// ---------- Cached AI summaries ----------
-
+// AI summaries (Anthropic Haiku batch). V1 scope: per-ticker GEX explanations
+// only, written by ai-summarizer at 07:00 ET. Sentiment summary path archived
+// in v1.2.3 (PRD §3.4 / §7).
+//
+// kind format (locked v1.2.2):
+//   "gex-{TICKER}-{YYYY-MM-DD}"   — V1 active
+//   "sentiment-{YYYY-MM-DD}"      — 🗄 archived, do not generate in V1
 model AiSummary {
   id          BigInt   @id @default(autoincrement())
-  kind        String   // "sentiment" | "gex-{ticker}"
+  kind        String   @db.VarChar(64)
   generatedAt DateTime @map("generated_at")
   body        String   @db.Text
+  tokensUsed  Int      @default(0) @map("tokens_used")
 
   @@index([kind, generatedAt(sort: Desc)])
   @@map("ai_summaries")
 }
+
+// ═══════════════════════════════════════════════════════════════
+// 4. Auth (Auth.js v5 + Whop OAuth provider) — added v1.3
+// ═══════════════════════════════════════════════════════════════
+//
+// Standard NextAuth/@auth/prisma-adapter tables (Account, Session,
+// VerificationToken) plus a custom User with Whop membership tracking.
+// See ARCHITECTURE §6 Phase F for the auth setup walkthrough.
+
+model User {
+  id                  String    @id @default(cuid())
+  whopMembershipId    String    @unique @map("whop_membership_id")
+  email               String    @unique
+  emailVerified       DateTime? @map("email_verified") // standard NextAuth field
+  name                String?
+  image               String?
+  isActive            Boolean   @default(true) @map("is_active")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  lastLoginAt         DateTime? @map("last_login_at")
+  membershipCheckedAt DateTime? @map("membership_checked_at") // for periodic re-check
+
+  accounts Account[]
+  sessions Session[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 5. 🗄 Archived in v1.2.3 — DO NOT USE IN V1
+// ═══════════════════════════════════════════════════════════════
+//
+// SentimentSnapshot was the daily sentiment cache feeding the Sentiment
+// Tracker module (PRD §7). The X API data path was archived in v1.2.3
+// because Basic tier ($100/mo) was unaffordable. Reactivate alongside
+// XPost / AnalystProfile / DivergenceAlert (see ARCHITECTURE §3 archive
+// block) when bringing the module back.
+//
+// model SentimentSnapshot {
+//   id          BigInt   @id @default(autoincrement())
+//   snapshotAt  DateTime @map("snapshot_at")
+//   ticker      String   @db.VarChar(10)
+//   mentions    Int
+//   velocityPct Float    @map("velocity_pct")
+//   bullPct     Float    @map("bull_pct")
+//   bearPct     Float    @map("bear_pct")
+//   neutralPct  Float    @map("neutral_pct")
+//   sentiment   String   // BULL | BEAR | MIX
+//
+//   @@index([snapshotAt(sort: Desc)])
+//   @@index([ticker])
+//   @@map("sentiment_snapshots")
+// }
