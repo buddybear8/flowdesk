@@ -1,7 +1,8 @@
 # FlowDesk — Product Requirements Document
-### Trading Intelligence Dashboard · v1.2.2 · April 2026
+### Trading Intelligence Dashboard · v1.2.3 · April 2026
 
-*Revised Apr 29, 2026 (later) — v1.2.2 locks the remaining open questions: Auth.js v5 with Whop OAuth provider for access management (each user gets their own session), Sector enum expanded to 15 values (11 GICS + 4 ETF asset classes) and tightened from `string`, hit list moves to a daily 07:30 ET worker job with same-day-rebuild on criteria save, divergence trigger rule defined (|Δsentiment| ≥ 30 + opposite price direction over 3 days), Dark Pools "Intraday only" toggle = 09:30–16:00 ET time-window filter, AI prompt templates locked, single-worker option-A architecture confirmed.*  
+*Revised Apr 30, 2026 — v1.2.3 **archives the Sentiment Tracker module** from V1 scope. X API Basic ($100/mo) is unaffordable for our deployment, and the sentiment summary path was the only consumer of X data. The Sentiment Tracker section, X API integration, sentiment-derived AI summary, divergence alert rule, and X/sentiment Prisma models are preserved in archive banners for future revisit. The sidebar entry is hidden in V1; the underlying route, page, mock data, types, and component remain in the repo. Cost impact: ~$100/mo savings.*  
+*Prior v1.2.2 (Apr 29, 2026 later) locked Auth.js v5 + Whop OAuth, expanded Sector enum to 15 values, moved hit list to a daily worker job, locked divergence trigger rule + AI prompt templates, confirmed single-worker option-A architecture.*  
 *Prior v1.2.1 (Apr 29, 2026) locked UW Basic tier, removed Vanna/Charm pill toggle, switched sentiment to X API direct, restored historical DP ranking via Polygon-sourced S3 import, locked retention rules and Confidence enum.*  
 *Prior v1.2 (Apr 23, 2026) added Market Pulse and reflected the live Vercel deployment + security hardening landed 2026-04-22.*
 
@@ -67,8 +68,8 @@ FlowDesk is a personal trading intelligence web app that aggregates institutiona
 | ORM | Prisma | Schema migrations |
 | Real-time | Polling against UW endpoints; prices arrive embedded in flow, GEX, market-tide, and DP responses | **v1.2 default — no dedicated price feed vendor.** Finnhub ($50/mo) remains an optional upgrade if sub-second ticks become necessary. See §3.2 |
 | Hosting | **Vercel** (frontend) + **Railway** (Postgres + worker service) | Frontend live on Vercel; Railway hosts the live-data DB and the polling worker. Full setup in [ARCHITECTURE.md](./ARCHITECTURE.md) §6. |
-| AI summaries | Anthropic Claude API (`claude-haiku-4-5`) | Pre-market batch, ~$1/mo for 50 tickers/day |
-| Sentiment API | xAI Grok API or X API v2 | Cashtag mention velocity, once-daily batch |
+| AI summaries | Anthropic Claude API (`claude-haiku-4-5`) | Pre-market batch — V1 scope is per-ticker GEX explanations only (sentiment summary archived with the Sentiment Tracker module) |
+| ~~Sentiment API~~ | ~~X API v2~~ | **Archived in v1.2.3** — X API Basic ($100/mo) unaffordable; Sentiment Tracker module deferred from V1 (see §7 archive banner) |
 
 ---
 
@@ -141,7 +142,9 @@ Until that tipping point is reached, the $50/mo is not spent.
 
 **Price-vendor history:** v1.0 used Polygon.io Advanced ($199/mo). v1.1 replaced it with Finnhub All-In-One ($50/mo). v1.2 drops Finnhub from the critical path in favor of UW-embedded prices — saving $50/mo on the default plan while keeping Finnhub as a clean drop-in if needs grow.
 
-### 3.3 X API v2
+### 3.3 X API v2 *(ARCHIVED in v1.2.3 — deferred from V1)*
+
+> **🗄 Archived from V1 scope (Apr 30, 2026).** The X API Basic tier at $100/mo is unaffordable for our deployment and was the only consumer of X data in the V1 design. This section is retained for future revisit; do NOT wire `X_BEARER_TOKEN` or schedule the X-batch cron in V1. The Sentiment Tracker module (§7) and sentiment-derived AI summary (§3.4) are archived alongside this. Reactivating the module means restoring this section, the `x-batch` cron in ARCHITECTURE §6, the `XPost`/`SentimentSnapshot`/`AnalystProfile`/`DivergenceAlert` Prisma models, and uncommenting the sidebar entry in `components/layout/Sidebar.tsx`.
 
 **Purpose:** Cashtag mention velocity, sentiment scoring, analyst post tracking  
 **Tier:** Basic ($100/mo) — ~500K tweet reads/month, comfortably enough for 50 tickers × once-daily + 20 analysts × 30 posts/day  
@@ -151,36 +154,36 @@ Until that tipping point is reached, the $50/mo is not spent.
 
 ### 3.4 Anthropic Claude API
 
-**Purpose:** Pre-market AI summaries for Sentiment tracker and GEX AI explanation modal  
+**Purpose:** Pre-market per-ticker GEX explanation (read into the AI explanation modal in §8). The previously-scoped sentiment summary path is archived in v1.2.3 alongside the Sentiment Tracker module.  
 **Model:** `claude-haiku-4-5` (cost-optimised)  
-**Cadence:** Once daily pre-market batch (07:00 ET) — both sentiment summary and per-ticker GEX explanations are generated in the same batch run  
-**Cost estimate:** ~$1–3/mo for 50 tickers/day pre-market + 5 GEX explanations
+**Cadence:** Once daily pre-market batch (07:00 ET) — GEX explanations only in V1  
+**Cost estimate:** **<$1/mo** in V1 (5 watched tickers × ~300 tokens × ~22 trading days). Was ~$1–3/mo prior to sentiment archive.
 
-#### Prompt templates (locked v1.2.2)
+#### Prompt templates (locked v1.2.2; sentiment template archived in v1.2.3)
 
-Two prompts are executed per daily batch. Templates live at `worker/src/prompts/sentiment.ts` and `worker/src/prompts/gex.ts` and are version-controlled in this repo.
+In V1, only the GEX explanation template runs in the daily batch. The sentiment summary template is preserved below in an archive block for the future Sentiment Tracker reactivation.
 
-**Sentiment summary prompt:**
-```
-SYSTEM:
-You are FlowDesk's pre-market analyst. Generate a 120–160 word summary of overnight
-sentiment for the date provided. Tone: terse, factual, like a Bloomberg morning
-email. No hedging language. No bullet points. Single paragraph. Do not name
-analysts or include direct quotes.
+> **🗄 Archived (sentiment summary prompt — deferred from V1):**
+> ```
+> SYSTEM:
+> You are FlowDesk's pre-market analyst. Generate a 120–160 word summary of overnight
+> sentiment for the date provided. Tone: terse, factual, like a Bloomberg morning
+> email. No hedging language. No bullet points. Single paragraph. Do not name
+> analysts or include direct quotes.
+>
+> INPUTS (passed as a structured JSON object):
+> - date                     ISO date string
+> - overall_score            0–100 integer
+> - trend_vs_yesterday       signed integer (points)
+> - top_velocity_movers      [{ ticker, velocity_pct, sentiment }]   ≤ 8 rows
+> - divergence_alerts        [{ ticker, type, severity, description }]
+> - sector_breakdown         [{ name, bull_pct }]
+> - new_entrants             [{ ticker, sentiment }]
+> - biggest_flips            [{ ticker, delta_pts }]
+> ```
+> Output stored in `ai_summaries` with `kind="sentiment-{YYYY-MM-DD}"`. Reactivate alongside §7 / §3.3.
 
-INPUTS (passed as a structured JSON object):
-- date                     ISO date string
-- overall_score            0–100 integer
-- trend_vs_yesterday       signed integer (points)
-- top_velocity_movers      [{ ticker, velocity_pct, sentiment }]   ≤ 8 rows
-- divergence_alerts        [{ ticker, type, severity, description }]
-- sector_breakdown         [{ name, bull_pct }]
-- new_entrants             [{ ticker, sentiment }]
-- biggest_flips            [{ ticker, delta_pts }]
-```
-Output is stored in `ai_summaries` with `kind="sentiment-{YYYY-MM-DD}"`.
-
-**Per-ticker GEX explanation prompt:**
+**Per-ticker GEX explanation prompt (V1 active):**
 ```
 SYSTEM:
 You are FlowDesk's GEX analyst. Generate a structured explanation of today's
@@ -267,7 +270,6 @@ Fixed-width left sidebar (192px) + flexible main content area. Height: full view
 ├─────────────────────┤
 │ MODULES             │
 │ 🔥 Daily watches  [new] │
-│ 👑 Sentiment tracker │
 │ 🌀 Market Pulse     │
 │ ⚡ Options GEX      │
 │ 📈 Flow alerts   [18] │
@@ -280,6 +282,8 @@ Fixed-width left sidebar (192px) + flexible main content area. Height: full view
 │ ⚙  Settings         │
 └─────────────────────┘
 ```
+
+> **🗄 Note (v1.2.3):** the `👑 Sentiment tracker` entry is archived from V1 — hidden in `components/layout/Sidebar.tsx`. Route + page + mock data + component remain in the repo for future reactivation.
 
 Icons are rendered as emoji on 26×26 tinted-background tiles. The logo mark is a blue rounded square with a white `^` SVG (upward trend).
 
@@ -300,7 +304,7 @@ Sits below the topbar. Each module has its own tab set. **Tab state is URL-synce
 | Module | Tabs | Built |
 |---|---|---|
 | Daily watches | Hit list · Criteria config | Hit list only (Criteria config placeholder) |
-| Sentiment tracker | Overview · Analyst intelligence | **Both** |
+| ~~Sentiment tracker~~ | ~~Overview · Analyst intelligence~~ | **🗄 Archived in v1.2.3 — deferred from V1.** Both tabs remain in repo (`/sentiment`, `app/(modules)/sentiment/page.tsx`, `SentimentView.tsx`) but unlinked from the sidebar |
 | Market Pulse *(new v1.2)* | *single page — no sub-tabs* | Tide line chart + Top Net Impact bar chart stacked |
 | Options GEX | *single page — no sub-tabs* | Full single-page layout |
 | Flow alerts | Live feed · Sweep scanner · 0DTE flow · Unusual activity | Live feed only (others placeholders) |
@@ -403,7 +407,17 @@ The hit list is **computed once per trading day, pre-market**. Key points:
 
 ---
 
-## 7. Module 2 — Sentiment tracker
+## 7. Module 2 — Sentiment tracker *(ARCHIVED in v1.2.3 — deferred from V1)*
+
+> **🗄 Archived from V1 scope (Apr 30, 2026).** X API Basic ($100/mo) is unaffordable for our deployment, and X data was the only input to this module. The sidebar entry is hidden in `components/layout/Sidebar.tsx`; the underlying route (`app/api/sentiment/route.ts`), page (`app/(modules)/sentiment/page.tsx`), component (`components/modules/sentiment/SentimentView.tsx`), mock data (`lib/mock/sentiment-data.ts`), and types are retained in the repo for future reactivation. Reactivating this module requires:
+> 1. Restoring §3.3 (X API v2) from its archive banner and securing X API credentials
+> 2. Restoring the sentiment summary prompt template in §3.4
+> 3. Un-archiving the `XPost`, `SentimentSnapshot`, `AnalystProfile`, `DivergenceAlert` Prisma models in ARCHITECTURE §3
+> 4. Re-adding the `daily6amET` X-batch cron and the sentiment branch of the `ai-summarizer` cron in ARCHITECTURE §6
+> 5. Un-commenting the `Sentiment tracker` entry in `components/layout/Sidebar.tsx`
+> 6. Confirming X API tier pricing fits the budget (current Basic = $100/mo)
+>
+> The full v1.2.2-locked module spec follows below for reference. **Do not implement in V1.**
 
 **Two tabs** — `Overview` and `Analyst intelligence` — rendered via a URL-synced TabBar. Breadcrumb updates live.
 
@@ -1018,13 +1032,15 @@ GET /api/watches
   → Production cache: 5 minutes
 ```
 
-### 5. Sentiment
+### 5. Sentiment *(ARCHIVED in v1.2.3 — deferred from V1)*
+
+> **🗄 Archived.** The route handler at `app/api/sentiment/route.ts` is retained in the repo and continues to return mock data when `USE_MOCK_DATA=true` (kept so the archived component still renders if visited via direct URL), but **no production wiring should be added in V1**. When V1 ships with `USE_MOCK_DATA=false`, this route returns 501. Reactivation requires un-archiving §3.3, §7, the sentiment Prisma models, and the daily X batch.
 
 ```
 GET /api/sentiment?view=overview      → SentimentOverview
 GET /api/sentiment?view=analysts      → AnalystIntelligence
   → Mock: buildSentimentOverview() / buildAnalystIntelligence()
-  → Production: reads from sentiment_snapshots DB cache (pre-computed daily)
+  → Production: archived from V1 scope
 ```
 
 ### 6. Market Pulse *(new in v1.2)*
@@ -1059,11 +1075,16 @@ Every route handler validates query params before calling the mock or upstream:
 # ─── Required (Vercel + Railway worker) ──────────────────────
 UW_API_TOKEN=your_uw_token_here
 ANTHROPIC_API_KEY=your_anthropic_key_here
-X_BEARER_TOKEN=your_x_api_v2_bearer_here          # Basic tier — see §3.3
 DATABASE_URL=postgresql://user:password@host:5432/flowdesk
 NEXT_PUBLIC_APP_URL=https://flowdesk.vercel.app
 USE_MOCK_DATA=true    # true = use mock fixtures; false = hit Postgres
 TZ=America/New_York   # worker only — required so node-cron expressions use ET
+
+# ─── Archived in v1.2.3 (do NOT set in V1) ───────────────────
+# X_BEARER_TOKEN — was for X API v2 Basic ($100/mo). Sentiment Tracker
+# module + sentiment AI summary archived from V1 due to cost. Restore
+# alongside §3.3, §7, and the X-batch cron in ARCHITECTURE §6 if/when
+# the module is reactivated.
 
 # ─── Required for auth (Vercel only) ─────────────────────────
 # Auth.js (NextAuth v5) with a Whop OAuth provider (locked v1.2.2 — see §11
@@ -1122,11 +1143,16 @@ Store all secrets in Vercel environment variables (not committed to git).
 - ~~GEX key levels~~ → **Worker computes** call wall / put wall / gamma flip from per-strike rows. Max pain comes from UW's `/options-volume` if available, otherwise computed locally. See §8.
 - ~~AI summary prompt template~~ → **Locked.** Sentiment summary + per-ticker GEX explanation prompts documented in §3.4 with structured input schemas; templates live at `worker/src/prompts/{sentiment,gex}.ts`.
 
+**Decided in v1.2.3 (scope reduction):**
+- **Sentiment Tracker module archived from V1.** X API Basic ($100/mo) unaffordable; the entire Sentiment Tracker module (overview + analyst intelligence), the X API integration (§3.3), the sentiment portion of the daily AI summary batch (§3.4), the divergence trigger rule (formerly §7), and the related Prisma models (`XPost`, `SentimentSnapshot`, `AnalystProfile`, `DivergenceAlert`) are deferred. Full archive treatment in §3.3 / §3.4 / §7. Sidebar entry hidden in `components/layout/Sidebar.tsx`. Cost impact: ~$100/mo savings.
+
 **Still open:**
 
 1. **Top Net Impact source:** confirm with UW support whether `/api/option-trades/flow-alerts` rows include `*_bid_premium` / `*_ask_premium` per row, or whether `/api/screener/option-contracts` is the right source. If neither exposes the bid/ask split, the worker's fallback aggregation (§11) needs a different input shape.
 
 2. **UW multi-user license:** UW Basic tier is licensed for personal/single-user use. A Whop-managed access list (potentially scaling to ~100 internal company users) likely requires a team or enterprise agreement with UW. Confirm with UW sales before moving past initial-user testing.
+
+3. **Sentiment Tracker reactivation criteria:** what threshold (cost reduction, alternative data source, demand from users) triggers bringing the archived module back? Track separately as a post-V1 product decision.
 
 ### Iteration priorities after sandbox demo
 
@@ -1170,7 +1196,7 @@ Store all secrets in Vercel environment variables (not committed to git).
 | Module | Route | Core built | Sub-tabs built | Consumes API | Notes |
 |---|---|---|---|---|---|
 | Daily watches | `/watches` | ✅ | Hit list only | `/api/watches` | Detail panel with functional "Return to overview" — left panel expands to fill when detail dismissed · v1.2.2: hit list compute moves to a daily 07:30 ET worker job writing to `hit_list_daily`; criteria save triggers same-day rebuild |
-| Sentiment tracker | `/sentiment` | ✅ | Overview + Analyst intelligence | `/api/sentiment?view=…` | 8 analyst chips, sort pills, aggregate/individual toggle |
+| ~~Sentiment tracker~~ | ~~`/sentiment`~~ | 🗄 | ~~Overview + Analyst intelligence~~ | ~~`/api/sentiment?view=…`~~ | **Archived in v1.2.3.** Module + route + page + mock + types remain in repo; sidebar entry hidden. Reactivation gated on cost-affordable sentiment data source |
 | Market Pulse *(new v1.2)* | `/market-tide` | ✅ | N/A (single page) | `/api/market-tide` | Stacked: tide line chart (dual Y) + Top Net Impact horizontal bars. Period toggle UI-only |
 | Options GEX | `/gex` | ✅ | N/A (single page) | `/api/gex` | Dual-series bar chart (OI + DV), 240px details panel · Vanna/Charm pill toggle removed in v1.2.1 (returns post-V1) |
 | Flow alerts | `/flow` | ✅ | Live feed only | `/api/flow` | 210px filter panel with chip groups + ranges + toggles |
@@ -1223,20 +1249,21 @@ Security hardening landed 2026-04-22:
 
 ### What's left before live data (punch list)
 
-1. Wire API keys in Railway worker + Vercel env: `UW_API_TOKEN`, `X_BEARER_TOKEN`, `ANTHROPIC_API_KEY`, `DATABASE_URL`, plus AWS S3 vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `DARKPOOL_S3_BUCKET`) for the historical DP import
-2. Provision Railway PostgreSQL; add the 9 missing Prisma models (`FlowAlert`, `GexSnapshot`, `MarketTideBar`, `NetImpactDaily`, `XPost`, `AnalystProfile`, `User`, `TickerMetadata`, `HitListDaily`, `DivergenceAlert`) per ARCHITECTURE §3; run `npx prisma migrate deploy`
-3. Stand up the single Node worker on Railway with the locked option-A architecture (PRD §13 + ARCHITECTURE §1); move `lambdas/sentiment-batch`, `lambdas/hitlist-compute`, `lambdas/dp-ranking` into `worker/src/jobs/`
+1. Wire API keys in Railway worker + Vercel env: `UW_API_TOKEN`, `ANTHROPIC_API_KEY`, `DATABASE_URL`, plus AWS S3 vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `DARKPOOL_S3_BUCKET`) for the historical DP import. *(`X_BEARER_TOKEN` archived in v1.2.3.)*
+2. Provision Railway PostgreSQL; add the 6 V1-active Prisma models (`FlowAlert`, `GexSnapshot`, `MarketTideBar`, `NetImpactDaily`, `User`, `TickerMetadata`, `HitListDaily`) per ARCHITECTURE §3; run `npx prisma migrate deploy`. *(`XPost`, `SentimentSnapshot`, `AnalystProfile`, `DivergenceAlert` archived in v1.2.3.)*
+3. Stand up the single Node worker on Railway with the locked option-A architecture (PRD §13 + ARCHITECTURE §1); move `lambdas/hitlist-compute`, `lambdas/dp-ranking` into `worker/src/jobs/`. *(`lambdas/sentiment-batch` parked under `worker/src/jobs/_archived/` for future reactivation.)*
 4. Implement the S3-to-Postgres dark-pool history import job
 5. Implement retention sweeps (60-day flow, 30-day DP for ranks > 100, perpetual for top 100)
 6. Implement the hit-list-compute job (07:30 ET daily) writing to `hit_list_daily`; wire `POST /api/admin/criteria` to trigger same-day rebuild
 7. Implement the refresh-ticker-metadata job (05:30 ET daily) populating `ticker_metadata`
-8. Replace mock branches in each `route.ts` with Prisma reads
-9. **Stand up Auth.js v5 with the Whop OAuth provider** per §13 "Authentication & access"; wire 401 middleware on every `/api/*` route; flip `USE_MOCK_DATA=false`
-10. Create the free Whop product/access pass; configure `WHOP_CLIENT_ID` / `WHOP_CLIENT_SECRET` / `WHOP_PRODUCT_ID` in Vercel env
-11. Build secondary tab views: Criteria config, Sweep scanner, 0DTE flow, Unusual activity, DP levels
-12. Wire Market Pulse period toggle to the UW `market-tide` interval param
-13. Confirm Top Net Impact endpoint availability with UW (or use the fallback aggregation per §11 formula)
-14. Confirm UW multi-user license posture before onboarding past initial-user testing
+8. Implement the `ai-summarizer` job (07:00 ET daily) — V1 scope is per-ticker GEX explanations only (5 tickers × `kind="gex-{TICKER}-{date}"` rows in `ai_summaries`). Sentiment summary archived in v1.2.3.
+9. Replace mock branches in each V1-active `route.ts` with Prisma reads (skip `app/api/sentiment/route.ts` — it returns mock when `USE_MOCK_DATA=true` and 501 when false; that's the archived state)
+10. **Stand up Auth.js v5 with the Whop OAuth provider** per §13 "Authentication & access"; wire 401 middleware on every V1-active `/api/*` route; flip `USE_MOCK_DATA=false`
+11. Create the free Whop product/access pass; configure `WHOP_CLIENT_ID` / `WHOP_CLIENT_SECRET` / `WHOP_PRODUCT_ID` in Vercel env
+12. Build secondary tab views: Criteria config, Sweep scanner, 0DTE flow, Unusual activity, DP levels
+13. Wire Market Pulse period toggle to the UW `market-tide` interval param
+14. Confirm Top Net Impact endpoint availability with UW (or use the fallback aggregation per §11 formula)
+15. Confirm UW multi-user license posture before onboarding past initial-user testing
 
 ---
 
@@ -1252,8 +1279,8 @@ Defined in `/lib/types/index.ts` (plus `/lib/mock/market-tide-data.ts` for the M
 | `DarkPoolPrint` | One DP print | `executed_at, ticker, price, size, premium, volume, exchange_id, trf_id, is_etf, is_extended, all_time_rank, percentile` *(rank + percentile now pass through from UW; no local historical index in v1.2)* |
 | `GEXLevel` | Per-strike GEX row | `strike, call_gamma_oi, put_gamma_oi, call/put_gamma_bid, call/put_gamma_ask, netDV, netOI, combined` |
 | `HitListItem` | One row in Daily watches | `rank, ticker, price, direction, confidence, premium, contract, dpConf, dpRank?, dpAge?, dpPrem?, thesis, sector, contracts, peers, theme` |
-| `SentimentTicker` | One top-tickers-by-velocity row | `ticker, velocityPct, sentiment (BULL/BEAR/MIX), mentions` |
-| `AnalystProfile` | One analyst record | `handle, initials, followers, bio, bias, accuracy30d, bullBearRatio, postsPerDay, callsTracked, portfolio, recentCalls, accuracyByTicker` |
+| ~~`SentimentTicker`~~ | ~~One top-tickers-by-velocity row~~ | **🗄 Archived in v1.2.3.** Type retained in `lib/types/index.ts` for future reactivation alongside §7 |
+| ~~`AnalystProfile`~~ | ~~One analyst record~~ | **🗄 Archived in v1.2.3** — same |
 
 ### Market Pulse interfaces *(new in v1.2)*
 
@@ -1266,7 +1293,9 @@ Defined in `/lib/types/index.ts` (plus `/lib/mock/market-tide-data.ts` for the M
 
 ### Supporting types
 
-`GEXPayload`, `KeyLevels`, `HitListPayload`, `SectorFlow`, `SentimentOverview`, `AnalystIntelligence`, `NotablePost`, `NewEntrantFlip`, `DivergenceAlert`.
+**V1 active:** `GEXPayload`, `KeyLevels`, `HitListPayload`, `SectorFlow`.
+
+**🗄 Archived in v1.2.3 (kept in `lib/types/index.ts` for future reactivation):** `SentimentOverview`, `AnalystIntelligence`, `NotablePost`, `NewEntrantFlip`, `DivergenceAlert`, `SectorSentiment`, `AnalystCall`.
 
 ### Enums
 
@@ -1280,4 +1309,4 @@ Defined in `/lib/types/index.ts` (plus `/lib/mock/market-tide-data.ts` for the M
 
 ---
 
-*Document prepared: April 29, 2026 · FlowDesk v1.2.2 PRD (revision of v1.2.1 — locks Auth.js + Whop access management, expands Sector enum to 15 values, moves hit list to a daily worker job, locks divergence rule + AI prompt templates, confirms single-worker option-A architecture)*
+*Document prepared: April 30, 2026 · FlowDesk v1.2.3 PRD (revision of v1.2.2 — archives the Sentiment Tracker module from V1 due to X API cost; preserves §3.3 / §7 / §3.4 sentiment prompt / sentiment Prisma models in archive banners; hides sidebar entry; ~$100/mo cost reduction)*

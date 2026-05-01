@@ -1,6 +1,6 @@
 # FlowDesk — Build Progress
 
-Last updated: 2026-04-29 (v1.2.2 doc round)
+Last updated: 2026-04-30 (v1.2.3 — Sentiment Tracker archived from V1)
 
 ---
 
@@ -27,17 +27,17 @@ Last updated: 2026-04-29 (v1.2.2 doc round)
 - ⬜ Criteria config tab (tab exists in topbar, view not built)
 - ⬜ Live data — UW "daily watches" hit-list endpoint not wired
 
-### 2. Sentiment Tracker (`/sentiment`) — PRD §2
-- ✅ Overview tab — overall sentiment score, bull/bear/neutral breakdown, top velocity movers
-- ✅ Divergence alerts (price vs. sentiment direction mismatch)
-- ✅ Sector sentiment breakdown
-- ✅ New entrants & sentiment flips list
-- ✅ Notable posts feed (safe rendering via `renderPostBody`, XSS fix applied)
-- ✅ AI summary card
-- ✅ Analyst intelligence tab — analyst profiles, accuracy leaderboard, top buys/sells
-- ✅ Mock data (`lib/mock/sentiment-data.ts`)
-- ⬜ Live data — xAI/X sentiment pipeline not wired
-- ⬜ Live data — AI summaries (Anthropic API) not wired
+### 2. Sentiment Tracker (`/sentiment`) — 🗄 ARCHIVED in v1.2.3
+- 🗄 **Archived from V1 scope (Apr 30, 2026)** due to X API Basic ($100/mo) cost. Module remains in repo (route, page, mock data, component, types) for future reactivation. Sidebar entry hidden in `components/layout/Sidebar.tsx`. See PRD §7 archive banner for reactivation steps.
+- ✅ *(retained in repo)* Overview tab — overall sentiment score, bull/bear/neutral breakdown, top velocity movers
+- ✅ *(retained in repo)* Divergence alerts (price vs. sentiment direction mismatch)
+- ✅ *(retained in repo)* Sector sentiment breakdown
+- ✅ *(retained in repo)* New entrants & sentiment flips list
+- ✅ *(retained in repo)* Notable posts feed (safe rendering via `renderPostBody`, XSS fix applied)
+- ✅ *(retained in repo)* AI summary card
+- ✅ *(retained in repo)* Analyst intelligence tab — analyst profiles, accuracy leaderboard, top buys/sells
+- ✅ *(retained in repo)* Mock data (`lib/mock/sentiment-data.ts`)
+- 🚫 Live data — X API + sentiment AI summary pipeline **deferred from V1**
 
 ### 3. Market Pulse (`/market-tide`) — PRD §3
 - ✅ Market Tide line chart — SPY price (gold) + net call premium (green) + net put premium (red), 5-min buckets
@@ -84,11 +84,11 @@ Last updated: 2026-04-29 (v1.2.2 doc round)
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Prisma schema | ⚠️ Partial | Has `DarkPoolPrint`, `WatchesCriteria`, `SentimentSnapshot`, `AiSummary`. Per ARCHITECTURE §3 still need: `FlowAlert`, `GexSnapshot`, `MarketTideBar`, `NetImpactDaily`, `XPost`, `AnalystProfile`, `User`, `TickerMetadata`, `HitListDaily`, `DivergenceAlert` |
+| Prisma schema | ⚠️ Partial | Has `DarkPoolPrint`, `WatchesCriteria`, `SentimentSnapshot`, `AiSummary`. V1-active still needed per ARCHITECTURE §3: `FlowAlert`, `GexSnapshot`, `MarketTideBar`, `NetImpactDaily`, `User`, `TickerMetadata`, `HitListDaily`. 🗄 Archived in v1.2.3: `XPost`, `SentimentSnapshot`, `AnalystProfile`, `DivergenceAlert` |
 | Database migrations | ⬜ Not run | `npx prisma migrate deploy` needed against Railway Postgres once schema is complete |
 | `USE_MOCK_DATA` flag | ✅ Wired | All 6 API routes check this env var before hitting live sources |
 | Live UW API integration | ⬜ Not started | Token placeholder in `.env.local` |
-| Live X API v2 integration | ⬜ Not started | `X_BEARER_TOKEN` placeholder in `.env.local` (xAI Grok dropped in v1.2.1) |
+| Live X API v2 integration | 🗄 **Archived in v1.2.3** | Sentiment Tracker module deferred from V1 due to X API cost |
 | Live Anthropic (AI summaries) | ⬜ Not started | Key placeholder in `.env.local` |
 | S3 → Postgres dark-pool history import | ⬜ Not started | Polygon extraction is a separate workstream; this codebase only consumes S3 files via `import-darkpool-history.ts` |
 | Retention sweeps (60d flow / 30d DP except top-100 perpetual) | ⬜ Not started | Two cron sweeps to add at 03:00 ET (PRD §3.5 / ARCHITECTURE §2.1) |
@@ -159,9 +159,13 @@ scripts/
 - ✅ GEX key levels → **worker computes** call wall / put wall / gamma flip; max pain from UW if available.
 - ✅ Disaster recovery → **Railway 4-day daily snapshots** accepted.
 
+**Closed in v1.2.3 (scope reduction):**
+- 🗄 Sentiment Tracker module → **archived from V1** (X API Basic $100/mo unaffordable). Module + route + page + mock + types + components retained in repo; sidebar entry hidden. ~$100/mo savings. Reactivation path documented in PRD §7 archive banner.
+
 **Still open:**
 - Top Net Impact source — preferred is a UW endpoint exposing the bid/ask formula directly; fallback is worker aggregation. Confirm with UW support.
 - UW multi-user license posture — Basic tier is for single-user; ~100-user company deployment likely needs a team/enterprise agreement. Confirm with UW sales.
+- Sentiment reactivation criteria — what threshold (cost, alternative source, demand) brings the archived module back? Track as a post-V1 product decision.
 
 ---
 
@@ -180,17 +184,17 @@ scripts/
 
 ## What's Left Before Live Data
 
-1. **Add the 10 missing Prisma models** — `FlowAlert`, `GexSnapshot`, `MarketTideBar`, `NetImpactDaily`, `XPost`, `AnalystProfile`, `User`, `TickerMetadata`, `HitListDaily`, `DivergenceAlert` per ARCHITECTURE §3.
+1. **Add the 7 V1-active Prisma models** — `FlowAlert`, `GexSnapshot`, `MarketTideBar`, `NetImpactDaily`, `User`, `TickerMetadata`, `HitListDaily` per ARCHITECTURE §3. 🗄 Skip the 4 archived models (`XPost`, `SentimentSnapshot`, `AnalystProfile`, `DivergenceAlert`).
 2. **Create Railway Postgres service** and run `npx prisma migrate deploy`.
-3. **Set environment variables in Railway worker** — `UW_API_TOKEN`, `X_BEARER_TOKEN`, `ANTHROPIC_API_KEY`, `DATABASE_URL`, `TZ=America/New_York`, plus AWS S3 vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `DARKPOOL_S3_BUCKET`, `DARKPOOL_S3_PREFIX`).
+3. **Set environment variables in Railway worker** — `UW_API_TOKEN`, `ANTHROPIC_API_KEY`, `DATABASE_URL`, `TZ=America/New_York`, plus AWS S3 vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `DARKPOOL_S3_BUCKET`, `DARKPOOL_S3_PREFIX`). 🗄 Skip `X_BEARER_TOKEN`.
 4. **Set environment variables in Vercel** — `DATABASE_URL` (public URL), `USE_MOCK_DATA=false`, `NEXT_PUBLIC_APP_URL`, plus auth: `WHOP_CLIENT_ID`, `WHOP_CLIENT_SECRET`, `WHOP_PRODUCT_ID`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`.
-5. **Stand up the single Node worker** on Railway per ARCHITECTURE §6 — UW polling (flow / GEX / DP / market tide), Net Impact aggregation (5m mkt), X-batch (06:00 ET), AI-summary batch (07:00 ET, sentiment + per-ticker GEX explanations + divergence alerts), hit-list-compute (07:30 ET), refresh-ticker-metadata (05:30 ET), retention sweeps (03:00 ET), S3 dark-pool history import (02:00 ET).
-6. **Move scaffolding to worker** — relocate `lambdas/sentiment-batch`, `lambdas/hitlist-compute`, `lambdas/dp-ranking` into `worker/src/jobs/`. Delete `services/websocket-server` and `services/data-ingestion` (option A doesn't use them).
+5. **Stand up the single Node worker** on Railway per ARCHITECTURE §6 — UW polling (flow / GEX / DP / market tide), Net Impact aggregation (5m mkt), AI-summary batch (07:00 ET, **per-ticker GEX explanations only** in V1), hit-list-compute (07:30 ET), refresh-ticker-metadata (05:30 ET), retention sweeps (03:00 ET), S3 dark-pool history import (02:00 ET). 🗄 Skip the 06:00 ET X-batch cron.
+6. **Move scaffolding to worker** — relocate `lambdas/hitlist-compute`, `lambdas/dp-ranking` into `worker/src/jobs/`. Park `lambdas/sentiment-batch` under `worker/src/jobs/_archived/` for future reactivation. Delete `services/websocket-server` and `services/data-ingestion` (option A doesn't use them).
 7. **Implement retention enforcement** — 60-day flow sweep, conditional 30-day DP sweep that preserves top-100 ranked rows in perpetuity.
-8. **Implement the prompt files** — `worker/src/prompts/sentiment.ts` and `worker/src/prompts/gex.ts` per the templates locked in PRD §3.4.
+8. **Implement the GEX prompt file** — `worker/src/prompts/gex.ts` per the template locked in PRD §3.4. 🗄 Skip `prompts/sentiment.ts` (archived).
 9. **Implement `lib/sector-overrides.ts`** for ETFs UW returns no sector for (SPY → "Index", GLD → "Commodities", TLT → "Bonds", UVXY → "Volatility", etc.).
-10. **Replace mock branches** in each `route.ts` with Prisma reads.
-11. **Stand up Auth.js v5 with Whop OAuth provider** per ARCHITECTURE §6 Phase F — create free Whop product/access pass, configure OAuth app, install Auth.js v5 + `@auth/prisma-adapter`, implement custom Whop provider, gate every `/api/*` route with the 3-line `auth()` check, build the `/login` page.
+10. **Replace mock branches** in each V1-active `route.ts` with Prisma reads. (Skip `app/api/sentiment/route.ts` — archived; returns mock when `USE_MOCK_DATA=true`, 501 otherwise.)
+11. **Stand up Auth.js v5 with Whop OAuth provider** per ARCHITECTURE §6 Phase F — create free Whop product/access pass, configure OAuth app, install Auth.js v5 + `@auth/prisma-adapter`, implement custom Whop provider, gate every V1-active `/api/*` route with the 3-line `auth()` check, build the `/login` page.
 12. **Build secondary tab views** — Criteria config, Sweep scanner, 0DTE flow, Unusual activity, DP levels.
 13. **Wire the Market Pulse period toggle** to the UW `market-tide` interval param.
 14. **Confirm Top Net Impact source with UW** — preferred is a UW endpoint exposing the bid/ask formula directly (PRD §11); fallback is worker-side aggregation.

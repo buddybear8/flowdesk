@@ -1,9 +1,19 @@
 # FlowDesk — Live Architecture & Railway Setup
-### From mock sandbox to a live data pipeline · v1.3 · Apr 2026
+### From mock sandbox to a live data pipeline · v1.4 · Apr 2026
 
 This doc scopes what needs to stand up to flip `USE_MOCK_DATA=false` and
-serve real data from Unusual Whales, X API v2, and Anthropic. Paired with
-the PRD at [./FlowDesk_PRD.md](./FlowDesk_PRD.md).
+serve real data from Unusual Whales and Anthropic. Paired with the PRD at
+[./FlowDesk_PRD.md](./FlowDesk_PRD.md).
+
+**v1.4 update (Apr 30, 2026):** archives the Sentiment Tracker module
+from V1 (PRD §7). X API Basic ($100/mo) was unaffordable for our
+deployment, so the entire X→sentiment data path is removed from V1
+scope: no X API integration, no `x-batch` cron, no sentiment summary in
+the daily AI batch (per-ticker GEX explanations remain), and the
+`XPost` / `SentimentSnapshot` / `AnalystProfile` / `DivergenceAlert`
+Prisma models drop to "archived" status. The `ai-summarizer` cron
+remains at 07:00 ET, scope reduced to GEX explanations only. Total
+infra cost drops by ~$100/mo.
 
 **v1.3 update (Apr 29, 2026 later):** locks single-worker option A as the
 chosen architecture (vs the multi-service alternative). Adds the
@@ -65,23 +75,26 @@ For a single-user personal tool, that trade-off is correct.
         │                         │  • uw-poll              30s mkt / 5m off
         │                         │  • market-tide          5m mkt
         │                         │  • net-impact           5m mkt (offset 30s)
-        │                         │  • x-batch              06:00 ET
-        │                         │  • ai-summarizer        07:00 ET
+        │                         │  • ai-summarizer (GEX)  07:00 ET
         │                         │  • hit-list-compute     07:30 ET
         │                         │  • refresh-ticker-meta  05:30 ET
         │                         │  • s3-darkpool-import   02:00 ET
         │                         │  • retention-sweeps     03:00 ET
         └───────────┬─────────────┘
                     │
-       ┌────────────┼────────────┬──────────────┬──────────────┐
-       ▼            ▼            ▼              ▼              ▼
-   ┌────────┐  ┌────────┐  ┌──────────┐  ┌────────────┐  ┌──────────┐
-   │ UW     │  │ X v2   │  │ Anthropic│  │ AWS S3     │  │ Whop     │
-   │ flow,  │  │ posts  │  │ Haiku    │  │ DP history │  │ OAuth +  │
-   │ GEX,   │  │        │  │          │  │ (Polygon-  │  │ member-  │
-   │ DP,    │  │        │  │          │  │  sourced)  │  │ ship API │
-   │ tide   │  │        │  │          │  │            │  │ (Vercel) │
-   └────────┘  └────────┘  └──────────┘  └────────────┘  └──────────┘
+       ┌────────────┼─────────────┬──────────────┐
+       ▼            ▼             ▼              ▼
+   ┌────────┐  ┌──────────┐  ┌────────────┐  ┌──────────┐
+   │ UW     │  │ Anthropic│  │ AWS S3     │  │ Whop     │
+   │ flow,  │  │ Haiku    │  │ DP history │  │ OAuth +  │
+   │ GEX,   │  │ (GEX     │  │ (Polygon-  │  │ member-  │
+   │ DP,    │  │ explan.) │  │  sourced)  │  │ ship API │
+   │ tide   │  │          │  │            │  │ (Vercel) │
+   └────────┘  └──────────┘  └────────────┘  └──────────┘
+
+🗄 Archived from V1 (PRD §7 / §3.3): the X API v2 box and the x-batch
+   06:00 ET cron — were the only consumers of sentiment data, removed
+   alongside the Sentiment Tracker module.
 ```
 
 **Design principles**
@@ -126,7 +139,9 @@ The top-100-perpetual rule is critical for ongoing historical ranking integrity 
 
 Each poll is idempotent: insert-or-ignore on natural keys (e.g. flow alert id + captured-at timestamp). No duplicate rows.
 
-### 2.2 X API v2
+### 2.2 X API v2 *(ARCHIVED in v1.4 — deferred from V1)*
+
+> **🗄 Archived (Apr 30, 2026).** X API Basic ($100/mo) is unaffordable for our deployment; this entire data path is deferred from V1. The `x-batch` cron is removed from §6, the `XPost` model is archived in §3, and the Sentiment Tracker module (PRD §7) is archived. The original spec follows below for reactivation reference. **Do not implement in V1.**
 
 Pulled by the worker's `x-batch` cron, scheduled once daily at 06:00 ET (before market open). v1 uses the X API v2 Basic tier directly (xAI Grok was previously listed as an alternative — dropped in v1.2.1).
 
@@ -138,14 +153,14 @@ Pulled by the worker's `x-batch` cron, scheduled once daily at 06:00 ET (before 
 
 ### 2.3 Anthropic Claude
 
-Called by the worker's `ai-summarizer` cron at 07:00 ET (Mon–Fri). v1.2.1 batches **two** workloads in one run:
+Called by the worker's `ai-summarizer` cron at 07:00 ET (Mon–Fri). **V1 scope (locked v1.4): per-ticker GEX explanations only.** The sentiment summary workload is archived alongside the Sentiment Tracker module.
 
-1. **Sentiment summary:** classify last 24h of `x_posts` (bull/bear/neutral), generate the market-wide AI summary paragraph, store in `ai_summaries` (`kind="sentiment-{YYYY-MM-DD}"`) and update `sentiment_snapshots`.
-2. **Per-ticker GEX explanation:** for each watched ticker (SPY/QQQ/SPX/NVDA/TSLA — see PRD §8), pull the most recent `gex_snapshots` row, prompt Claude with regime + spot + key levels + DV-vs-OI delta, store the response in `ai_summaries` (`kind="gex-{TICKER}-{YYYY-MM-DD}"`).
+1. ~~Sentiment summary~~ — **🗄 archived in v1.4.** Was: classify last 24h of `x_posts` (bull/bear/neutral), generate market-wide AI summary, store in `ai_summaries` with `kind="sentiment-{YYYY-MM-DD}"` and update `sentiment_snapshots`. Reactivate alongside §2.2 / PRD §7.
+2. **Per-ticker GEX explanation (V1 active):** for each watched ticker (SPY/QQQ/SPX/NVDA/TSLA — see PRD §8), pull the most recent `gex_snapshots` row, prompt Claude with regime + spot + key levels + DV-vs-OI delta, store the response in `ai_summaries` (`kind="gex-{TICKER}-{YYYY-MM-DD}"`).
 
 The GEX modal in the frontend reads the cached body and renders a header note: *"Static summary as of market open — regime and key levels may change throughout the trading day."* On-demand (per-click) generation moves to a later iteration once latency/cost is benchmarked.
 
-**Model:** `claude-haiku-4-5`. Estimated cost: ~$1–3/month for the combined batch (sentiment + 5 GEX explanations × ~300 tokens each).
+**Model:** `claude-haiku-4-5`. **V1 cost: <$1/month** (5 GEX explanations × ~300 tokens × ~22 trading days). Was ~$1–3/month before sentiment archive.
 
 ---
 
@@ -259,6 +274,12 @@ model DarkPoolPrint {
   @@map("dark_pool_prints")
 }
 
+// ─── 🗄 ARCHIVED in v1.4 ──────────────────────────────────────
+// XPost, SentimentSnapshot, AnalystProfile, DivergenceAlert below are
+// deferred from V1 alongside the Sentiment Tracker module (PRD §7).
+// Do NOT add these to prisma/schema.prisma in V1. They are retained
+// here for future reactivation reference.
+
 // ─── Sentiment: raw X posts + daily snapshots ─────────────────
 model XPost {
   id             String   @id                         // X tweet id
@@ -305,6 +326,7 @@ model AnalystProfile {
   accuracyByTicker Json   @map("accuracy_by_ticker")
   @@map("analyst_profiles")
 }
+// ─── End of archived sentiment block ──────────────────────────
 
 // ─── AI summaries ─────────────────────────────────────────────
 model AiSummary {
@@ -373,8 +395,11 @@ model HitListDaily {
   @@map("hit_list_daily")
 }
 
-// ─── Divergence alerts — added v1.3 ───────────────────────────
+// ─── Divergence alerts — added v1.3, ARCHIVED in v1.4 ─────────
 // Materialized by the 07:00 ET ai-summarizer batch per the rule in PRD §7.
+// 🗄 Archived from V1 alongside the Sentiment Tracker module — divergence
+// alerts are a sentiment-derived feature with no consumer in V1. Retained
+// here for future reactivation.
 model DivergenceAlert {
   id              BigInt   @id @default(autoincrement())
   generatedAt     DateTime @map("generated_at")
@@ -431,17 +456,20 @@ Railway charges usage-based, with a **$5/mo minimum** that includes the first $5
 |---|---|---|
 | Railway — Postgres | 1 GB RAM, ~5 GB storage | ~$8–12 |
 | Railway — worker service | 512 MB RAM, ~0.1 vCPU average, 24/7 | ~$5–8 |
-| Railway egress | UW polling + occasional X batch | < $1 |
+| Railway egress | UW polling | < $1 |
 | **Railway subtotal** | | **~$15–20/mo** |
 | UW Basic | | $150 |
-| X API Basic | | $100 |
-| Anthropic Claude Haiku | | ~$1–5 |
-| Vercel Hobby | | $0 |
-| **Total** | | **~$270–275/mo** |
+| ~~X API Basic~~ | ~~Sentiment Tracker (PRD §7)~~ | **🗄 $0 — archived in v1.4** *(was $100/mo)* |
+| Anthropic Claude Haiku | GEX explanations only (sentiment summary archived) | **<$1** *(was $1–5)* |
+| Vercel (Pro for ~100 users) | | $20 |
+| Whop (free product) | | $0 |
+| **Total** | | **~$185–195/mo** |
 
-**Compared to AWS (v1.0 plan):** the infra line drops from ~$44/mo (RDS + Proxy + Lambda + Secrets + CloudWatch) to ~$15–20/mo on Railway. Same workload, roughly half the cost, and the setup walkthrough shrinks from 8 phases to 4.
+**Compared to v1.3 plan (~$285–295/mo with X API + Vercel Pro):** ~$100/mo savings from archiving the Sentiment Tracker module.
 
-Cheaper paths if you want: move X to the free tier for the sandbox phase (saves $100), downgrade the Railway Postgres service (saves ~$5), defer the worker by running the poller locally overnight during development (saves ~$8).
+**Compared to AWS (v1.0 plan):** the infra line drops from ~$44/mo (RDS + Proxy + Lambda + Secrets + CloudWatch) to ~$15–20/mo on Railway. Same workload, roughly half the cost, and the setup walkthrough shrinks from 8 phases to 4 (or 5 with auth).
+
+Cheaper paths if you want: downgrade the Railway Postgres service (saves ~$5), defer the worker by running the poller locally overnight during development (saves ~$8), stay on Vercel Hobby during single-user testing before scaling to Pro (saves $20).
 
 ---
 
@@ -571,12 +599,13 @@ Create `worker/src/index.ts`:
 ```ts
 import cron from "node-cron";
 import { pollFlowAlerts, pollGex, pollDarkPool, pollMarketTide, computeNetImpact } from "./jobs/uw.js";
-import { runXBatch } from "./jobs/x.js";
 import { runAiSummary } from "./jobs/ai-summarizer.js";
 import { runFlowRetentionSweep, runDpRetentionSweep } from "./jobs/retention.js";
 import { importDarkpoolHistory } from "./jobs/s3-import.js";
 import { computeHitList } from "./jobs/hit-list-compute.js";
 import { refreshTickerMetadata } from "./jobs/refresh-ticker-metadata.js";
+// 🗄 Archived in v1.4: import { runXBatch } from "./jobs/_archived/x.js";
+//    Restore alongside the daily6amET schedule below if reactivating Sentiment Tracker.
 
 // node-cron uses 6-field expressions (sec min hour DOM month DOW). TZ=America/New_York
 // is set as a service env var so all expressions below resolve in ET.
@@ -586,11 +615,12 @@ const marketGex60s     = "*/60 * 9-15 * * 1-5";     // every 60s, market hours, 
 const marketTide5m     = "0 */5 9-15 * * 1-5";      // every 5 min, market hours (UW returns 5-min buckets)
 const netImpact5m      = "30 */5 9-15 * * 1-5";     // every 5 min at :30 (offset 30s after tide poll lands)
 const daily530amET     = "0 30 5 * * 1-5";          // 05:30 ET Mon–Fri — refresh ticker_metadata
-const daily6amET       = "0 0 6 * * 1-5";           // 06:00 ET Mon–Fri — X batch
-const daily7amET       = "0 0 7 * * 1-5";           // 07:00 ET Mon–Fri — sentiment + GEX explanation batch + divergence alerts
+const daily7amET       = "0 0 7 * * 1-5";           // 07:00 ET Mon–Fri — V1: per-ticker GEX explanations only (sentiment summary archived)
 const daily730amET     = "0 30 7 * * 1-5";          // 07:30 ET Mon–Fri — hit-list-compute (after AI summary lands)
 const daily3amET       = "0 0 3 * * 1-5";           // 03:00 ET Mon–Fri — retention sweeps
 const daily2amET       = "0 0 2 * * 1-5";           // 02:00 ET Mon–Fri — pull new S3 DP history files
+// 🗄 Archived in v1.4:
+// const daily6amET    = "0 0 6 * * 1-5";           // 06:00 ET — was X batch (Sentiment Tracker module archived from V1)
 
 // UW polling — flow + DP
 cron.schedule(marketHours30s, () => Promise.all([pollFlowAlerts(), pollDarkPool()]));
@@ -609,10 +639,11 @@ cron.schedule(netImpact5m, computeNetImpact);
 // Refresh ticker_metadata (PRD §18 — 11 GICS sectors + 4 ETF asset classes)
 cron.schedule(daily530amET, refreshTickerMetadata);
 
-// X API daily batch
-cron.schedule(daily6amET, runXBatch);
+// 🗄 Archived in v1.4: cron.schedule(daily6amET, runXBatch);
+//    Was the X API daily batch feeding the Sentiment Tracker module.
 
-// AI summary batch — sentiment + per-ticker GEX explanations + divergence alerts
+// AI summary batch — V1 scope: per-ticker GEX explanations only.
+// (Sentiment summary path archived in v1.4 alongside the Sentiment Tracker module.)
 cron.schedule(daily7amET, runAiSummary);
 
 // Hit list compute — daily 07:30 ET (PRD §6). Reads flow_alerts + dark_pool_prints,
@@ -696,10 +727,10 @@ git push
 6. **Settings** → **Variables** → add:
    - `DATABASE_URL` → click **Reference** → pick the Postgres service's `DATABASE_URL` (Railway injects the internal URL, not the public one — faster + free egress)
    - `UW_API_TOKEN` → your UW token
-   - `X_BEARER_TOKEN` → your X API bearer token
    - `ANTHROPIC_API_KEY` → your Anthropic key
    - `TZ` → `America/New_York` (so cron expressions respect ET)
    - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `DARKPOOL_S3_BUCKET`, `DARKPOOL_S3_PREFIX` — for the dark-pool history S3 import job (PRD §3.5). The Polygon extraction pipeline lands files in this bucket; the worker job consumes them.
+   - 🗄 ~~`X_BEARER_TOKEN`~~ — archived in v1.4 alongside the Sentiment Tracker module. Do NOT set in V1.
 7. Trigger the first deploy: push any commit, or click **Deploy** in the service view
 
 **C5. Verify the worker is running**
@@ -933,13 +964,13 @@ What you trade: no granular IAM policies, less detailed metrics than CloudWatch,
 - [ ] Phase B1: Add Postgres service to the project
 - [ ] Phase B2: Install `psql` locally
 - [ ] Phase B3: Test connection via `DATABASE_PUBLIC_URL`
-- [ ] Phase B4: Update `prisma/schema.prisma` with §3 additions (FlowAlert, GexSnapshot, MarketTideBar, NetImpactDaily, DarkPoolPrint, XPost, SentimentSnapshot, AnalystProfile, AiSummary, **User, TickerMetadata, HitListDaily, DivergenceAlert**)
+- [ ] Phase B4: Update `prisma/schema.prisma` with §3 V1-active additions (FlowAlert, GexSnapshot, MarketTideBar, NetImpactDaily, DarkPoolPrint, AiSummary, **User, TickerMetadata, HitListDaily**). 🗄 Archived in v1.4 — do NOT add: XPost, SentimentSnapshot, AnalystProfile, DivergenceAlert
 - [ ] Phase B5: `npx prisma migrate deploy` against Railway Postgres
-- [ ] Phase C1: Scaffold `worker/` directory in the repo; move `lambdas/sentiment-batch`, `lambdas/hitlist-compute`, `lambdas/dp-ranking` into `worker/src/jobs/`
-- [ ] Phase C1: Implement all job files: `uw.ts`, `x.ts`, `ai-summarizer.ts`, `retention.ts`, `s3-import.ts`, `hit-list-compute.ts`, `refresh-ticker-metadata.ts`
-- [ ] Phase C1: Implement `worker/src/prompts/sentiment.ts` and `worker/src/prompts/gex.ts` per PRD §3.4 templates
+- [ ] Phase C1: Scaffold `worker/` directory in the repo; move `lambdas/hitlist-compute`, `lambdas/dp-ranking` into `worker/src/jobs/`. 🗄 Park `lambdas/sentiment-batch` under `worker/src/jobs/_archived/` for future reactivation
+- [ ] Phase C1: Implement V1-active job files: `uw.ts`, `ai-summarizer.ts` (GEX-only), `retention.ts`, `s3-import.ts`, `hit-list-compute.ts`, `refresh-ticker-metadata.ts`. 🗄 Skip `x.ts` (Sentiment Tracker archived)
+- [ ] Phase C1: Implement `worker/src/prompts/gex.ts` per PRD §3.4 template. 🗄 Skip `prompts/sentiment.ts` (template archived)
 - [ ] Phase C3: Commit + push
-- [ ] Phase C4: Create the worker service on Railway, reference Postgres DB, set env vars (UW, X, Anthropic, AWS S3, TZ), set root dir to `worker/`
+- [ ] Phase C4: Create the worker service on Railway, reference Postgres DB, set env vars (UW, Anthropic, AWS S3, TZ — NOT X_BEARER_TOKEN), set root dir to `worker/`
 - [ ] Phase C5: Confirm `[worker] started` log and first data rows land in Postgres
 - [ ] Phase D5: Rewrite each `app/api/*/route.ts` to read from Postgres (remove the 501 branch); add the 3-line `auth()` check at the top
 - [ ] **Phase F1: Create the free Whop product/access pass + OAuth app**

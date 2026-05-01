@@ -13,7 +13,9 @@ type NavEntry = {
 
 const MODULES: NavEntry[] = [
   { href: "/watches",     label: "Daily watches",     icon: "🔥",   badge: { text: "new", variant: "green" } },
-  { href: "/sentiment",   label: "Sentiment tracker", icon: "👑" },
+  // Sentiment tracker — archived from V1 (PRD §7 archive banner). Route, page,
+  // and component remain in the repo; un-comment this entry to re-enable.
+  // { href: "/sentiment",   label: "Sentiment tracker", icon: "👑" },
   { href: "/market-tide", label: "Market Pulse",       icon: "🌀" },
   { href: "/gex",         label: "Options GEX",       icon: "⚡" },
   { href: "/flow",        label: "Flow alerts",       icon: "📈",   badge: { text: "18", variant: "red" } },
