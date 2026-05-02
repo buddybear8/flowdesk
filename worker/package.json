@@ -1,0 +1,23 @@
+{
+  "name": "flowdesk-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FlowDesk single Node worker — runs UW polling, AI summarizer, hit-list compute, retention sweeps, and S3 dark-pool history import via node-cron. See ARCHITECTURE.md §1 / §6.",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "prisma:generate": "prisma generate --schema=../prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "node-cron": "^3.0.3",
+    "tsx": "^4.19.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/node-cron": "^3.0.11",
+    "prisma": "^5.22.0",
+    "typescript": "^5.6.0"
+  }
+}
