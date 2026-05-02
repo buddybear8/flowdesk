@@ -29,4 +29,5 @@ yarn-error.log*
 next-env.d.ts
 
 # prisma
-/prisma/migrations
+# /prisma/migrations  ← un-ignored 2026-05-02: migrations must be tracked in
+# git so they can be applied to other envs (Railway worker on deploy, etc.)
