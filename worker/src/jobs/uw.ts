@@ -84,13 +84,6 @@ function isIntradayET(date: Date): boolean {
   return true;
 }
 
-function normalizeConfidence(v: unknown): "HIGH" | "MED" | "LOW" {
-  const s = String(v ?? "").toUpperCase();
-  if (s === "HIGH" || s === "H") return "HIGH";
-  if (s === "LOW" || s === "L") return "LOW";
-  return "MED"; // covers MED, MOD, MEDIUM, missing
-}
-
 function logSampleOnce(label: string, sample: unknown): void {
   // Print the first row's raw shape once per worker process so we can verify
   // UW response field names match our mappings. Subsequent calls are silent.
@@ -131,31 +124,71 @@ export async function pollFlowAlerts(): Promise<void> {
 
 function mapFlowAlert(raw: any): Prisma.FlowAlertCreateManyInput | null {
   if (!raw?.id || !raw?.ticker) return null;
-  // TODO verify against real UW response — these are best-guess field names.
-  // The first row of every poll prints to logs via logSampleOnce; once shapes
-  // are confirmed, tighten the `??` chains.
-  const time = new Date(raw.executed_at ?? raw.created_at ?? raw.time ?? Date.now());
-  const expiry = new Date(raw.expiry ?? raw.expiration ?? raw.expires_at ?? time);
+  // Field names verified against live UW /api/option-trades/flow-alerts on
+  // 2026-05-04. UW does NOT provide type/side/sentiment/exec/confidence
+  // directly — they're derived below.
+
+  const time = new Date(raw.created_at ?? raw.executed_at ?? raw.time ?? Date.now());
+  const expiry = new Date(raw.expiry ?? raw.expiration ?? time);
+  const strike = Number(raw.strike ?? 0);
+
+  // Type: parse from the OCC-encoded option_chain symbol.
+  // Format: TICKER + YYMMDD + C/P + 8-digit-strike (e.g. SPXW260506P07225000).
+  const chain = String(raw.option_chain ?? "");
+  const occ = chain.match(/(\d{6})([CP])(\d{8})$/);
+  const type: "CALL" | "PUT" = occ?.[2] === "P" ? "PUT" : "CALL";
+
+  // Side: aggressive direction from premium balance.
+  //   ask-side total > bid-side total → BUY (initiator hit the ask)
+  //   bid-side total > ask-side total → SELL (initiator hit the bid)
+  const askPrem = Number(raw.total_ask_side_prem ?? 0);
+  const bidPrem = Number(raw.total_bid_side_prem ?? 0);
+  const side: "BUY" | "SELL" = askPrem >= bidPrem ? "BUY" : "SELL";
+
+  // Sentiment: directional read on the trade.
+  //   CALL+BUY  = BULLISH    PUT+BUY  = BEARISH
+  //   CALL+SELL = BEARISH    PUT+SELL = BULLISH
+  const sentiment: "BULLISH" | "BEARISH" =
+    (type === "CALL" && side === "BUY") || (type === "PUT" && side === "SELL")
+      ? "BULLISH"
+      : "BEARISH";
+
+  // Execution type: from has_* flags. UW doesn't expose FLOOR explicitly in
+  // the response sample we have; revisit if a FLOOR-marker field surfaces.
+  const exec: "SWEEP" | "FLOOR" | "SINGLE" | "BLOCK" =
+    raw.has_sweep ? "SWEEP" : raw.has_multileg ? "BLOCK" : "SINGLE";
+
+  // Confidence: derived from volume/OI ratio (PRD §6 doesn't mandate a
+  // formula; this mirrors common "unusualness" heuristics). Tunable.
+  const voi = Number(raw.volume_oi_ratio ?? 0);
+  const confidence: "HIGH" | "MED" | "LOW" =
+    voi >= 5 ? "HIGH" : voi >= 1 ? "MED" : "LOW";
+
+  // Contract label: e.g. "$7225P May 6" — matches mock display format.
+  const monthAbbrev = expiry.toLocaleString("en-US", { month: "short", timeZone: "America/New_York" });
+  const day = expiry.toLocaleString("en-US", { day: "numeric", timeZone: "America/New_York" });
+  const contract = `$${strike}${type[0]} ${monthAbbrev} ${day}`;
+
   return {
     id: String(raw.id),
     capturedAt: new Date(),
     time,
     ticker: String(raw.ticker).toUpperCase(),
-    type: String(raw.type ?? raw.option_type ?? "CALL").toUpperCase().slice(0, 4),
-    side: String(raw.side ?? "BUY").toUpperCase().slice(0, 4),
-    sentiment: String(raw.sentiment ?? "BULLISH").toUpperCase().slice(0, 8),
-    exec: String(raw.exec ?? raw.execution_type ?? "SINGLE").toUpperCase().slice(0, 8),
-    multiLeg: Boolean(raw.multi_leg ?? raw.is_multi_leg ?? false),
-    contract: String(raw.contract ?? `${raw.strike ?? ""}${(raw.type ?? "C")[0]} ${raw.expiry ?? ""}`).slice(0, 64),
-    strike: Number(raw.strike ?? 0),
+    type,
+    side,
+    sentiment,
+    exec,
+    multiLeg: Boolean(raw.has_multileg ?? false),
+    contract: contract.slice(0, 64),
+    strike,
     expiry,
-    size: Math.trunc(Number(raw.size ?? raw.volume ?? 0)),
-    oi: Math.trunc(Number(raw.open_interest ?? raw.oi ?? 0)),
-    premium: Number(raw.premium ?? raw.total_premium ?? 0),
-    spot: Number(raw.spot ?? raw.spot_price ?? 0),
-    rule: String(raw.rule ?? raw.alert_rule ?? "Unusual activity"),
-    confidence: normalizeConfidence(raw.confidence),
-    sector: String(raw.sector ?? "Technology"), // TODO: enrich from ticker_metadata once that table is populated
+    size: Math.trunc(Number(raw.volume ?? raw.size ?? 0)),
+    oi: Math.trunc(Number(raw.open_interest ?? 0)),
+    premium: Number(raw.total_premium ?? raw.premium ?? 0),
+    spot: Number(raw.underlying_price ?? raw.spot ?? 0),
+    rule: String(raw.alert_rule ?? raw.rule ?? "Unusual activity"),
+    confidence,
+    sector: String(raw.sector ?? "Technology"), // TODO Phase 2 step 4: enrich from ticker_metadata
   };
 }
 
@@ -186,19 +219,29 @@ export async function pollDarkPool(): Promise<void> {
 
 function mapDarkPoolPrint(raw: any): Prisma.DarkPoolPrintCreateManyInput | null {
   if (!raw?.ticker) return null;
-  const executedAt = new Date(raw.executed_at ?? raw.time ?? raw.timestamp ?? Date.now());
+  // Field names verified against live UW /api/darkpool/recent on 2026-05-04.
+  // - Dedup key is `tracking_id` (UW's stable per-print identifier), not `id`.
+  // - `ext_hour_sold_codes` is non-null for extended-hours prints.
+  // - `volume` is per-print daily volume (NOT a separate `daily_volume` field).
+  // - `is_etf` not in the response — defer to ticker_metadata enrichment.
+  // - `exchange_id` / `trf_id` not exposed; UW provides `market_center` (letter
+  //   code) and `trf_executed_at` instead. Leaving exchange_id/trf_id null.
+
+  const executedAt = new Date(raw.executed_at ?? raw.time ?? Date.now());
+  const isExtended = raw.ext_hour_sold_codes != null && raw.ext_hour_sold_codes !== "";
+
   return {
-    uwId: raw.id != null ? String(raw.id) : null,
+    uwId: raw.tracking_id != null ? String(raw.tracking_id) : null,
     executedAt,
     ticker: String(raw.ticker).toUpperCase(),
     price: Number(raw.price ?? 0),
-    size: Math.trunc(Number(raw.size ?? raw.volume ?? 0)),
-    premium: Number(raw.premium ?? raw.notional ?? raw.price * (raw.size ?? 0)),
-    volume: raw.daily_volume != null ? BigInt(Math.trunc(Number(raw.daily_volume))) : null,
-    exchangeId: raw.exchange_id != null ? Math.trunc(Number(raw.exchange_id)) : null,
-    trfId: raw.trf_id != null ? Math.trunc(Number(raw.trf_id)) : null,
-    isEtf: Boolean(raw.is_etf ?? false),
-    isExtended: Boolean(raw.is_extended ?? raw.extended_hours ?? false),
+    size: Math.trunc(Number(raw.size ?? 0)),
+    premium: Number(raw.premium ?? Number(raw.price ?? 0) * Number(raw.size ?? 0)),
+    volume: raw.volume != null ? BigInt(Math.trunc(Number(raw.volume))) : null,
+    exchangeId: null, // UW returns market_center letter code, not numeric id
+    trfId: null,      // not exposed in /api/darkpool/recent response
+    isEtf: Boolean(raw.is_etf ?? false), // TODO: enrich from ticker_metadata
+    isExtended,
     isIntraday: isIntradayET(executedAt),
     rank: raw.rank != null ? Math.trunc(Number(raw.rank)) : null,
     percentile: raw.percentile != null ? Number(raw.percentile) : null,
@@ -219,7 +262,15 @@ export async function pollGex(): Promise<void> {
     }
     logSampleOnce(`gex-${ticker}`, strikesRaw[0]);
 
-    const spot = Number((json as any).spot ?? (json as any).spot_price ?? 0);
+    // UW puts spot price + asOf timestamp on each strike row, not at the
+    // response root (verified 2026-05-04). Take from the first row.
+    const spot = Number((strikesRaw[0] as any).price ?? 0);
+    const asOf = new Date(
+      (strikesRaw[0] as any).time ??
+        (strikesRaw[0] as any).date ??
+        (json as any).as_of ??
+        Date.now()
+    );
     if (!spot) {
       console.warn(`[uw:gex:${ticker}] missing spot price`);
       continue;
@@ -259,7 +310,7 @@ export async function pollGex(): Promise<void> {
       data: {
         capturedAt: new Date(),
         ticker,
-        asOf: new Date((json as any).as_of ?? Date.now()),
+        asOf,
         spot,
         netGexOI,
         netGexDV,
@@ -334,6 +385,12 @@ function computeMaxPain(sorted: ComputedStrike[]): number {
 // ─── 4. Market Tide ──────────────────────────────────────────────────────────
 
 export async function pollMarketTide(): Promise<void> {
+  // ⚠️ As of 2026-05-04 smoke test, UW returns HTTP 422 for `?interval_5m=1`.
+  // PRD §3.1 documents that param spelling but it appears UW expects
+  // something different. Need to check current UW docs for the right param
+  // (could be `?interval=5m`, `?bucket=5m`, or no param required). Until
+  // then this job logs the 422 and returns no rows — Market Pulse module
+  // will show empty data on /market-tide.
   const json = await uwFetch("/api/market/market-tide?interval_5m=1", "tide");
   if (!json) return;
   const buckets = asArray(json);
