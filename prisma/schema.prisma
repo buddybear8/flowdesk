@@ -19,6 +19,10 @@ generator client {
   // node_modules so its stub finds the fresh schema-typed client. When
   // Phase 4 wires Vercel API routes to Prisma, switch to a workspace
   // setup or add a second generator block targeting root/node_modules.
+  //
+  // The Docker image preserves the dev tree layout (/app/worker/ +
+  // /app/prisma/ side-by-side, see worker/Dockerfile) so this relative
+  // path resolves correctly in both environments.
   output   = "../worker/node_modules/.prisma/client"
 }
 
