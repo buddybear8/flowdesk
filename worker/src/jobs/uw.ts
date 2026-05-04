@@ -277,10 +277,21 @@ export async function pollGex(): Promise<void> {
     }
 
     // ⚠️ Sign convention (verified from 2026-05-04 smoke test): UW returns
-    // put_gamma_* values already signed (negative when dealers are short put
-    // gamma). PRD §3.1's `call - put` formula assumes positive magnitudes —
-    // applying it to UW's signed data over-corrects. We sum instead, treating
-    // UW values as pre-signed dealer-net exposures. Same logic for bid/ask.
+    // gamma_oi / gamma_bid / gamma_ask already signed by direction:
+    //   *_gamma_oi  signed by dealer's net OI position (puts negative when
+    //               dealers are net short put gamma, etc.)
+    //   *_gamma_bid signed positive (dealer accumulated gamma from bid-side
+    //               trades — retail sold to dealer)
+    //   *_gamma_ask signed negative (dealer reduced gamma via ask-side
+    //               trades — retail bought from dealer)
+    // Net dealer change per side = bid + ask (magnitudes nearly cancel when
+    // intraday flow is balanced). Total net DV = sum across calls + puts.
+    //
+    // PRD §3.1's formulas (`call - put` for OI; `(call_ask - call_bid) -
+    // (put_ask - put_bid)` for DV) assumed positive magnitudes and break on
+    // UW's signed data — the prior smoke run produced netDV values 100× the
+    // netOI scale, dwarfing the cumulative and preventing gamma-flip
+    // detection. Switching both formulas to plain summation.
     const strikes = strikesRaw.map((s: any) => {
       const callOI = Number(s.call_gamma_oi ?? 0);
       const putOI = Number(s.put_gamma_oi ?? 0);
@@ -288,8 +299,8 @@ export async function pollGex(): Promise<void> {
       const callAsk = Number(s.call_gamma_ask ?? 0);
       const putBid = Number(s.put_gamma_bid ?? 0);
       const putAsk = Number(s.put_gamma_ask ?? 0);
-      const netOI = callOI + putOI;                       // UW-signed sum
-      const netDV = (callAsk - callBid) + (putAsk - putBid); // ditto
+      const netOI = callOI + putOI;                                  // OI-based net
+      const netDV = callBid + callAsk + putBid + putAsk;             // DV-based net
       return {
         strike: Number(s.strike),
         call_gamma_oi: callOI,
