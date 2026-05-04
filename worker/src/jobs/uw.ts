@@ -317,7 +317,11 @@ export async function pollGex(): Promise<void> {
 
     const sorted = [...strikes].sort((a, b) => a.strike - b.strike);
     const { callWall, putWall, gammaFlip } = deriveKeyLevels(sorted, spot);
-    const maxPain = computeMaxPain(sorted); // TODO: prefer UW /options-volume if exposed
+    // Max pain requires raw contract OI per strike, which the spot-exposures
+    // endpoint does NOT provide (it returns dollar gamma/delta/charm/vanna,
+    // and puts are pre-signed). Defaulting to spot until we wire UW's
+    // /api/stock/{t}/options-volume per PRD §8.
+    const maxPain = spot;
 
     const netGexOI = strikes.reduce((sum, s) => sum + s.netOI, 0);
     const netGexDV = strikes.reduce((sum, s) => sum + s.netDV, 0);
@@ -377,26 +381,17 @@ function deriveKeyLevels(sorted: ComputedStrike[], spot: number) {
   return { callWall, putWall, gammaFlip };
 }
 
-function computeMaxPain(sorted: ComputedStrike[]): number {
-  // Max pain = strike K minimizing total option-holder payoff at expiry:
-  //   sum over K' of max(0, K - K') * call_oi(K') + max(0, K' - K) * put_oi(K')
-  // Picks the strike from the chain itself.
-  if (sorted.length === 0) return 0;
-  let best = sorted[0]!.strike;
-  let bestPain = Infinity;
-  for (const candidate of sorted) {
-    let pain = 0;
-    for (const s of sorted) {
-      pain += Math.max(0, candidate.strike - s.strike) * s.call_gamma_oi;
-      pain += Math.max(0, s.strike - candidate.strike) * s.put_gamma_oi;
-    }
-    if (pain < bestPain) {
-      bestPain = pain;
-      best = candidate.strike;
-    }
-  }
-  return best;
-}
+// Max pain — DISABLED in V1.
+//
+// 2026-05-04: the spot-exposures/strike endpoint returns dollar gamma values
+// (not raw contract OI), and puts are pre-signed negative — applying the
+// standard `Σ max(0, K − K′) · call_oi + max(0, K′ − K) · put_oi` formula
+// to those values produces nonsensical results (e.g. max_pain=$0.50 for NVDA).
+// To compute max pain properly we need contract counts per strike from UW's
+// /api/stock/{ticker}/options-volume endpoint (PRD §8). Wire that when adding
+// the corresponding poll, then replace the spot fallback in pollGex.
+//
+// function computeMaxPain(sorted: ComputedStrike[]): number { ... }
 
 // ─── 4. Market Tide ──────────────────────────────────────────────────────────
 
