@@ -764,9 +764,9 @@ The **top 10 tickers by `|Net Impact|`** during the same calendar day are surfac
 
 ### Data source
 
-Per UW API:
-- **Market Tide:** `GET /api/market/market-tide?interval_5m=1` — returns time-series of net call premium, net put premium, and SPY price at 5-min resolution.
-- **Top Net Impact:** preferred path is a UW endpoint exposing the formula above directly (TBD — confirm with UW support whether `/api/option-trades/flow-alerts` rows include `*_bid_premium` / `*_ask_premium` per row, or whether `/api/screener/option-contracts` is the right source). Fallback: the worker aggregates intraday flow rows by ticker, applies the formula, and writes the top 10 by `|Net Impact|` to `net_impact_daily` on a 5-min cron.
+Per UW API (verified 2026-05-04):
+- **Market Tide:** `GET /api/market/market-tide` — returns 1-minute buckets of `net_call_premium`, `net_put_premium`, `net_volume`, and `timestamp`. No query params accepted; SPY price is NOT included in the response (must be sourced separately, e.g. from the SPY GEX snapshot's `spot` field).
+- **Top Net Impact:** `GET /api/market/top-net-impact?limit=20` — returns top tickers by `(net_call_premium − net_put_premium)` directly, half bullish / half bearish. Defaults to last market day. Worker polls every 5 min during market hours and upserts into `net_impact_daily`. Frontend slices top 10 by `|net_premium|` at render time. The fallback "aggregate flow_alerts ourselves" path (which would have required UW to expose bid/ask premium per row in flow-alerts — they do not) is no longer needed.
 
 ### Mock data (v1.2.1 demo)
 
@@ -1146,13 +1146,20 @@ Store all secrets in Vercel environment variables (not committed to git).
 **Decided in v1.2.3 (scope reduction):**
 - **Sentiment Tracker module archived from V1.** X API Basic ($100/mo) unaffordable; the entire Sentiment Tracker module (overview + analyst intelligence), the X API integration (§3.3), the sentiment portion of the daily AI summary batch (§3.4), the divergence trigger rule (formerly §7), and the related Prisma models (`XPost`, `SentimentSnapshot`, `AnalystProfile`, `DivergenceAlert`) are deferred. Full archive treatment in §3.3 / §3.4 / §7. Sidebar entry hidden in `components/layout/Sidebar.tsx`. Cost impact: ~$100/mo savings.
 
+**Resolved in Phase 2 step 3a (2026-05-04):**
+- ~~Top Net Impact source~~ → **`GET /api/market/top-net-impact`** confirmed via UW docs. Worker fetches with `?limit=20` every 5 min during market hours and upserts into `net_impact_daily`. The fallback aggregation path (which assumed UW's flow-alerts response would include bid/ask premium per row — it does not) is dropped.
+
 **Still open:**
 
-1. **Top Net Impact source:** confirm with UW support whether `/api/option-trades/flow-alerts` rows include `*_bid_premium` / `*_ask_premium` per row, or whether `/api/screener/option-contracts` is the right source. If neither exposes the bid/ask split, the worker's fallback aggregation (§11) needs a different input shape.
+1. **UW multi-user license:** UW Basic tier is licensed for personal/single-user use. A Whop-managed access list (potentially scaling to ~100 internal company users) likely requires a team or enterprise agreement with UW. Confirm with UW sales before moving past initial-user testing.
 
-2. **UW multi-user license:** UW Basic tier is licensed for personal/single-user use. A Whop-managed access list (potentially scaling to ~100 internal company users) likely requires a team or enterprise agreement with UW. Confirm with UW sales before moving past initial-user testing.
+2. **Sentiment Tracker reactivation criteria:** what threshold (cost reduction, alternative data source, demand from users) triggers bringing the archived module back? Track separately as a post-V1 product decision.
 
-3. **Sentiment Tracker reactivation criteria:** what threshold (cost reduction, alternative data source, demand from users) triggers bringing the archived module back? Track separately as a post-V1 product decision.
+3. **GEX max pain source:** the `/spot-exposures/strike` endpoint returns dollar gamma values, not contract OI. Real max-pain computation requires raw OI from `/api/stock/{t}/options-volume` — wire that endpoint in a future iteration to replace the current `max_pain = spot` placeholder.
+
+4. **GEX strike range for index tickers:** UW's `/spot-exposures/strike` for SPY and SPX returned only below-spot strikes in our 2026-05-04 smoke run (50–295 for SPY at $720, similar for SPX). Investigate whether a different endpoint or expiry filter returns above-spot strikes; without them, the chart can't show call wall.
+
+5. **Market Tide SPY price:** the Market Pulse chart per §11 needs SPY price as the gold line, but UW's `/market-tide` does not include it. JOIN against the latest `gex_snapshots` row for ticker=SPY at API-route render time, or pull SPY spot from a separate UW endpoint in the worker.
 
 ### Iteration priorities after sandbox demo
 

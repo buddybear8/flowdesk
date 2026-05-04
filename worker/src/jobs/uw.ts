@@ -435,30 +435,43 @@ export async function pollMarketTide(): Promise<void> {
   console.log(`[uw:tide] ${ts()} stored ${result.count} of ${records.length} buckets`);
 }
 
-// ─── 5. Top Net Impact (placeholder) ─────────────────────────────────────────
+// ─── 5. Top Net Impact ───────────────────────────────────────────────────────
 
 export async function computeNetImpact(): Promise<void> {
-  // PRD §11 formula:
-  //   Net Impact = (call_ask_premium − call_bid_premium)
-  //              + (put_bid_premium  − put_ask_premium)
-  //
-  // PRD §16 still-open question: does UW's /api/option-trades/flow-alerts row
-  // include `*_bid_premium` / `*_ask_premium`? Our FlowAlert table currently
-  // has only a single `premium` field, so even the fallback aggregation needs
-  // schema additions.
-  //
-  // Action items before implementing:
-  //   1. Inspect a real flow-alerts response (look at logSampleOnce output)
-  //   2. If bid/ask premium per row exists → add fields to FlowAlert schema
-  //      and aggregate from there
-  //   3. If not → check /api/screener/option-contracts or contact UW
-  //
-  // Until resolved, this job is a no-op so the Top Net Impact card on the
-  // Market Pulse page reads from net_impact_daily that stays empty (UI shows
-  // empty state).
-  console.warn(
-    `[uw:net-impact] ${ts()} not implemented — pending UW response shape verification (PRD §16 #1)`
+  // UW exposes a Top Net Impact endpoint directly (verified docs 2026-05-04):
+  //   GET /api/market/top-net-impact?limit=20
+  // Returns top tickers by `net_call_premium − net_put_premium`, split half
+  // bullish / half bearish. Defaults to last market day; during market hours
+  // that resolves to the current trading day. We upsert all rows keyed by
+  // (snapshotDate, ticker) so 5-min repolls overwrite intraday refreshes.
+  // Frontend slices top 10 by |net_premium| at render time per PRD §11.
+  const json = await uwFetch("/api/market/top-net-impact?limit=20", "net-impact");
+  if (!json) return;
+  const rows = asArray(json);
+  if (rows.length === 0) return;
+  logSampleOnce("net-impact", rows[0]);
+
+  // Today's date in ET. Cron is gated to weekdays 09:00–15:59 ET so we never
+  // straddle a date boundary; using en-CA Intl format gives "YYYY-MM-DD".
+  const todayET = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(
+    new Date()
   );
+  const snapshotDate = new Date(todayET);
+
+  let upserted = 0;
+  for (const row of rows) {
+    if (!row?.ticker || row.net_premium == null) continue;
+    const ticker = String(row.ticker).toUpperCase();
+    const netPremium = Number(row.net_premium);
+    if (!Number.isFinite(netPremium)) continue;
+    await prisma.netImpactDaily.upsert({
+      where: { snapshotDate_ticker: { snapshotDate, ticker } },
+      update: { netPremium },
+      create: { snapshotDate, ticker, netPremium },
+    });
+    upserted++;
+  }
+  console.log(`[uw:net-impact] ${ts()} upserted ${upserted}/${rows.length} rows for ${todayET}`);
 }
 
 // ─── Graceful shutdown re-exported from ../lib/prisma.js (top of file) ───────

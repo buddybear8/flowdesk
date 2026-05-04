@@ -21,8 +21,9 @@ import {
   pollDarkPool,
   pollGex,
   pollMarketTide,
-  disconnectPrisma,
+  computeNetImpact,
 } from "./jobs/uw.js";
+import { disconnectPrisma } from "./lib/prisma.js";
 
 async function main() {
   console.log("──────── flow alerts ────────");
@@ -33,6 +34,9 @@ async function main() {
 
   console.log("──────── market tide ────────");
   await pollMarketTide();
+
+  console.log("──────── net impact ────────");
+  await computeNetImpact();
 
   console.log("──────── gex (5 tickers) ────────");
   await pollGex();

@@ -995,7 +995,12 @@ What you trade: no granular IAM policies, less detailed metrics than CloudWatch,
 - ~~GEX key levels~~ → **Worker computes** call wall / put wall / gamma flip from per-strike rows. Max pain comes from UW's `/options-volume` if available, otherwise computed locally.
 - ~~AI summary prompt templates~~ → **Locked.** See PRD §3.4 for the full sentiment + per-ticker GEX templates. Files live at `worker/src/prompts/{sentiment,gex}.ts`.
 
+**Resolved in Phase 2 step 3a (2026-05-04):**
+- ~~Top Net Impact source~~ → **`GET /api/market/top-net-impact?limit=20`** confirmed via UW docs. Worker upserts the response directly into `net_impact_daily`; no local aggregation needed.
+
 **Still open:**
 
-1. **Top Net Impact source.** Preferred path is a UW endpoint exposing the bid/ask formula (PRD §11); fallback is worker-side aggregation. Confirm with UW support whether `/api/option-trades/flow-alerts` rows include `*_bid_premium` / `*_ask_premium`.
-2. **UW multi-user license.** Basic tier is licensed for personal/single-user use. A Whop-managed access list (potentially scaling to ~100 internal company users) likely requires a team or enterprise agreement with UW. Confirm with UW sales before moving past initial-user testing.
+1. **UW multi-user license.** Basic tier is licensed for personal/single-user use. A Whop-managed access list (potentially scaling to ~100 internal company users) likely requires a team or enterprise agreement with UW. Confirm with UW sales before moving past initial-user testing.
+2. **GEX max pain source.** The `/spot-exposures/strike` endpoint returns dollar gamma, not contract OI. Wire `/api/stock/{t}/options-volume` to replace the current `max_pain = spot` placeholder in `pollGex`.
+3. **GEX strike range for index tickers.** UW's `/spot-exposures/strike` returned only below-spot strikes for SPY/SPX in the 2026-05-04 smoke run, leaving call_wall = spot. Investigate alternate endpoint/params that surface above-spot strikes.
+4. **Market Tide SPY price.** UW's `/market-tide` response omits SPY price; the Market Pulse chart needs it. Join against `gex_snapshots(ticker=SPY)` at API-route render time, or fetch separately in the worker.
