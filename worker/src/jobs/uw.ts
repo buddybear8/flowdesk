@@ -397,13 +397,18 @@ function deriveKeyLevels(sorted: ComputedStrike[], spot: number) {
 // ─── 4. Market Tide ──────────────────────────────────────────────────────────
 
 export async function pollMarketTide(): Promise<void> {
-  // ⚠️ As of 2026-05-04 smoke test, UW returns HTTP 422 for `?interval_5m=1`.
-  // PRD §3.1 documents that param spelling but it appears UW expects
-  // something different. Need to check current UW docs for the right param
-  // (could be `?interval=5m`, `?bucket=5m`, or no param required). Until
-  // then this job logs the 422 and returns no rows — Market Pulse module
-  // will show empty data on /market-tide.
-  const json = await uwFetch("/api/market/market-tide?interval_5m=1", "tide");
+  // UW response shape (verified against UW docs 2026-05-04):
+  //   { data: [{ date, net_call_premium, net_put_premium, net_volume, timestamp }] }
+  // - No query params accepted (the prior `?interval_5m=1` returned HTTP 422).
+  // - Buckets are 1-MINUTE, not 5-minute as PRD §3.1 assumed. Storing as-is;
+  //   frontend can downsample to 5-min for the Market Pulse chart per PRD §11.
+  // - Response does NOT include SPY price. PRD §3.2 expected it inline; in
+  //   reality we'd need to source SPY spot from a separate endpoint
+  //   (e.g. /api/stock/SPY/spot-exposures/strike already polled by pollGex).
+  //   For now, spyPrice is stored as 0 — Market Pulse SPY-price line will
+  //   need backfill from gex_snapshots.spot at render time, or we add a
+  //   joining step here in a later iteration.
+  const json = await uwFetch("/api/market/market-tide", "tide");
   if (!json) return;
   const buckets = asArray(json);
   if (buckets.length === 0) return;
@@ -411,15 +416,15 @@ export async function pollMarketTide(): Promise<void> {
 
   const records: Prisma.MarketTideBarCreateManyInput[] = buckets
     .filter((b: any) => {
-      const t = b?.time ?? b?.bucket_start ?? b?.timestamp;
+      const t = b?.timestamp ?? b?.time ?? b?.bucket_start;
       return t != null && !Number.isNaN(new Date(t).getTime());
     })
     .map((b: any) => ({
-      bucketStart: new Date(b.time ?? b.bucket_start ?? b.timestamp),
-      spyPrice: Number(b.spy_price ?? b.price ?? 0),
+      bucketStart: new Date(b.timestamp ?? b.time ?? b.bucket_start),
+      spyPrice: 0, // TODO: backfill from gex_snapshots(ticker=SPY) or pull from a separate UW endpoint
       netCallPremium: Number(b.net_call_premium ?? 0),
       netPutPremium: Number(b.net_put_premium ?? 0),
-      volume: BigInt(Math.trunc(Number(b.volume ?? b.spy_volume ?? 0))),
+      volume: BigInt(Math.trunc(Number(b.net_volume ?? b.volume ?? 0))),
     }));
 
   if (records.length === 0) return;
