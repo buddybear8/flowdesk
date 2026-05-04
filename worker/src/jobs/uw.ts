@@ -15,9 +15,10 @@
 // key (FlowAlert.id, DarkPoolPrint.uwId, MarketTideBar.bucketStart). Repeat
 // polls in the same window do not produce dupes.
 
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { prisma } from "../lib/prisma.js";
 
-const prisma = new PrismaClient();
+export { disconnectPrisma } from "../lib/prisma.js";
 
 const UW_BASE = "https://api.unusualwhales.com";
 
@@ -455,8 +456,4 @@ export async function computeNetImpact(): Promise<void> {
   );
 }
 
-// ─── Graceful shutdown ───────────────────────────────────────────────────────
-
-export async function disconnectPrisma(): Promise<void> {
-  await prisma.$disconnect();
-}
+// ─── Graceful shutdown re-exported from ../lib/prisma.js (top of file) ───────
