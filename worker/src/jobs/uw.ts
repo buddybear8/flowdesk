@@ -276,6 +276,11 @@ export async function pollGex(): Promise<void> {
       continue;
     }
 
+    // ⚠️ Sign convention (verified from 2026-05-04 smoke test): UW returns
+    // put_gamma_* values already signed (negative when dealers are short put
+    // gamma). PRD §3.1's `call - put` formula assumes positive magnitudes —
+    // applying it to UW's signed data over-corrects. We sum instead, treating
+    // UW values as pre-signed dealer-net exposures. Same logic for bid/ask.
     const strikes = strikesRaw.map((s: any) => {
       const callOI = Number(s.call_gamma_oi ?? 0);
       const putOI = Number(s.put_gamma_oi ?? 0);
@@ -283,8 +288,8 @@ export async function pollGex(): Promise<void> {
       const callAsk = Number(s.call_gamma_ask ?? 0);
       const putBid = Number(s.put_gamma_bid ?? 0);
       const putAsk = Number(s.put_gamma_ask ?? 0);
-      const netOI = callOI - putOI;
-      const netDV = callAsk - callBid - (putAsk - putBid);
+      const netOI = callOI + putOI;                       // UW-signed sum
+      const netDV = (callAsk - callBid) + (putAsk - putBid); // ditto
       return {
         strike: Number(s.strike),
         call_gamma_oi: callOI,
