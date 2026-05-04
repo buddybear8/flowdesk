@@ -5,57 +5,71 @@
 // so the 06:00 ET X-batch and the sentiment branch of ai-summarizer are NOT
 // scheduled here.
 //
-// Phase 2 step 1 (this file) registers all schedules with stub loggers so we
-// can verify the worker starts cleanly on Railway and cron expressions parse.
-// Step 3 will replace each `log(...)` call with an import from `./jobs/...`.
+// Phase 2 step 3: UW jobs wired (Phase 2 step 1 stubs replaced). Other job
+// modules still log "not implemented yet" until they land in subsequent steps.
 
 import cron from "node-cron";
+import {
+  pollFlowAlerts,
+  pollDarkPool,
+  pollGex,
+  pollMarketTide,
+  computeNetImpact,
+  disconnectPrisma,
+} from "./jobs/uw.js";
 
 const ts = () => new Date().toISOString();
-const log = (job: string) => () => {
-  console.log(`[${ts()}] [job:${job}] fired (stub — Phase 2 step 1)`);
-};
+
+// Wraps a job in error-isolation: a single failing run never bubbles to
+// node-cron and never kills the process.
+const safe =
+  (label: string, fn: () => Promise<unknown> | unknown) =>
+  () => {
+    Promise.resolve()
+      .then(fn)
+      .catch((err) => console.error(`[${ts()}] [job:${label}] uncaught:`, err));
+  };
+
+// Stub for jobs not yet implemented in this step. Removes itself in a later
+// commit when the job's source file lands.
+const todo = (label: string) =>
+  safe(label, () => {
+    console.warn(`[${ts()}] [job:${label}] not implemented — Phase 2 step 3+`);
+  });
 
 // node-cron 6-field expressions: sec min hour dayOfMonth month dayOfWeek.
 // TZ=America/New_York must be set on the Railway service so cron resolves in ET.
 
-// ─── UW polling ──────────────────────────────────────────────────────────────
-// Flow alerts + dark pool prints — every 30s during market hours (9:00–15:59 ET
-// covers 9:30 open through 16:00 close), every 5m off-hours.
-cron.schedule("*/30 * 9-15 * * 1-5", log("uw-poll-mkt"));         // mkt hours
-cron.schedule("0 */5 0-8,16-23 * * 1-5", log("uw-poll-off"));     // off hours
+// ─── UW polling (jobs/uw.ts — wired in step 3) ───────────────────────────────
+cron.schedule("*/30 * 9-15 * * 1-5", safe("uw-poll-mkt", async () => {
+  await Promise.all([pollFlowAlerts(), pollDarkPool()]);
+}));
+cron.schedule("0 */5 0-8,16-23 * * 1-5", safe("uw-poll-off", async () => {
+  await Promise.all([pollFlowAlerts(), pollDarkPool()]);
+}));
+cron.schedule("*/60 * 9-15 * * 1-5", safe("gex-poll", pollGex));
+cron.schedule("0 */5 9-15 * * 1-5", safe("market-tide", pollMarketTide));
+cron.schedule("30 */5 9-15 * * 1-5", safe("net-impact", computeNetImpact));
 
-// GEX per watched ticker — every 60s during market hours.
-cron.schedule("*/60 * 9-15 * * 1-5", log("gex-poll"));
-
-// Market Tide — UW returns 5-min buckets; poll on the 5-min boundary.
-cron.schedule("0 */5 9-15 * * 1-5", log("market-tide"));
-
-// Top Net Impact — top 10 by |Net Impact| per day, recomputed every 5m
-// (offset 30s after the tide poll lands so flow_alerts is up to date).
-cron.schedule("30 */5 9-15 * * 1-5", log("net-impact"));
-
-// ─── Daily batches ───────────────────────────────────────────────────────────
-// Refresh ticker_metadata (sector + name + isEtf cache).
-cron.schedule("0 30 5 * * 1-5", log("refresh-ticker-metadata"));   // 05:30 ET
-
-// AI summarizer — V1 scope: per-ticker GEX explanations only (sentiment
-// summary archived in v1.2.3). Writes ai_summaries(kind="gex-{TICKER}-{date}").
-cron.schedule("0 0 7 * * 1-5", log("ai-summarizer-gex"));          // 07:00 ET
-
-// Hit-list compute — reads flow_alerts + dark_pool_prints, applies
-// WatchesCriteria, writes top-20 to hit_list_daily.
-cron.schedule("0 30 7 * * 1-5", log("hit-list-compute"));          // 07:30 ET
-
-// Retention sweeps — flow (60d) + DP (top-100 perpetual / 30d otherwise).
-cron.schedule("0 0 3 * * 1-5", log("retention-sweeps"));           // 03:00 ET
-
-// Dark-pool history import — pull new files from S3 (Polygon-extracted,
-// out-of-band per PRD §3.5).
-cron.schedule("0 0 2 * * 1-5", log("s3-darkpool-import"));         // 02:00 ET
+// ─── Daily batches (jobs/* — pending steps 4–6) ──────────────────────────────
+cron.schedule("0 30 5 * * 1-5", todo("refresh-ticker-metadata"));   // 05:30 ET
+cron.schedule("0 0 7 * * 1-5", todo("ai-summarizer-gex"));          // 07:00 ET
+cron.schedule("0 30 7 * * 1-5", todo("hit-list-compute"));          // 07:30 ET
+cron.schedule("0 0 3 * * 1-5", todo("retention-sweeps"));           // 03:00 ET
+cron.schedule("0 0 2 * * 1-5", todo("s3-darkpool-import"));         // 02:00 ET
 
 // ─── 🗄 Archived in v1.4 (do NOT re-add in V1) ────────────────────────────────
 // "0 0 6 * * 1-5"  — was the X API daily batch. Sentiment Tracker module
 //                    deferred from V1 (see PRD §7 archive banner).
 
-console.log(`[${ts()}] [worker] started — 10 schedules registered (Phase 2 step 1 stubs)`);
+// Graceful shutdown — disconnect Prisma on SIGINT/SIGTERM so Railway redeploys
+// don't leak DB connections.
+const shutdown = async (signal: string) => {
+  console.log(`[${ts()}] [worker] received ${signal}, disconnecting Prisma...`);
+  await disconnectPrisma();
+  process.exit(0);
+};
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+
+console.log(`[${ts()}] [worker] started — 10 schedules registered (UW jobs wired, daily batches pending)`);

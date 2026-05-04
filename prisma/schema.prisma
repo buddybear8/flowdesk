@@ -15,6 +15,11 @@
 
 generator client {
   provider = "prisma-client-js"
+  // V1: only the worker imports @prisma/client. Generate into worker's
+  // node_modules so its stub finds the fresh schema-typed client. When
+  // Phase 4 wires Vercel API routes to Prisma, switch to a workspace
+  // setup or add a second generator block targeting root/node_modules.
+  output   = "../worker/node_modules/.prisma/client"
 }
 
 datasource db {
