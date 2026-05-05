@@ -258,10 +258,10 @@ export async function pollGex(): Promise<void> {
   for (let i = 0; i < WATCHED_TICKERS.length; i++) {
     const ticker = WATCHED_TICKERS[i];
     if (i > 0) await sleep(TICKER_DELAY_MS);
-    const json = await uwFetch(`/api/stock/${ticker}/spot-exposures/strike`, `gex:${ticker}`);
+    let json = await uwFetch(`/api/stock/${ticker}/spot-exposures/strike`, `gex:${ticker}`);
     if (!json) continue;
 
-    const strikesRaw = asArray((json as any).strikes ?? json);
+    let strikesRaw = asArray((json as any).strikes ?? json);
     if (strikesRaw.length === 0) {
       console.warn(`[uw:gex:${ticker}] no strike data`);
       continue;
@@ -270,7 +270,43 @@ export async function pollGex(): Promise<void> {
 
     // UW puts spot price + asOf timestamp on each strike row, not at the
     // response root (verified 2026-05-04). Take from the first row.
-    const spot = Number((strikesRaw[0] as any).price ?? 0);
+    let spot = Number((strikesRaw[0] as any).price ?? 0);
+
+    // UW's /spot-exposures/strike caps at 500 rows and returns them unfiltered.
+    // For some tickers (notably QQQ every poll; SPY/NVDA/TSLA intermittently)
+    // those rows are dominated by corp-action-adjusted legacy contracts or
+    // deep-OTM LEAPS whose strikes sit nowhere near spot, leaving the chart
+    // empty. When we detect that case, re-request with min_strike/max_strike
+    // (±15% of spot) so UW filters at source. The endpoint has no expiry/
+    // is_standard param and the response payload has no marker field to do
+    // the filtering ourselves — strike bounds are the only lever.
+    if (spot) {
+      const initialNearSpot = strikesRaw.filter(
+        (s: any) => Math.abs(Number(s.strike) - spot) <= spot * 0.1
+      ).length;
+      if (initialNearSpot < 5) {
+        await sleep(TICKER_DELAY_MS);
+        const minStrike = Math.floor(spot * 0.85);
+        const maxStrike = Math.ceil(spot * 1.15);
+        const retryJson = await uwFetch(
+          `/api/stock/${ticker}/spot-exposures/strike?min_strike=${minStrike}&max_strike=${maxStrike}`,
+          `gex:${ticker}:bounded`
+        );
+        if (retryJson) {
+          const retryStrikes = asArray((retryJson as any).strikes ?? retryJson);
+          if (retryStrikes.length > 0) {
+            console.log(
+              `[uw:gex:${ticker}] retried with bounds [$${minStrike}..$${maxStrike}] — ` +
+                `${retryStrikes.length} strikes (initial ${strikesRaw.length}, ${initialNearSpot} near spot)`
+            );
+            strikesRaw = retryStrikes;
+            json = retryJson;
+            spot = Number((strikesRaw[0] as any).price ?? spot);
+          }
+        }
+      }
+    }
+
     const asOf = new Date(
       (strikesRaw[0] as any).time ??
         (strikesRaw[0] as any).date ??
