@@ -23,71 +23,32 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid strikes" }, { status: 400 });
   }
 
-  // Walk backward through recent snapshots and pick the first one with at
-  // least 5 strikes within ±20% of spot. UW's spot-exposures endpoint is
-  // intermittently noisy — for SPY it alternates between full near-money
-  // chains and pure deep-OTM LEAPS dumps; for QQQ it's been returning only
-  // legacy non-standard strikes (e.g. $174 when spot is $682) every poll.
-  // Falling back to a recent good snapshot avoids flicker between polls.
-  const recent = await prisma.gexSnapshot.findMany({
-    where: {
-      ticker,
-      capturedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) }, // last hour
-    },
+  const snapshot = await prisma.gexSnapshot.findFirst({
+    where: { ticker },
     orderBy: { capturedAt: "desc" },
-    take: 60,
   });
 
-  if (recent.length === 0) {
+  if (!snapshot) {
     return NextResponse.json(
       { error: `No GEX data for ${ticker}` },
       { status: 404 }
     );
   }
 
-  const NEAR_SPOT_THRESHOLD = 5;
-  let snapshot = recent[0]!;
-  let allStrikes: GEXLevel[] = [];
-  for (const candidate of recent) {
-    const candidateStrikes = Array.isArray(candidate.strikes)
-      ? (candidate.strikes as unknown as GEXLevel[]).filter(
-          (s) => typeof s?.strike === "number"
-        )
-      : [];
-    const candidateSpot = Number(candidate.spot);
-    const nearSpotCount = candidateStrikes.filter(
-      (s) => Math.abs(s.strike - candidateSpot) <= candidateSpot * 0.2
-    ).length;
-    if (nearSpotCount >= NEAR_SPOT_THRESHOLD) {
-      snapshot = candidate;
-      allStrikes = candidateStrikes;
-      break;
-    }
-  }
-  // If nothing in the last hour passed the threshold (e.g. QQQ), fall back
-  // to the absolute latest so the page shows *something* — empty chart from
-  // the API's own ±20% clamp will still flag the issue.
-  if (allStrikes.length === 0) {
-    allStrikes = Array.isArray(snapshot.strikes)
-      ? (snapshot.strikes as unknown as GEXLevel[]).filter(
-          (s) => typeof s?.strike === "number"
-        )
-      : [];
-  }
+  const allStrikes = Array.isArray(snapshot.strikes)
+    ? (snapshot.strikes as unknown as GEXLevel[]).filter(
+        (s) => typeof s?.strike === "number"
+      )
+    : [];
 
-  // Window the strikes to ±20% of spot, then sort by distance and slice.
-  // Sorting by distance alone wasn't enough: when the worker stores a sparse
-  // chain (e.g. SPY data clustered at $50–$295 LEAPS strikes far below
-  // spot=$723), "nearest spot" still returns those rows because they're the
-  // only rows that exist. Clamping enforces the at-the-money invariant —
-  // if there's nothing near spot, the chart goes empty and that's a true
-  // signal rather than a misleading deep-OTM fill.
+  // Only show strikes surrounding spot — ±10%. Deep-OTM LEAPS and
+  // corp-action-adjusted legacy strikes (e.g. UW returns $174 strikes for
+  // QQQ when spot is $682) are excluded. If the latest snapshot has no
+  // near-spot strikes, the chart goes empty rather than backfilling with
+  // irrelevant deep-OTM rows.
   const spot = Number(snapshot.spot);
-  const window = spot * 0.2;
-  const nearSpot = allStrikes.filter(
-    (s) => Math.abs(s.strike - spot) <= window
-  );
-  const topStrikes = [...nearSpot]
+  const topStrikes = allStrikes
+    .filter((s) => Math.abs(s.strike - spot) <= spot * 0.1)
     .sort((a, b) => Math.abs(a.strike - spot) - Math.abs(b.strike - spot))
     .slice(0, strikes)
     .sort((a, b) => a.strike - b.strike);
