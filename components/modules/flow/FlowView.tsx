@@ -16,12 +16,15 @@ type FilterState = {
   sweepOnly: boolean;
   otmOnly: boolean;
   sizeOverOi: boolean;
+  sizeMin: string;
+  sizeMax: string;
   dte: string;
 };
 
 const INITIAL_FILTER: FilterState = {
   type: "ALL", side: "ALL", sent: "ALL", exec: "ALL", prem: "ALL", conf: "ALL",
-  rule: "ALL", ticker: "", sweepOnly: false, otmOnly: false, sizeOverOi: false, dte: "ALL",
+  rule: "ALL", ticker: "", sweepOnly: false, otmOnly: false, sizeOverOi: false,
+  sizeMin: "", sizeMax: "", dte: "ALL",
 };
 
 type SortKey = "time" | "prem" | "size";
@@ -56,6 +59,10 @@ export function FlowView() {
     if (filter.sweepOnly) r = r.filter(x => x.exec === "SWEEP");
     if (filter.otmOnly) r = r.filter(x => x.type === "CALL" ? x.strike > x.spot : x.strike < x.spot);
     if (filter.sizeOverOi) r = r.filter(x => x.size > x.oi);
+    const sizeMin = Number(filter.sizeMin);
+    if (filter.sizeMin && Number.isFinite(sizeMin)) r = r.filter(x => x.size >= sizeMin);
+    const sizeMax = Number(filter.sizeMax);
+    if (filter.sizeMax && Number.isFinite(sizeMax)) r = r.filter(x => x.size <= sizeMax);
     if (filter.rule !== "ALL") r = r.filter(x => x.rule.startsWith(filter.rule));
     if (filter.ticker) r = r.filter(x => x.ticker.startsWith(filter.ticker));
     if (sortKey === "prem") r.sort((a, b) => b.premium - a.premium);
@@ -277,15 +284,20 @@ function FilterPanel({ filter, setFilter }: { filter: FilterState; setFilter: Re
         <div className="mb-[12px]">
           <FpLabel>Size range</FpLabel>
           <div style={{ display: "flex", gap: 5, marginTop: 4 }}>
-            <RangeIn placeholder="Min" />
-            <RangeIn placeholder="Max" />
-          </div>
-        </div>
-        <div className="mb-[12px]">
-          <FpLabel>IV range (%)</FpLabel>
-          <div style={{ display: "flex", gap: 5, marginTop: 4 }}>
-            <RangeIn placeholder="Min IV" />
-            <RangeIn placeholder="Max IV" />
+            <RangeIn
+              placeholder="Min"
+              type="number"
+              inputMode="numeric"
+              value={filter.sizeMin}
+              onChange={e => setFilter(f => ({ ...f, sizeMin: e.target.value }))}
+            />
+            <RangeIn
+              placeholder="Max"
+              type="number"
+              inputMode="numeric"
+              value={filter.sizeMax}
+              onChange={e => setFilter(f => ({ ...f, sizeMax: e.target.value }))}
+            />
           </div>
         </div>
         <div className="mb-[12px]">
