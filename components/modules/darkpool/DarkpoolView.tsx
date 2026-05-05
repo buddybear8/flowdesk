@@ -64,7 +64,10 @@ export function DarkpoolView() {
   }, []);
 
   const rows = useMemo(() => {
-    let r = prints.filter(p => p.all_time_rank >= filter.rankMin && p.all_time_rank <= filter.rankMax);
+    // all_time_rank === 0 = "unranked" (live UW polls don't carry rank — that
+    // arrives via the S3 backfill). Pass those through; a real rank filter
+    // applies only to backfilled rows.
+    let r = prints.filter(p => p.all_time_rank === 0 || (p.all_time_rank >= filter.rankMin && p.all_time_rank <= filter.rankMax));
     if (filter.hideETF) r = r.filter(p => !p.is_etf);
     if (filter.intradayOnly) r = r.filter(p => !p.is_extended);
     if (!filter.regularHour) r = r.filter(p => p.is_extended);

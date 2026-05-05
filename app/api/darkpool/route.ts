@@ -9,18 +9,22 @@ const MAX_ROWS = 100;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
+  // Rank filter is opt-in. Live UW polls store NULL rank (UW's
+  // /api/darkpool/recent doesn't expose rank — it comes from the S3 backfill
+  // that's still stubbed). Applying a default rank range here would exclude
+  // every live-polled row, which is most of the table today.
+  const hasRankParam = searchParams.has("rankMin") || searchParams.has("rankMax");
   const rankMin = Math.max(1, Math.min(10000, Number(searchParams.get("rankMin") ?? 1)));
   const rankMax = Math.max(1, Math.min(10000, Number(searchParams.get("rankMax") ?? 100)));
-  if (isNaN(rankMin) || isNaN(rankMax) || rankMin > rankMax) {
+  if (hasRankParam && (isNaN(rankMin) || isNaN(rankMax) || rankMin > rankMax)) {
     return NextResponse.json({ error: "Invalid rankMin/rankMax" }, { status: 400 });
   }
   const hideETF = searchParams.get("hideETF") === "true";
   const regularHour = searchParams.get("regularHour") !== "false";
   const extendedHour = searchParams.get("extendedHour") !== "false";
 
-  const where: Prisma.DarkPoolPrintWhereInput = {
-    rank: { gte: rankMin, lte: rankMax },
-  };
+  const where: Prisma.DarkPoolPrintWhereInput = {};
+  if (hasRankParam) where.rank = { gte: rankMin, lte: rankMax };
   if (hideETF) where.isEtf = false;
   // regular vs extended is a partition: filter only when one is OFF.
   // Both ON or both OFF → no filter (both-OFF is a degenerate UI state).
@@ -29,7 +33,9 @@ export async function GET(req: NextRequest) {
 
   const rows = await prisma.darkPoolPrint.findMany({
     where,
-    orderBy: { rank: "asc" },
+    // Most-recent first — the only meaningful ordering until rank backfill
+    // (every live-polled row has NULL rank, so ordering by rank is a no-op).
+    orderBy: { executedAt: "desc" },
     take: MAX_ROWS,
   });
 
