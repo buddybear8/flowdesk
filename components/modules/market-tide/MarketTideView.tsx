@@ -60,6 +60,11 @@ export function MarketTideView() {
 
   const noTide = data.tide.series.length === 0;
   const headerDate = HEADER_DATE_FMT.format(new Date(data.tide.asOf));
+  // "Live" only when the latest bucket is fresh (worker writes every 5 min
+  // during RTH, so 10 min covers a missed poll). Otherwise we're showing
+  // a prior session's data — pill should read "Closed" with that date.
+  const lastBucketAgeMs = noTide ? Infinity : Date.now() - new Date(data.tide.asOf).getTime();
+  const isLive = lastBucketAgeMs < 10 * 60 * 1000;
 
   return (
     <div
@@ -83,12 +88,12 @@ export function MarketTideView() {
               fontSize: 11,
               fontWeight: 500,
               padding: "3px 11px",
-              background: noTide ? "#F0EFEC" : "#E6F1FB",
-              color: noTide ? "#6E6B62" : "#185FA5",
-              border: `0.5px solid ${noTide ? "#9B9890" : "#185FA5"}`,
+              background: isLive ? "#E6F1FB" : "#F0EFEC",
+              color: isLive ? "#185FA5" : "#6E6B62",
+              border: `0.5px solid ${isLive ? "#185FA5" : "#9B9890"}`,
             }}
           >
-            {noTide ? "● Closed" : "● Live"}
+            {isLive ? "● Live" : "● Closed"}
           </span>
           <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Source: Unusual Whales · market-tide</span>
         </div>
@@ -121,7 +126,7 @@ export function MarketTideView() {
         <div style={{ height: 320 }}>
           {noTide ? (
             <div className="flex h-full items-center justify-center text-text-tertiary text-[12px]" style={{ color: "var(--color-text-tertiary)" }}>
-              No market-tide buckets in the last 6.5 hours · resumes at next open
+              No market-tide data yet · check worker status
             </div>
           ) : (
             <TideChart snapshot={data.tide} />

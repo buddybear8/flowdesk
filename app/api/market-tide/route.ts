@@ -7,9 +7,9 @@ import type {
   NetImpactSnapshot,
 } from "@/lib/mock/market-tide-data";
 
-// Last 6.5h of 5-min buckets covers a full RTH session (78 buckets). We pull
-// up to 200 to leave headroom for the 1-min UW cadence the worker may store.
-const TIDE_LOOKBACK_MS = 6.5 * 60 * 60 * 1000;
+// One RTH session = ~78 5-min buckets. 200 leaves headroom for finer-grained
+// UW cadences and for partial-day fetches (e.g. mid-morning) that still want
+// the prior session as context. Pulling more than one session would mix dates.
 const TIDE_MAX_ROWS = 200;
 const NET_IMPACT_LIMIT = 20;
 
@@ -27,14 +27,25 @@ const LABEL_FMT = new Intl.DateTimeFormat("en-US", {
   hour12: true,
 });
 
-export async function GET() {
-  const cutoff = new Date(Date.now() - TIDE_LOOKBACK_MS);
+const ET_DATE_FMT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/New_York",
+});
 
-  const bars = await prisma.marketTideBar.findMany({
-    where: { bucketStart: { gte: cutoff } },
-    orderBy: { bucketStart: "asc" },
+export async function GET() {
+  // Pull the most recent N bars, then keep only the ones from the same ET
+  // trading day as the newest one. This means after-hours / weekends still
+  // show the last completed session (with its real date) instead of going
+  // blank, and during RTH it grows intraday as new buckets land.
+  const recent = await prisma.marketTideBar.findMany({
+    orderBy: { bucketStart: "desc" },
     take: TIDE_MAX_ROWS,
   });
+  const newest = recent[0];
+  const sessionETDate = newest ? ET_DATE_FMT.format(newest.bucketStart) : null;
+  const bars = (sessionETDate
+    ? recent.filter((b) => ET_DATE_FMT.format(b.bucketStart) === sessionETDate)
+    : []
+  ).reverse();
 
   const series: MarketTidePoint[] = bars.map((b) => ({
     time: HHMM_FMT.format(b.bucketStart),
