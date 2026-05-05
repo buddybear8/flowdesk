@@ -17,20 +17,17 @@ import { gexLabels } from "@/lib/mock/gex-data";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
-type Greek = "GEX" | "Vanna" | "Charm";
 type StrikeCount = "5" | "10" | "15" | "20" | "25" | "40" | "50";
 
-const EXPLAINERS: Record<Greek, { color: string; text: string }> = {
-  GEX: { color: "#C9A55A", text: "Gamma Exposure (GEX) shows dealer hedging pressure per 1% move. Positive = dealers long gamma (vol suppressor). Negative = dealers short gamma (vol amplifier)." },
-  Vanna: { color: "#1D9E75", text: "Vanna measures how delta changes as IV changes. An IV spike forces directional dealer hedging that can amplify or dampen moves." },
-  Charm: { color: "#BA7517", text: "Charm (delta decay) shows how delta shifts over time. Most powerful near expiry — creates mechanical buying or selling pressure into the close." },
-};
+// Vanna and Charm tabs were hidden from the production UI — UW Basic doesn't
+// expose those endpoints. Reactivation: add Greek state + the tab pill group
+// back, restore the explainer map (see git history) once data is wired.
+const GEX_EXPLAINER = "Gamma Exposure (GEX) shows dealer hedging pressure per 1% move. Positive = dealers long gamma (vol suppressor). Negative = dealers short gamma (vol amplifier).";
 
 const TICKERS = ["SPY", "QQQ", "SPX", "NVDA", "TSLA"];
 
 export function GexView() {
   const [ticker, setTicker] = useState<string>("SPY");
-  const [greek, setGreek] = useState<Greek>("GEX");
   const [showDV, setShowDV] = useState(true);
   const [showOI, setShowOI] = useState(true);
   const [strikeCount, setStrikeCount] = useState<StrikeCount>("25");
@@ -49,7 +46,6 @@ export function GexView() {
   }
 
   const pos = data.gammaRegime === "POSITIVE";
-  const expl = EXPLAINERS[greek];
 
   return (
     <div
@@ -60,7 +56,7 @@ export function GexView() {
       <div className="flex flex-wrap items-start justify-between gap-[8px]" style={{ marginBottom: 12 }}>
         <div>
           <div style={{ fontSize: 17, fontWeight: 500, color: "var(--color-text-primary)" }}>
-            {greek === "GEX" ? "Spot gamma exposure — GEX overview" : `${greek} overview`}
+            Spot gamma exposure — GEX overview
           </div>
           <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
             Via Unusual Whales API · Real-time · Apr 21, 2026
@@ -69,28 +65,6 @@ export function GexView() {
         <div className="flex flex-wrap items-center gap-[7px]">
           <Select value={ticker} options={TICKERS.map(t => ({ id: t, label: t }))} onChange={setTicker} />
           <Select value="all" options={[{ id: "all", label: "All expirations" }, { id: "0dte", label: "0DTE only" }, { id: "weekly", label: "Weekly" }, { id: "monthly", label: "Monthly" }]} onChange={() => {}} />
-          <div
-            className="inline-flex rounded-md bg-bg-secondary"
-            style={{ padding: 2, gap: 1 }}
-          >
-            {(["GEX", "Vanna", "Charm"] as Greek[]).map(g => (
-              <button
-                key={g}
-                onClick={() => setGreek(g)}
-                className={clsx("text-[12px]", greek === g ? "font-medium" : "")}
-                style={{
-                  padding: "5px 16px",
-                  borderRadius: 6,
-                  background: greek === g ? "var(--color-background-primary)" : "transparent",
-                  color: greek === g ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-                  border: greek === g ? "0.5px solid var(--color-border-tertiary)" : "none",
-                  cursor: "pointer",
-                }}
-              >
-                {g}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 
@@ -103,51 +77,30 @@ export function GexView() {
           fontSize: 11,
           color: "var(--color-text-secondary)",
           lineHeight: 1.55,
-          borderLeft: `3px solid ${expl.color}`,
+          borderLeft: `3px solid #C9A55A`,
           background: "var(--color-background-secondary)",
         }}
       >
-        {expl.text}
+        {GEX_EXPLAINER}
       </div>
 
-      {greek !== "GEX" ? (
-        /* Vanna / Charm — UW Basic tier doesn't expose these endpoints
-           (PRD §4 v1.2.1 decision). Honest placeholder until the upgrade. */
-        <div
-          style={{
-            background: "var(--color-background-primary)",
-            border: "0.5px solid var(--color-border-tertiary)",
-            borderRadius: 12,
-            padding: "60px 40px",
-            textAlign: "center",
-          }}
-        >
-          <div style={{ fontSize: 14, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 8 }}>
-            {greek} data not available yet
-          </div>
-          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55, maxWidth: 460, margin: "0 auto" }}>
-            The Unusual Whales Basic tier doesn't expose {greek}-by-strike endpoints. Returning post-V1.
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* 5 metric cards */}
-          <div className="grid gap-[8px]" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))", marginBottom: 12 }}>
-            <Mc label="Net GEX (OI)" value={labels.o1} valueColor={pos ? "#7FBF52" : "#E76A6A"} sub={`${pos ? "Positive" : "Negative"} regime`} subColor={pos ? "#7FBF52" : "#E76A6A"} />
-            <Mc label="Gamma flip" value={`$${data.keyLevels.gammaFlip.toLocaleString()}`} valueColor="#E2BF73" sub={`${Math.abs(data.keyLevels.spot - data.keyLevels.gammaFlip).toFixed(0)}pts ${data.keyLevels.spot > data.keyLevels.gammaFlip ? "below" : "above"} spot`} subColor="#E2BF73" />
-            <Mc label="Call wall" value={`$${data.keyLevels.callWall.toLocaleString()}`} valueColor="#7FBF52" sub="Resistance" subColor="var(--color-text-secondary)" />
-            <Mc label="Put wall" value={`$${data.keyLevels.putWall.toLocaleString()}`} valueColor="#E76A6A" sub="Support" subColor="var(--color-text-secondary)" />
-            <Mc label="Max pain" value={`$${data.keyLevels.maxPain.toLocaleString()}`} sub="Pinning target" subColor="var(--color-text-secondary)" />
-          </div>
+      {/* 5 metric cards */}
+      <div className="grid gap-[8px]" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))", marginBottom: 12 }}>
+        <Mc label="Net GEX (OI)" value={labels.o1} valueColor={pos ? "#7FBF52" : "#E76A6A"} sub={`${pos ? "Positive" : "Negative"} regime`} subColor={pos ? "#7FBF52" : "#E76A6A"} />
+        <Mc label="Gamma flip" value={`$${data.keyLevels.gammaFlip.toLocaleString()}`} valueColor="#E2BF73" sub={`${Math.abs(data.keyLevels.spot - data.keyLevels.gammaFlip).toFixed(0)}pts ${data.keyLevels.spot > data.keyLevels.gammaFlip ? "below" : "above"} spot`} subColor="#E2BF73" />
+        <Mc label="Call wall" value={`$${data.keyLevels.callWall.toLocaleString()}`} valueColor="#7FBF52" sub="Resistance" subColor="var(--color-text-secondary)" />
+        <Mc label="Put wall" value={`$${data.keyLevels.putWall.toLocaleString()}`} valueColor="#E76A6A" sub="Support" subColor="var(--color-text-secondary)" />
+        <Mc label="Max pain" value={`$${data.keyLevels.maxPain.toLocaleString()}`} sub="Pinning target" subColor="var(--color-text-secondary)" />
+      </div>
 
-          {/* Chart + details */}
-          <div className="grid gap-[12px]" style={{ gridTemplateColumns: "1fr 240px" }}>
-            <Card>
-              <div className="flex flex-wrap items-start justify-between gap-[7px]" style={{ marginBottom: 10 }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>
-                    Net {greek} by strike — {ticker}
-                  </div>
+      {/* Chart + details */}
+      <div className="grid gap-[12px]" style={{ gridTemplateColumns: "1fr 240px" }}>
+        <Card>
+          <div className="flex flex-wrap items-start justify-between gap-[7px]" style={{ marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>
+                Net GEX by strike — {ticker}
+              </div>
                   <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 2 }}>
                     Positive = dealer long · Negative = dealer short
                   </div>
@@ -215,8 +168,6 @@ export function GexView() {
             ))}
         </Card>
       </div>
-        </>
-      )}
     </div>
   );
 }
