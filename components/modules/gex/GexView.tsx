@@ -26,6 +26,17 @@ const GEX_EXPLAINER = "Gamma Exposure (GEX) shows dealer hedging pressure per 1%
 
 const TICKERS = ["SPY", "QQQ", "SPX", "NVDA", "TSLA"];
 
+// Pick the actual strike nearest to spot from the API's strike array.
+// Falls back to rounded spot when no strikes were returned (e.g. UW gave
+// us a snapshot with nothing in the ±10% window).
+function atmStrike(data: GEXPayload): number {
+  const spot = data.keyLevels.spot;
+  if (!data.strikes.length) return Math.round(spot);
+  return data.strikes.reduce((best, s) =>
+    Math.abs(s.strike - spot) < Math.abs(best.strike - spot) ? s : best
+  ).strike;
+}
+
 export function GexView() {
   const [ticker, setTicker] = useState<string>("SPY");
   const [showDV, setShowDV] = useState(true);
@@ -118,7 +129,7 @@ export function GexView() {
 
             <Card>
           <SectionLabel>Details</SectionLabel>
-          <DlRows rows={[["Ticker", ticker], ["ATM strike", `~$${labels.atm.toLocaleString()}`], ["Spot", `$${data.keyLevels.spot.toFixed(2)}`]]} />
+          <DlRows rows={[["Ticker", ticker], ["ATM strike", `~$${atmStrike(data).toLocaleString()}`], ["Spot", `$${data.keyLevels.spot.toFixed(2)}`]]} />
           <SectionLabel>Open interest</SectionLabel>
           <DlRows
             rows={[["Gamma per 1% move", labels.o1], ["Net GEX", labels.o2]]}

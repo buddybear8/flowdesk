@@ -364,25 +364,38 @@ interface ComputedStrike {
 }
 
 function deriveKeyLevels(sorted: ComputedStrike[], spot: number) {
-  // PRD §8 derivations:
-  //   call_wall  = strike with largest positive `combined` above spot
-  //   put_wall   = strike with most-negative `combined` below spot
-  //   gamma_flip = strike where running cumulative `combined` crosses zero
-  const above = sorted.filter((s) => s.strike > spot && s.combined > 0);
-  const callWall = above.length
-    ? above.reduce((a, b) => (a.combined > b.combined ? a : b)).strike
+  // Restrict every key-level search to ±5% of spot. Without this bound,
+  // deep-OTM strikes produce spurious results — for SPX at $7,265 the
+  // unconstrained cumulative-crossing logic returned a gamma flip at
+  // $6,000 (driven by put-heavy LEAPS far below spot). Walls have the
+  // same problem in the other direction.
+  const window = spot * 0.05;
+
+  // call_wall = largest positive `combined` strike inside [spot, spot+5%]
+  const callCandidates = sorted.filter(
+    (s) => s.strike > spot && s.strike - spot <= window && s.combined > 0
+  );
+  const callWall = callCandidates.length
+    ? callCandidates.reduce((a, b) => (a.combined > b.combined ? a : b)).strike
     : spot;
 
-  const below = sorted.filter((s) => s.strike < spot && s.combined < 0);
-  const putWall = below.length
-    ? below.reduce((a, b) => (a.combined < b.combined ? a : b)).strike
+  // put_wall = most-negative `combined` strike inside [spot-5%, spot]
+  const putCandidates = sorted.filter(
+    (s) => s.strike < spot && spot - s.strike <= window && s.combined < 0
+  );
+  const putWall = putCandidates.length
+    ? putCandidates.reduce((a, b) => (a.combined < b.combined ? a : b)).strike
     : spot;
 
+  // gamma_flip = strike where running cumulative `combined` crosses zero,
+  // counted only when the crossing falls within ±5% of spot. The cumulative
+  // is still summed over the full chain so it reflects the real balance.
   let gammaFlip = spot;
   let cum = 0;
   for (const s of sorted) {
     const next = cum + s.combined;
-    if (cum !== 0 && Math.sign(cum) !== Math.sign(next)) {
+    const nearSpot = Math.abs(s.strike - spot) <= window;
+    if (nearSpot && cum !== 0 && Math.sign(cum) !== Math.sign(next)) {
       gammaFlip = s.strike;
       break;
     }
