@@ -68,9 +68,12 @@ export async function GET() {
         series: [],
       };
 
-  // Net Impact: most-recent snapshot date, top-N by signed netPremium.
-  // Querying "today (ET)" left the panel blank between 00:00 ET and the next
-  // 09:30 ET worker write, even though yesterday's session was still in DB.
+  // Net Impact: latest UW poll's curated top-N (already split half-bullish /
+  // half-bearish by UW). The worker upserts by (snapshotDate, ticker), so by
+  // mid-session the table accumulates 30+ tickers as UW's leaderboard rotates;
+  // ordering by netPremium DESC then returns the day's most-positive movers
+  // and drops the largest negatives. Ordering by updatedAt DESC and taking N
+  // returns exactly the most recent poll's row set — matches UW's chart.
   const latest = await prisma.netImpactDaily.findFirst({
     orderBy: { snapshotDate: "desc" },
     select: { snapshotDate: true },
@@ -78,7 +81,7 @@ export async function GET() {
   const netImpactRows = latest
     ? await prisma.netImpactDaily.findMany({
         where: { snapshotDate: latest.snapshotDate },
-        orderBy: { netPremium: "desc" },
+        orderBy: { updatedAt: "desc" },
         take: NET_IMPACT_LIMIT,
       })
     : [];
