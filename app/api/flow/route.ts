@@ -28,6 +28,24 @@ const ISO_DATE_FMT = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/New_York",
 });
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Parse YYYY-MM-DD as midnight in America/New_York, returned as a UTC Date.
+// DST-safe: tries the EDT offset first; if that re-formats back to the same
+// ET date we're correct, otherwise it's an EST day so use -05:00.
+function etMidnightUTC(dateStr: string): Date {
+  const edt = new Date(`${dateStr}T00:00:00-04:00`);
+  if (ISO_DATE_FMT.format(edt) === dateStr) return edt;
+  return new Date(`${dateStr}T00:00:00-05:00`);
+}
+
+function nextETDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const d0 = new Date(Date.UTC(y!, m! - 1, d!));
+  d0.setUTCDate(d0.getUTCDate() + 1);
+  return `${d0.getUTCFullYear()}-${String(d0.getUTCMonth() + 1).padStart(2, "0")}-${String(d0.getUTCDate()).padStart(2, "0")}`;
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const rawType = searchParams.get("type") ?? "ALL";
@@ -43,12 +61,22 @@ export async function GET(req: NextRequest) {
   const rawConf = searchParams.get("conf") ?? "ALL";
   const conf = ALLOWED_CONFS.includes(rawConf as typeof ALLOWED_CONFS[number]) ? rawConf : "ALL";
 
+  const date = searchParams.get("date");
+  if (date != null && !DATE_RE.test(date)) {
+    return NextResponse.json({ error: "Invalid date (expected YYYY-MM-DD)" }, { status: 400 });
+  }
+
   const where: Prisma.FlowAlertWhereInput = {};
   if (type !== "ALL") where.type = type;
   if (side !== "ALL") where.side = side;
   if (exec !== "ALL") where.exec = exec;
   if (conf !== "ALL") where.confidence = conf;
   if (minPrem > 0) where.premium = { gte: minPrem };
+  if (date) {
+    const start = etMidnightUTC(date);
+    const end = etMidnightUTC(nextETDate(date));
+    where.time = { gte: start, lt: end };
+  }
 
   const rows = await prisma.flowAlert.findMany({
     where,

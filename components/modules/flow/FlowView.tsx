@@ -19,9 +19,15 @@ type FilterState = {
   premMin: string;
   premMax: string;
   dte: string;
+  date: string; // YYYY-MM-DD in ET; controls the dataset (server-side filter)
 };
 
-const INITIAL_FILTER: FilterState = {
+const ET_DATE_FMT = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" });
+const todayET = () => ET_DATE_FMT.format(new Date());
+
+// `date` is filled in by the component using todayET() so the default tracks
+// the actual day, not the server-render time of this module.
+const INITIAL_FILTER: Omit<FilterState, "date"> = {
   type: "ALL", side: "ALL", sent: "ALL", exec: "ALL", prem: "ALL", conf: "ALL",
   rule: "ALL", ticker: "", sweepOnly: false, otmOnly: false, sizeOverOi: false,
   premMin: "", premMax: "", dte: "ALL",
@@ -39,12 +45,12 @@ function fmtP(v: number): string {
 
 export function FlowView() {
   const [alerts, setAlerts] = useState<FlowAlert[]>([]);
-  const [filter, setFilter] = useState<FilterState>(INITIAL_FILTER);
+  const [filter, setFilter] = useState<FilterState>(() => ({ ...INITIAL_FILTER, date: todayET() }));
   const [sortKey, setSortKey] = useState<SortKey>("time");
 
   useEffect(() => {
-    fetch("/api/flow").then(r => r.json()).then(r => setAlerts(r.alerts ?? []));
-  }, []);
+    fetch(`/api/flow?date=${filter.date}`).then(r => r.json()).then(r => setAlerts(r.alerts ?? []));
+  }, [filter.date]);
 
   const rows = useMemo(() => {
     let r = [...alerts];
@@ -225,7 +231,7 @@ function FilterPanel({ filter, setFilter }: { filter: FilterState; setFilter: Re
       >
         <span className="text-[12px] font-medium text-text-primary">Filters</span>
         <button
-          onClick={() => setFilter(INITIAL_FILTER)}
+          onClick={() => setFilter(f => ({ ...INITIAL_FILTER, date: f.date }))}
           className="cursor-pointer rounded-full"
           style={{
             fontSize: 10,
@@ -238,6 +244,45 @@ function FilterPanel({ filter, setFilter }: { filter: FilterState; setFilter: Re
         </button>
       </div>
       <div className="flex-1 overflow-y-auto px-[12px] py-[10px]">
+        <div className="mb-[12px]">
+          <FpLabel>Trading day</FpLabel>
+          <div className="flex items-center gap-[5px]" style={{ marginTop: 4 }}>
+            <input
+              type="date"
+              value={filter.date}
+              max={todayET()}
+              onChange={e => setFilter(f => ({ ...f, date: e.target.value || todayET() }))}
+              style={{
+                flex: 1,
+                fontSize: 11,
+                padding: "4px 7px",
+                borderRadius: 8,
+                border: "0.5px solid var(--color-border-secondary)",
+                background: "var(--color-background-secondary)",
+                color: "var(--color-text-primary)",
+                outline: "none",
+                colorScheme: "dark",
+              }}
+            />
+            {filter.date !== todayET() && (
+              <button
+                onClick={() => setFilter(f => ({ ...f, date: todayET() }))}
+                style={{
+                  fontSize: 10,
+                  padding: "3px 8px",
+                  borderRadius: 6,
+                  border: "0.5px solid var(--color-border-info)",
+                  background: "transparent",
+                  color: "var(--color-text-info)",
+                  cursor: "pointer",
+                }}
+              >
+                Today
+              </button>
+            )}
+          </div>
+        </div>
+        <Divider />
         <ChipSec label="Type" value={filter.type} onChange={v => setFilter(f => ({ ...f, type: v as FilterState["type"] }))}
           opts={[["ALL", "All types", "sel"], ["CALL", "Calls", "sel-g"], ["PUT", "Puts", "sel-r"]]} />
         <ChipSec label="Side" value={filter.side} onChange={v => setFilter(f => ({ ...f, side: v as FilterState["side"] }))}
