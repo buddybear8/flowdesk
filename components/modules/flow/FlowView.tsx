@@ -86,10 +86,10 @@ export function FlowView() {
           className="flex items-center flex-wrap px-[12px] py-[7px] flex-shrink-0 bg-bg-primary"
           style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
         >
-          <StatGroup><SV color="#185FA5">{rows.length}</SV><SL>&nbsp;ALERTS</SL></StatGroup>
-          <StatGroup><SV color="#3B6D11">{calls}</SV><SL>&nbsp;CALLS</SL><SV color="#A32D2D" style={{ marginLeft: 4 }}>{puts}</SV><SL>&nbsp;PUTS</SL></StatGroup>
-          <StatGroup><SV color="#185FA5">{fmtP(totalPrem)}</SV><SL>&nbsp;PREMIUM</SL></StatGroup>
-          <StatGroup last><SV color="#854F0B">{puts > 0 ? (calls / puts).toFixed(2) : "—"}</SV><SL>&nbsp;C/P RATIO</SL></StatGroup>
+          <StatGroup><SV color="#C9A55A">{rows.length}</SV><SL>&nbsp;ALERTS</SL></StatGroup>
+          <StatGroup><SV color="#7FBF52">{calls}</SV><SL>&nbsp;CALLS</SL><SV color="#E76A6A" style={{ marginLeft: 4 }}>{puts}</SV><SL>&nbsp;PUTS</SL></StatGroup>
+          <StatGroup><SV color="#C9A55A">{fmtP(totalPrem)}</SV><SL>&nbsp;PREMIUM</SL></StatGroup>
+          <StatGroup last><SV color="#E2BF73">{puts > 0 ? (calls / puts).toFixed(2) : "—"}</SV><SL>&nbsp;C/P RATIO</SL></StatGroup>
         </div>
 
         {/* Toolbar */}
@@ -157,7 +157,7 @@ export function FlowView() {
                   <Td style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-primary)" }}>{r.ticker}</Td>
                   <Td><Badge type={r.type === "CALL" ? "call" : "put"}>{r.type}</Badge></Td>
                   <Td><Badge type={r.side === "BUY" ? "buy" : "sell"}>{r.side}</Badge></Td>
-                  <Td><span style={{ fontSize: 10, fontWeight: 500, color: r.sentiment === "BULLISH" ? "#3B6D11" : "#A32D2D" }}>{r.sentiment}</span></Td>
+                  <Td><span style={{ fontSize: 10, fontWeight: 500, color: r.sentiment === "BULLISH" ? "#7FBF52" : "#E76A6A" }}>{r.sentiment}</span></Td>
                   <Td>
                     <Badge
                       type={
@@ -175,7 +175,7 @@ export function FlowView() {
                           fontSize: 8,
                           padding: "1px 4px",
                           borderRadius: 3,
-                          background: "#185FA5",
+                          background: "#C9A55A",
                           color: "white",
                           marginLeft: 3,
                         }}
@@ -193,7 +193,7 @@ export function FlowView() {
                     style={{
                       fontSize: 12,
                       fontWeight: 500,
-                      color: r.sentiment === "BEARISH" && r.side === "SELL" ? "#A32D2D" : "#3B6D11",
+                      color: r.sentiment === "BEARISH" && r.side === "SELL" ? "#E76A6A" : "#7FBF52",
                     }}
                   >
                     {fmtP(r.premium)}
@@ -333,10 +333,10 @@ function ChipSec({
         {opts.map(([v, l, selCls]) => {
           const selected = value === v;
           const selStyles: Record<string, { bg: string; border: string; color: string }> = {
-            sel: { bg: "#E6F1FB", border: "#185FA5", color: "#0C447C" },
-            "sel-g": { bg: "#EAF3DE", border: "#3B6D11", color: "#27500A" },
-            "sel-r": { bg: "#FCEBEB", border: "#A32D2D", color: "#791F1F" },
-            "sel-a": { bg: "#FAEEDA", border: "#854F0B", color: "#633806" },
+            sel: { bg: "rgba(201, 165, 90, 0.18)", border: "#C9A55A", color: "#C9A55A" },
+            "sel-g": { bg: "rgba(127, 191, 82, 0.14)", border: "#7FBF52", color: "#7FBF52" },
+            "sel-r": { bg: "rgba(231, 106, 106, 0.14)", border: "#E76A6A", color: "#E76A6A" },
+            "sel-a": { bg: "#FAEEDA", border: "#E2BF73", color: "#633806" },
           };
           const s = selStyles[selCls]!;
           return (
@@ -523,14 +523,14 @@ function Td({ children, style }: { children: React.ReactNode; style?: React.CSSP
 
 function Badge({ type, children }: { type: "call" | "put" | "buy" | "sell" | "sweep" | "floor" | "single" | "block"; children: React.ReactNode }) {
   const styles: Record<typeof type, { bg: string; color: string }> = {
-    call:   { bg: "#EAF3DE", color: "#27500A" },
-    put:    { bg: "#FCEBEB", color: "#791F1F" },
-    buy:    { bg: "#EAF3DE", color: "#27500A" },
-    sell:   { bg: "#FCEBEB", color: "#791F1F" },
+    call:   { bg: "rgba(127, 191, 82, 0.14)", color: "#7FBF52" },
+    put:    { bg: "rgba(231, 106, 106, 0.14)", color: "#E76A6A" },
+    buy:    { bg: "rgba(127, 191, 82, 0.14)", color: "#7FBF52" },
+    sell:   { bg: "rgba(231, 106, 106, 0.14)", color: "#E76A6A" },
     sweep:  { bg: "#FAEEDA", color: "#633806" },
     floor:  { bg: "#EEEDFE", color: "#3C3489" },
-    single: { bg: "#F1EFE8", color: "#5F5E5A" },
-    block:  { bg: "#E6F1FB", color: "#0C447C" },
+    single: { bg: "#F1EFE8", color: "#A8A496" },
+    block:  { bg: "rgba(201, 165, 90, 0.18)", color: "#C9A55A" },
   };
   const { bg, color } = styles[type];
   return (
@@ -554,10 +554,10 @@ function Badge({ type, children }: { type: "call" | "put" | "buy" | "sell" | "sw
 
 function ConfBadge({ conf }: { conf: string }) {
   const styles: Record<string, { bg: string; color: string }> = {
-    HIGH: { bg: "#EAF3DE", color: "#27500A" },
+    HIGH: { bg: "rgba(127, 191, 82, 0.14)", color: "#7FBF52" },
     MED:  { bg: "#FAEEDA", color: "#633806" },
     MOD:  { bg: "#FAEEDA", color: "#633806" },
-    LOW:  { bg: "#FCEBEB", color: "#791F1F" },
+    LOW:  { bg: "rgba(231, 106, 106, 0.14)", color: "#E76A6A" },
   };
   const s = styles[conf] ?? styles.MED!;
   return (

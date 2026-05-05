@@ -5,7 +5,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 
 export const metadata: Metadata = {
-  title: "FlowDesk",
+  title: "Champagne Sessions",
   description: "Trading intelligence dashboard",
 };
 

@@ -40,9 +40,9 @@ function fmtVol(v: number): string {
 }
 
 function rankClass(rank: number): { bg: string; color: string; border: string } {
-  if (rank <= 3) return { bg: "#FAEEDA", color: "#633806", border: "#EF9F27" };
-  if (rank <= 10) return { bg: "#EAF3DE", color: "#27500A", border: "#639922" };
-  if (rank <= 25) return { bg: "#E6F1FB", color: "#0C447C", border: "#185FA5" };
+  if (rank <= 3) return { bg: "#FAEEDA", color: "#633806", border: "#C9A55A" };
+  if (rank <= 10) return { bg: "rgba(127, 191, 82, 0.14)", color: "#7FBF52", border: "#7FBF52" };
+  if (rank <= 25) return { bg: "rgba(201, 165, 90, 0.18)", color: "#C9A55A", border: "#C9A55A" };
   if (rank <= 50) return { bg: "#EEEDFE", color: "#3C3489", border: "#7F77DD" };
   return { bg: "var(--color-background-secondary)", color: "var(--color-text-secondary)", border: "var(--color-border-secondary)" };
 }
@@ -115,7 +115,7 @@ export function DarkpoolView() {
               max={100}
               value={filter.rankMax}
               onChange={e => setFilter(f => ({ ...f, rankMax: Number(e.target.value) }))}
-              style={{ width: "100%", accentColor: "#185FA5" }}
+              style={{ width: "100%", accentColor: "#C9A55A" }}
             />
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--color-text-tertiary)", marginTop: 2 }}>
               <span>Rank 1</span><span>Top 100</span>
@@ -138,9 +138,9 @@ export function DarkpoolView() {
           className="flex items-center flex-wrap px-[12px] py-[7px] flex-shrink-0 bg-bg-primary"
           style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
         >
-          <StatGroup><SV color="#185FA5">{rows.length}</SV><SL>&nbsp;PRINTS</SL></StatGroup>
-          <StatGroup><SV color="#3B6D11">{fmtP(totalPrem)}</SV><SL>&nbsp;TOTAL PREMIUM</SL></StatGroup>
-          <StatGroup><SV color="#854F0B">{fmtVol(totalVol)}</SV><SL>&nbsp;TOTAL VOLUME</SL></StatGroup>
+          <StatGroup><SV color="#C9A55A">{rows.length}</SV><SL>&nbsp;PRINTS</SL></StatGroup>
+          <StatGroup><SV color="#7FBF52">{fmtP(totalPrem)}</SV><SL>&nbsp;TOTAL PREMIUM</SL></StatGroup>
+          <StatGroup><SV color="#E2BF73">{fmtVol(totalVol)}</SV><SL>&nbsp;TOTAL VOLUME</SL></StatGroup>
           <StatGroup last><SV color="#534AB7">#{bestRank}</SV><SL>&nbsp;TOP RANK</SL></StatGroup>
         </div>
 
@@ -149,7 +149,7 @@ export function DarkpoolView() {
           style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
         >
           <div className="flex items-center gap-[5px]" style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
-            <span className="blink" style={{ width: 7, height: 7, borderRadius: "50%", background: "#3B6D11", display: "inline-block" }} />
+            <span className="blink" style={{ width: 7, height: 7, borderRadius: "50%", background: "#7FBF52", display: "inline-block" }} />
             Live · updating
           </div>
           <input
@@ -222,10 +222,10 @@ export function DarkpoolView() {
                         </span>
                       )}
                     </Td>
-                    <Td style={{ fontSize: 13, fontWeight: 500, color: r.is_etf ? "#534AB7" : "#185FA5" }}>{r.ticker}</Td>
+                    <Td style={{ fontSize: 13, fontWeight: 500, color: r.is_etf ? "#534AB7" : "#C9A55A" }}>{r.ticker}</Td>
                     <Td style={{ fontSize: 12, color: "var(--color-text-primary)" }}>${r.price.toFixed(4)}</Td>
                     <Td style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{r.size.toLocaleString()}</Td>
-                    <Td style={{ fontSize: 12, fontWeight: 500, color: "#3B6D11" }}>{fmtP(r.premium)}</Td>
+                    <Td style={{ fontSize: 12, fontWeight: 500, color: "#7FBF52" }}>{fmtP(r.premium)}</Td>
                     <Td style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{fmtVol(r.volume)}</Td>
                     <Td center>
                       <span
@@ -315,8 +315,8 @@ function Tog({ label, checked, onChange }: { label: string; checked: boolean; on
             position: "absolute",
             inset: 0,
             borderRadius: 20,
-            background: checked ? "#185FA5" : "var(--color-background-secondary)",
-            border: `0.5px solid ${checked ? "#185FA5" : "var(--color-border-secondary)"}`,
+            background: checked ? "#C9A55A" : "var(--color-background-secondary)",
+            border: `0.5px solid ${checked ? "#C9A55A" : "var(--color-border-secondary)"}`,
             cursor: "pointer",
             transition: "background .2s",
           }}

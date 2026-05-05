@@ -38,15 +38,20 @@ export function Sidebar() {
       <div className="px-3 pt-3 pb-[10px]" style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
         <div className="mb-[9px] flex items-center gap-2">
           <div
-            className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-md"
-            style={{ background: "#185FA5" }}
+            className="flex h-[28px] w-[28px] flex-shrink-0 items-center justify-center rounded-md"
+            style={{
+              background: "var(--color-background-tertiary)",
+              border: "1px solid var(--color-border-info)",
+              color: "#C9A55A",
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "-0.5px",
+            }}
           >
-            <svg viewBox="0 0 14 14" fill="none" width="14" height="14">
-              <path d="M2 10L7 4L12 10" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            CS
           </div>
           <div>
-            <div className="text-[14px] font-medium text-text-primary">FlowDesk</div>
+            <div className="text-[12px] font-semibold" style={{ color: "#E2BF73", letterSpacing: "0.02em" }}>Champagne Sessions</div>
             <div className="text-[9px] text-text-tertiary" style={{ marginTop: 1 }}>Trading intelligence</div>
           </div>
         </div>
@@ -130,8 +135,8 @@ function NavRow({ entry, active, smallIcon }: { entry: NavEntry; active: boolean
           className="rounded-full px-[5px] text-[8px] font-medium"
           style={{
             padding: "1px 5px",
-            background: entry.badge.variant === "red" ? "#FCEBEB" : "#EAF3DE",
-            color: entry.badge.variant === "red" ? "#A32D2D" : "#27500A",
+            background: entry.badge.variant === "red" ? "rgba(231, 106, 106, 0.14)" : "rgba(127, 191, 82, 0.14)",
+            color: entry.badge.variant === "red" ? "#E76A6A" : "#7FBF52",
           }}
         >
           {entry.badge.text}

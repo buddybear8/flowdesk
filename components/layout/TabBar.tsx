@@ -46,8 +46,8 @@ export function TabBar({ tabs, activeId, onChange, syncToUrl = true }: Props) {
               active ? "font-medium" : "text-text-secondary hover:text-text-primary"
             )}
             style={{
-              borderBottom: active ? "2px solid #185FA5" : "2px solid transparent",
-              color: active ? "#185FA5" : undefined,
+              borderBottom: active ? "2px solid #C9A55A" : "2px solid transparent",
+              color: active ? "#C9A55A" : undefined,
               marginBottom: "-0.5px",
             }}
           >

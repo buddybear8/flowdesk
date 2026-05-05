@@ -20,7 +20,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 type Greek = "GEX" | "Vanna" | "Charm";
 
 const EXPLAINERS: Record<Greek, { color: string; text: string }> = {
-  GEX: { color: "#185FA5", text: "Gamma Exposure (GEX) shows dealer hedging pressure per 1% move. Positive = dealers long gamma (vol suppressor). Negative = dealers short gamma (vol amplifier)." },
+  GEX: { color: "#C9A55A", text: "Gamma Exposure (GEX) shows dealer hedging pressure per 1% move. Positive = dealers long gamma (vol suppressor). Negative = dealers short gamma (vol amplifier)." },
   Vanna: { color: "#1D9E75", text: "Vanna measures how delta changes as IV changes. An IV spike forces directional dealer hedging that can amplify or dampen moves." },
   Charm: { color: "#BA7517", text: "Charm (delta decay) shows how delta shifts over time. Most powerful near expiry — creates mechanical buying or selling pressure into the close." },
 };
@@ -110,10 +110,10 @@ export function GexView() {
 
       {/* 5 metric cards */}
       <div className="grid gap-[8px]" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))", marginBottom: 12 }}>
-        <Mc label="Net GEX (OI)" value={labels.o1} valueColor={pos ? "#3B6D11" : "#A32D2D"} sub={`${pos ? "Positive" : "Negative"} regime`} subColor={pos ? "#3B6D11" : "#A32D2D"} />
-        <Mc label="Gamma flip" value={`$${data.keyLevels.gammaFlip.toLocaleString()}`} valueColor="#854F0B" sub={`${Math.abs(data.keyLevels.spot - data.keyLevels.gammaFlip).toFixed(0)}pts ${data.keyLevels.spot > data.keyLevels.gammaFlip ? "below" : "above"} spot`} subColor="#854F0B" />
-        <Mc label="Call wall" value={`$${data.keyLevels.callWall.toLocaleString()}`} valueColor="#3B6D11" sub="Resistance" subColor="var(--color-text-secondary)" />
-        <Mc label="Put wall" value={`$${data.keyLevels.putWall.toLocaleString()}`} valueColor="#A32D2D" sub="Support" subColor="var(--color-text-secondary)" />
+        <Mc label="Net GEX (OI)" value={labels.o1} valueColor={pos ? "#7FBF52" : "#E76A6A"} sub={`${pos ? "Positive" : "Negative"} regime`} subColor={pos ? "#7FBF52" : "#E76A6A"} />
+        <Mc label="Gamma flip" value={`$${data.keyLevels.gammaFlip.toLocaleString()}`} valueColor="#E2BF73" sub={`${Math.abs(data.keyLevels.spot - data.keyLevels.gammaFlip).toFixed(0)}pts ${data.keyLevels.spot > data.keyLevels.gammaFlip ? "below" : "above"} spot`} subColor="#E2BF73" />
+        <Mc label="Call wall" value={`$${data.keyLevels.callWall.toLocaleString()}`} valueColor="#7FBF52" sub="Resistance" subColor="var(--color-text-secondary)" />
+        <Mc label="Put wall" value={`$${data.keyLevels.putWall.toLocaleString()}`} valueColor="#E76A6A" sub="Support" subColor="var(--color-text-secondary)" />
         <Mc label="Max pain" value={`$${data.keyLevels.maxPain.toLocaleString()}`} sub="Pinning target" subColor="var(--color-text-secondary)" />
       </div>
 
@@ -145,7 +145,7 @@ export function GexView() {
           <SectionLabel>Open interest</SectionLabel>
           <DlRows
             rows={[["Gamma per 1% move", labels.o1], ["Net GEX", labels.o2]]}
-            valueColor={pos ? "#3B6D11" : "#A32D2D"}
+            valueColor={pos ? "#7FBF52" : "#E76A6A"}
           />
           <SectionLabel>Gamma regime</SectionLabel>
           <div
@@ -155,11 +155,11 @@ export function GexView() {
               padding: "4px 10px",
               borderRadius: 20,
               marginBottom: 7,
-              background: pos ? "#EAF3DE" : "#FCEBEB",
-              color: pos ? "#3B6D11" : "#A32D2D",
+              background: pos ? "rgba(127, 191, 82, 0.14)" : "rgba(231, 106, 106, 0.14)",
+              color: pos ? "#7FBF52" : "#E76A6A",
             }}
           >
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: pos ? "#3B6D11" : "#A32D2D" }} />
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: pos ? "#7FBF52" : "#E76A6A" }} />
             {pos ? "Positive gamma" : "Negative gamma"}
           </div>
           <div style={{ fontSize: 11, color: "var(--color-text-secondary)", lineHeight: 1.55, marginBottom: 10 }}>
@@ -169,11 +169,11 @@ export function GexView() {
           </div>
           <SectionLabel>Key levels</SectionLabel>
           {[
-            { name: "Call wall", px: data.keyLevels.callWall, color: "#639922", bg: "#EAF3DE", text: "#27500A" },
-            { name: "Spot", px: data.keyLevels.spot, color: "#378ADD", bg: "#E6F1FB", text: "#0C447C" },
-            { name: "Gamma flip", px: data.keyLevels.gammaFlip, color: "#EF9F27", bg: "#FAEEDA", text: "#633806" },
-            { name: "Max pain", px: data.keyLevels.maxPain, color: "#888780", bg: "#F1EFE8", text: "#444441" },
-            { name: "Put wall", px: data.keyLevels.putWall, color: "#E24B4A", bg: "#FCEBEB", text: "#791F1F" },
+            { name: "Call wall", px: data.keyLevels.callWall, color: "#7FBF52", bg: "rgba(127, 191, 82, 0.14)", text: "#7FBF52" },
+            { name: "Spot", px: data.keyLevels.spot, color: "#378ADD", bg: "rgba(201, 165, 90, 0.18)", text: "#C9A55A" },
+            { name: "Gamma flip", px: data.keyLevels.gammaFlip, color: "#C9A55A", bg: "#FAEEDA", text: "#633806" },
+            { name: "Max pain", px: data.keyLevels.maxPain, color: "#888780", bg: "#F1EFE8", text: "#A8A496" },
+            { name: "Put wall", px: data.keyLevels.putWall, color: "#E76A6A", bg: "rgba(231, 106, 106, 0.14)", text: "#E76A6A" },
           ]
             .sort((a, b) => b.px - a.px)
             .map(l => (
@@ -216,7 +216,7 @@ function GexBarChart({ data, showDV, showOI }: { data: GEXPayload; showDV: boole
         label: "Open interest",
         data: rows.map(r => r.netOI / 1_000_000),
         backgroundColor: rows.map(r => (r.netOI >= 0 ? "rgba(99,153,34,0.75)" : "rgba(226,75,74,0.7)")),
-        borderColor: rows.map(r => (r.netOI >= 0 ? "#639922" : "#E24B4A")),
+        borderColor: rows.map(r => (r.netOI >= 0 ? "#7FBF52" : "#E76A6A")),
         borderWidth: 1,
         borderRadius: 2,
         borderSkipped: false,
@@ -238,11 +238,11 @@ function GexBarChart({ data, showDV, showOI }: { data: GEXPayload; showDV: boole
       },
       scales: {
         x: {
-          grid: { color: "rgba(0,0,0,0.04)" },
+          grid: { color: "rgba(255,255,255,0.06)" },
           ticks: { color: "#888780", font: { size: 9 }, callback: v => Math.abs(Math.round(Number(v))) + "M" },
         },
         y: {
-          grid: { color: "rgba(0,0,0,0.04)" },
+          grid: { color: "rgba(255,255,255,0.06)" },
           ticks: { color: "#888780", font: { size: 9 } },
         },
       },
@@ -292,10 +292,10 @@ function SeriesButton({
         fontSize: 11,
         border: `0.5px solid ${active ? color : "var(--color-border-secondary)"}`,
         background: active
-          ? color === "#378ADD" ? "#E6F1FB" : "#EEEDFE"
+          ? color === "#378ADD" ? "rgba(201, 165, 90, 0.18)" : "#EEEDFE"
           : "var(--color-background-primary)",
         color: active
-          ? color === "#378ADD" ? "#0C447C" : "#3C3489"
+          ? color === "#378ADD" ? "#C9A55A" : "#3C3489"
           : "var(--color-text-secondary)",
       }}
     >

@@ -19,9 +19,9 @@ function confClass(c: string): string {
 }
 
 function confColor(c: string): string {
-  if (c === "HIGH") return "#3B6D11";
-  if (c === "MOD" || c === "MED") return "#854F0B";
-  return "#A32D2D";
+  if (c === "HIGH") return "#7FBF52";
+  if (c === "MOD" || c === "MED") return "#E2BF73";
+  return "#E76A6A";
 }
 
 type SortKey = "rank" | "prem" | "conf";
@@ -71,8 +71,8 @@ export function WatchesView() {
               className="inline-flex items-center gap-[3px] text-[10px] font-medium rounded-full"
               style={{
                 padding: "2px 8px",
-                background: payload.sessionMeta.sentiment === "BULLISH" ? "#EAF3DE" : "#FCEBEB",
-                color: payload.sessionMeta.sentiment === "BULLISH" ? "#27500A" : "#791F1F",
+                background: payload.sessionMeta.sentiment === "BULLISH" ? "rgba(127, 191, 82, 0.14)" : "rgba(231, 106, 106, 0.14)",
+                color: payload.sessionMeta.sentiment === "BULLISH" ? "#7FBF52" : "#E76A6A",
               }}
             >
               {payload.sessionMeta.sentiment === "BULLISH" ? "▲ Bullish" : "▼ Bearish"}
@@ -141,15 +141,15 @@ export function WatchesView() {
                 >
                   <Td style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{h.rank}</Td>
                   <Td>
-                    <span className="font-medium" style={{ fontSize: 13, color: i === selRow ? "#0C447C" : "#185FA5" }}>{h.ticker}</span>{" "}
-                    <span style={{ fontSize: 9, color: h.direction === "UP" ? "#3B6D11" : "#A32D2D" }}>
+                    <span className="font-medium" style={{ fontSize: 13, color: i === selRow ? "#C9A55A" : "#C9A55A" }}>{h.ticker}</span>{" "}
+                    <span style={{ fontSize: 9, color: h.direction === "UP" ? "#7FBF52" : "#E76A6A" }}>
                       {h.direction === "UP" ? "▲" : "▼"}
                     </span>
                   </Td>
                   <Td>
                     <ConfBadge conf={h.confidence} />
                   </Td>
-                  <Td style={{ fontSize: 12, fontWeight: 500, color: h.direction === "UP" ? "#3B6D11" : "#A32D2D" }}>{fmtP(h.premium)}</Td>
+                  <Td style={{ fontSize: 12, fontWeight: 500, color: h.direction === "UP" ? "#7FBF52" : "#E76A6A" }}>{fmtP(h.premium)}</Td>
                   <Td style={{ fontSize: 11, color: "var(--color-text-primary)" }}>{h.contract}</Td>
                   <Td center>
                     {h.dpConf ? (
@@ -197,7 +197,7 @@ export function WatchesView() {
                     height: 5,
                     borderRadius: 3,
                     width: `${Math.abs(s.netPremium / sfMax) * 100}%`,
-                    background: s.netPremium >= 0 ? "#639922" : "#E24B4A",
+                    background: s.netPremium >= 0 ? "#7FBF52" : "#E76A6A",
                   }}
                 />
               </div>
@@ -208,7 +208,7 @@ export function WatchesView() {
                   width: 50,
                   textAlign: "right",
                   flexShrink: 0,
-                  color: s.netPremium >= 0 ? "#3B6D11" : "#A32D2D",
+                  color: s.netPremium >= 0 ? "#7FBF52" : "#E76A6A",
                 }}
               >
                 {s.netPremium >= 0 ? "+" : ""}{fmtP(s.netPremium)}
@@ -273,9 +273,9 @@ function DetailPanel({
             marginBottom: 10,
             fontSize: 12,
             padding: "5px 14px",
-            background: hit.direction === "UP" ? "#EAF3DE" : "#FCEBEB",
-            color: hit.direction === "UP" ? "#27500A" : "#791F1F",
-            border: `0.5px solid ${hit.direction === "UP" ? "#639922" : "#A32D2D"}`,
+            background: hit.direction === "UP" ? "rgba(127, 191, 82, 0.14)" : "rgba(231, 106, 106, 0.14)",
+            color: hit.direction === "UP" ? "#7FBF52" : "#E76A6A",
+            border: `0.5px solid ${hit.direction === "UP" ? "#7FBF52" : "#E76A6A"}`,
           }}
         >
           {hit.direction === "UP" ? "▲ Bullish" : "▼ Bearish"}
@@ -344,9 +344,9 @@ function DetailPanel({
                 >
                   <td style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-primary)", padding: "6px 8px" }}>{c.strikeLabel}</td>
                   <td style={{ color: "var(--color-text-secondary)", padding: "6px 8px" }}>{c.expiryLabel}</td>
-                  <td style={{ fontWeight: 500, color: "#3B6D11", padding: "6px 8px" }}>{c.premiumLabel}</td>
+                  <td style={{ fontWeight: 500, color: "#7FBF52", padding: "6px 8px" }}>{c.premiumLabel}</td>
                   <td style={{ fontSize: 10, color: "var(--color-text-secondary)", padding: "6px 8px" }}>{c.rule}</td>
-                  <td style={{ fontWeight: 500, color: "#3B6D11", textAlign: "right", padding: "6px 0" }}>{c.vOiLabel}</td>
+                  <td style={{ fontWeight: 500, color: "#7FBF52", textAlign: "right", padding: "6px 0" }}>{c.vOiLabel}</td>
                 </tr>
               ))}
             </tbody>
@@ -394,12 +394,12 @@ function DetailPanel({
                   style={{
                     padding: "3px 9px",
                     fontSize: 11,
-                    background: p.highlighted ? "#E6F1FB" : "var(--color-background-secondary)",
-                    color: p.highlighted ? "#0C447C" : "var(--color-text-secondary)",
-                    border: `0.5px solid ${p.highlighted ? "#185FA5" : "var(--color-border-secondary)"}`,
+                    background: p.highlighted ? "rgba(201, 165, 90, 0.18)" : "var(--color-background-secondary)",
+                    color: p.highlighted ? "#C9A55A" : "var(--color-text-secondary)",
+                    border: `0.5px solid ${p.highlighted ? "#C9A55A" : "var(--color-border-secondary)"}`,
                   }}
                 >
-                  <span style={{ fontSize: 10, color: p.direction === "UP" ? "#3B6D11" : "#A32D2D" }}>
+                  <span style={{ fontSize: 10, color: p.direction === "UP" ? "#7FBF52" : "#E76A6A" }}>
                     {p.direction === "UP" ? "▲" : "▼"}
                   </span>
                   {p.ticker}
@@ -416,7 +416,7 @@ function DetailPanel({
           <div className="rounded-md bg-bg-secondary" style={{ padding: "10px 12px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
               <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>{hit.theme.name}</span>
-              <span style={{ fontSize: 12, fontWeight: 500, color: "#3B6D11" }}>{hit.theme.totalPremiumLabel}</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: "#7FBF52" }}>{hit.theme.totalPremiumLabel}</span>
             </div>
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
               {hit.theme.tickers.map(t => {
@@ -428,9 +428,9 @@ function DetailPanel({
                     style={{
                       padding: "2px 8px",
                       fontSize: 11,
-                      background: highlighted ? "#E6F1FB" : "var(--color-background-primary)",
-                      border: `0.5px solid ${highlighted ? "#185FA5" : "var(--color-border-secondary)"}`,
-                      color: highlighted ? "#0C447C" : "var(--color-text-secondary)",
+                      background: highlighted ? "rgba(201, 165, 90, 0.18)" : "var(--color-background-primary)",
+                      border: `0.5px solid ${highlighted ? "#C9A55A" : "var(--color-border-secondary)"}`,
+                      color: highlighted ? "#C9A55A" : "var(--color-text-secondary)",
                       fontWeight: highlighted ? 500 : undefined,
                     }}
                   >
@@ -505,8 +505,8 @@ function ConfBadge({ conf }: { conf: string }) {
         borderRadius: 3,
         display: "inline-flex",
         alignItems: "center",
-        background: conf === "HIGH" ? "#EAF3DE" : conf === "MOD" || conf === "MED" ? "#FAEEDA" : "#FCEBEB",
-        color: conf === "HIGH" ? "#27500A" : conf === "MOD" || conf === "MED" ? "#633806" : "#791F1F",
+        background: conf === "HIGH" ? "rgba(127, 191, 82, 0.14)" : conf === "MOD" || conf === "MED" ? "#FAEEDA" : "rgba(231, 106, 106, 0.14)",
+        color: conf === "HIGH" ? "#7FBF52" : conf === "MOD" || conf === "MED" ? "#633806" : "#E76A6A",
       }}
     >
       {conf}

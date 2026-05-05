@@ -39,7 +39,7 @@ export function Topbar() {
       <div className="ml-auto flex items-center gap-[7px]">
         <span
           className="text-[10px] font-medium rounded-full"
-          style={{ padding: "2px 8px", background: "#EAF3DE", color: "#3B6D11" }}
+          style={{ padding: "2px 8px", background: "rgba(127, 191, 82, 0.14)", color: "#7FBF52" }}
         >
           ● Market open
         </span>

@@ -88,9 +88,9 @@ export function MarketTideView() {
               fontSize: 11,
               fontWeight: 500,
               padding: "3px 11px",
-              background: isLive ? "#E6F1FB" : "#F0EFEC",
-              color: isLive ? "#185FA5" : "#6E6B62",
-              border: `0.5px solid ${isLive ? "#185FA5" : "#9B9890"}`,
+              background: isLive ? "rgba(201, 165, 90, 0.18)" : "#F0EFEC",
+              color: isLive ? "#C9A55A" : "#A8A496",
+              border: `0.5px solid ${isLive ? "#C9A55A" : "#6B6960"}`,
             }}
           >
             {isLive ? "● Live" : "● Closed"}
@@ -105,8 +105,8 @@ export function MarketTideView() {
         style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))", marginBottom: 12 }}
       >
         <Mc label="Volume (5-min bucket)" value={noTide ? "—" : fmtVol(data.tide.volumeCurrent)} sub="rolling" subColor="var(--color-text-secondary)" />
-        <Mc label="Net call premium" value={noTide ? "—" : fmtPrem(data.tide.netCallPremiumCurrent)} valueColor="#3B6D11" sub="cumulative today" subColor="#3B6D11" />
-        <Mc label="Net put premium" value={noTide ? "—" : fmtPrem(data.tide.netPutPremiumCurrent)} valueColor="#A32D2D" sub="cumulative today" subColor="#A32D2D" />
+        <Mc label="Net call premium" value={noTide ? "—" : fmtPrem(data.tide.netCallPremiumCurrent)} valueColor="#7FBF52" sub="cumulative today" subColor="#7FBF52" />
+        <Mc label="Net put premium" value={noTide ? "—" : fmtPrem(data.tide.netPutPremiumCurrent)} valueColor="#E76A6A" sub="cumulative today" subColor="#E76A6A" />
       </div>
 
       {/* Market Tide chart */}
@@ -168,7 +168,7 @@ function TideChart({ snapshot }: { snapshot: MarketTideSnapshot }) {
         {
           label: "Net call premium",
           data: snapshot.series.map(p => p.netCallPremium / 1_000_000),
-          borderColor: "#3B6D11",
+          borderColor: "#7FBF52",
           backgroundColor: "rgba(59, 109, 17, 0.10)",
           borderWidth: 1.8,
           fill: true,
@@ -178,7 +178,7 @@ function TideChart({ snapshot }: { snapshot: MarketTideSnapshot }) {
         {
           label: "Net put premium",
           data: snapshot.series.map(p => p.netPutPremium / 1_000_000),
-          borderColor: "#E24B4A",
+          borderColor: "#E76A6A",
           backgroundColor: "rgba(226, 75, 74, 0.08)",
           borderWidth: 1.8,
           fill: true,
@@ -206,21 +206,21 @@ function TideChart({ snapshot }: { snapshot: MarketTideSnapshot }) {
       },
       scales: {
         x: {
-          grid: { color: "rgba(0,0,0,0.04)" },
-          ticks: { color: "#9B9890", font: { size: 10 }, maxTicksLimit: 10, maxRotation: 0 },
+          grid: { color: "rgba(255,255,255,0.06)" },
+          ticks: { color: "#6B6960", font: { size: 10 }, maxTicksLimit: 10, maxRotation: 0 },
         },
         y: {
           position: "left",
-          grid: { color: "rgba(0,0,0,0.04)" },
+          grid: { color: "rgba(255,255,255,0.06)" },
           ticks: {
-            color: "#9B9890",
+            color: "#6B6960",
             font: { size: 10 },
             callback: v => {
               const n = Number(v);
               return `${n >= 0 ? "+" : ""}${n}M`;
             },
           },
-          title: { display: true, text: "Net premium ($)", color: "#9B9890", font: { size: 10 } },
+          title: { display: true, text: "Net premium ($)", color: "#6B6960", font: { size: 10 } },
         },
       },
     };
@@ -278,9 +278,9 @@ function NetImpactChart({ snapshot }: { snapshot: NetImpactSnapshot }) {
       },
       scales: {
         x: {
-          grid: { color: "rgba(0,0,0,0.04)" },
+          grid: { color: "rgba(255,255,255,0.06)" },
           ticks: {
-            color: "#9B9890",
+            color: "#6B6960",
             font: { size: 10 },
             callback: v => {
               const n = Number(v);
@@ -293,8 +293,8 @@ function NetImpactChart({ snapshot }: { snapshot: NetImpactSnapshot }) {
           ticks: {
             color: ctx => {
               const row = snapshot.rows.find(r => r.ticker === String(ctx.tick.label));
-              if (!row) return "#9B9890";
-              return row.netPremium >= 0 ? "#3B6D11" : "#A32D2D";
+              if (!row) return "#6B6960";
+              return row.netPremium >= 0 ? "#7FBF52" : "#E76A6A";
             },
             font: { size: 11, weight: 500 },
           },

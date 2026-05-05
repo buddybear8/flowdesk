@@ -3,17 +3,25 @@
 @tailwind utilities;
 
 :root {
-  --color-background-primary: #FFFFFF;
-  --color-background-secondary: #F6F5F2;
-  --color-background-tertiary: #EFEDE8;
-  --color-background-info: #E6F1FB;
-  --color-text-primary: #1A1918;
-  --color-text-secondary: #6B6965;
-  --color-text-tertiary: #9B9890;
-  --color-text-info: #185FA5;
-  --color-border-tertiary: rgba(0, 0, 0, 0.10);
-  --color-border-secondary: rgba(0, 0, 0, 0.18);
-  --color-border-info: #185FA5;
+  color-scheme: dark;
+
+  /* Backgrounds — 4-step navy scale, deepest to lightest, matches the brand mark. */
+  --color-background-primary: #0F2040;     /* sidebar, cards, topbar */
+  --color-background-secondary: #162947;   /* inputs, secondary surfaces */
+  --color-background-tertiary: #0A1A33;    /* page background */
+  --color-background-info: rgba(201, 165, 90, 0.18);  /* faint gold (active row, info pill) */
+
+  /* Text — warm cream primary to match the logo wordmark. */
+  --color-text-primary: #F1ECDF;
+  --color-text-secondary: #A8A496;
+  --color-text-tertiary: #6B6960;
+  --color-text-info: #C9A55A;              /* champagne gold accent */
+
+  /* Borders */
+  --color-border-tertiary: rgba(255, 255, 255, 0.06);
+  --color-border-secondary: rgba(255, 255, 255, 0.10);
+  --color-border-info: rgba(201, 165, 90, 0.45);
+
   --border-radius-md: 8px;
   --border-radius-lg: 12px;
   --border-radius-xl: 16px;
@@ -24,7 +32,7 @@ html, body {
   font-size: 12px;
   line-height: 1.6;
   color: var(--color-text-primary);
-  background: var(--color-background-primary);
+  background: var(--color-background-tertiary);
 }
 
 * {

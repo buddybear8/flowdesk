@@ -80,9 +80,9 @@ function OverviewTab() {
               fontSize: 10,
               padding: "3px 10px",
               borderRadius: 20,
-              border: "0.5px solid #185FA5",
-              background: "#E6F1FB",
-              color: "#0C447C",
+              border: "0.5px solid #C9A55A",
+              background: "rgba(201, 165, 90, 0.18)",
+              color: "#C9A55A",
             }}
           >
             Pre-market
@@ -123,7 +123,7 @@ function OverviewTab() {
             <CardTitle rightText="24h">Market sentiment</CardTitle>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
               <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 28, fontWeight: 500, color: "#3B6D11" }}>68</div>
+                <div style={{ fontSize: 28, fontWeight: 500, color: "#7FBF52" }}>68</div>
                 <div style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>Mod. bullish</div>
               </div>
               <div style={{ flex: 1 }}>
@@ -131,11 +131,11 @@ function OverviewTab() {
                   Bull {data.overall.bullPct}% · Neu {data.overall.neutralPct}% · Bear {data.overall.bearPct}%
                 </div>
                 <div style={{ height: 7, borderRadius: 4, background: "var(--color-background-secondary)", overflow: "hidden", display: "flex", marginTop: 4 }}>
-                  <div style={{ background: "#639922", width: `${data.overall.bullPct}%` }} />
+                  <div style={{ background: "#7FBF52", width: `${data.overall.bullPct}%` }} />
                   <div style={{ background: "#B4B2A9", width: `${data.overall.neutralPct}%` }} />
-                  <div style={{ background: "#E24B4A", width: `${data.overall.bearPct}%` }} />
+                  <div style={{ background: "#E76A6A", width: `${data.overall.bearPct}%` }} />
                 </div>
-                <div style={{ fontSize: 10, color: "#3B6D11", marginTop: 4 }}>
+                <div style={{ fontSize: 10, color: "#7FBF52", marginTop: 4 }}>
                   Trending up {data.overall.trendVsYesterday >= 0 ? "+" : ""}
                   {data.overall.trendVsYesterday}pts vs yesterday
                 </div>
@@ -157,7 +157,7 @@ function OverviewTab() {
           <Card>
             <CardTitle rightText="sentiment vs price">Divergence alerts</CardTitle>
             {data.divergenceAlerts.map(a => {
-              const dotColor = a.severity === "red" ? "#E24B4A" : a.severity === "green" ? "#639922" : "#EF9F27";
+              const dotColor = a.severity === "red" ? "#E76A6A" : a.severity === "green" ? "#7FBF52" : "#C9A55A";
               const titleText =
                 a.severity === "red" ? `${a.ticker} bearish flip` :
                 a.severity === "green" ? `${a.ticker} bullish surge` :
@@ -221,7 +221,7 @@ function OverviewTab() {
           <SectionLabel>First time in top 20</SectionLabel>
           {NEW_ENTRANTS.map(r => (
             <SrRow key={r.ticker} sym={r.ticker} name={r.name} trailing={
-              <Badge bg="#EAF3DE" color="#3B6D11">{r.badge}</Badge>
+              <Badge bg="rgba(127, 191, 82, 0.14)" color="#7FBF52">{r.badge}</Badge>
             } />
           ))}
           <Divider compact />
@@ -253,9 +253,9 @@ function OverviewTab() {
 }
 
 const NOTABLE_POST_VIEW = [
-  { initials: "KB", avBg: "#E6F1FB", avText: "#185FA5", handle: "@KobeissiLetter",  pill: "bull" as const, time: "6:04 AM", body: "Massive institutional buying on $PLTR. Options flow screaming calls.", engagement: "4.2K likes · 312K followers" },
-  { initials: "TW", avBg: "#FAECE7", avText: "#993C1D", handle: "@TechWatcher",     pill: "bear" as const, time: "7:18 AM", body: "$META earnings whisper below consensus. Preparing for gap down.",      engagement: "2.8K likes · 188K followers" },
-  { initials: "MV", avBg: "#E1F5EE", avText: "#0F6E56", handle: "@MarketVigilante", pill: "mix"  as const, time: "8:02 AM", body: "$TSLA delivery numbers Thursday. Bulls and bears loaded.",             engagement: "1.9K likes · 245K followers" },
+  { initials: "KB", avBg: "rgba(201, 165, 90, 0.18)", avText: "#C9A55A", handle: "@KobeissiLetter",  pill: "bull" as const, time: "6:04 AM", body: "Massive institutional buying on $PLTR. Options flow screaming calls.", engagement: "4.2K likes · 312K followers" },
+  { initials: "TW", avBg: "#FAECE7", avText: "#E76A6A", handle: "@TechWatcher",     pill: "bear" as const, time: "7:18 AM", body: "$META earnings whisper below consensus. Preparing for gap down.",      engagement: "2.8K likes · 188K followers" },
+  { initials: "MV", avBg: "#E1F5EE", avText: "#7FBF52", handle: "@MarketVigilante", pill: "mix"  as const, time: "8:02 AM", body: "$TSLA delivery numbers Thursday. Bulls and bears loaded.",             engagement: "1.9K likes · 245K followers" },
 ];
 
 const NEW_ENTRANTS = [
@@ -265,9 +265,9 @@ const NEW_ENTRANTS = [
 ];
 
 const FLIPS = [
-  { ticker: "META", name: "Bull → Bear",          symColor: "#A32D2D", badge: "-41 pts", badgeBg: "#FCEBEB", badgeText: "#A32D2D" },
-  { ticker: "PLTR", name: "Bear → Bull",          symColor: "#3B6D11", badge: "+38 pts", badgeBg: "#EAF3DE", badgeText: "#3B6D11" },
-  { ticker: "NVDA", name: "Momentum building",    symColor: "#3B6D11", badge: "+22 pts", badgeBg: "#EAF3DE", badgeText: "#3B6D11" },
+  { ticker: "META", name: "Bull → Bear",          symColor: "#E76A6A", badge: "-41 pts", badgeBg: "rgba(231, 106, 106, 0.14)", badgeText: "#E76A6A" },
+  { ticker: "PLTR", name: "Bear → Bull",          symColor: "#7FBF52", badge: "+38 pts", badgeBg: "rgba(127, 191, 82, 0.14)", badgeText: "#7FBF52" },
+  { ticker: "NVDA", name: "Momentum building",    symColor: "#7FBF52", badge: "+22 pts", badgeBg: "rgba(127, 191, 82, 0.14)", badgeText: "#7FBF52" },
 ];
 
 function SrRow({ sym, name, symColor, trailing }: { sym: string; name: string; symColor?: string; trailing: React.ReactNode }) {
@@ -296,7 +296,7 @@ function TickerRow({ row, rank }: { row: SentimentDisplayRow; rank: number }) {
           fontWeight: 500,
           width: 44,
           textAlign: "right",
-          color: velClass === "up" ? "#3B6D11" : velClass === "dn" ? "#A32D2D" : "#854F0B",
+          color: velClass === "up" ? "#7FBF52" : velClass === "dn" ? "#E76A6A" : "#E2BF73",
         }}
       >
         {row.velocityChangeLabel}
@@ -437,7 +437,7 @@ function AggregateView() {
                 <span style={{ fontWeight: 500, color: "var(--color-text-primary)" }}>{l.handle}</span>
                 <span
                   style={{
-                    color: l.tone === "up" ? "#3B6D11" : l.tone === "dn" ? "#A32D2D" : "#854F0B",
+                    color: l.tone === "up" ? "#7FBF52" : l.tone === "dn" ? "#E76A6A" : "#E2BF73",
                   }}
                 >
                   {l.pctLabel}
@@ -487,7 +487,7 @@ function BuySellCard({
               fontWeight: 500,
               width: 42,
               textAlign: "right",
-              color: r.direction === "up" ? "#3B6D11" : "#A32D2D",
+              color: r.direction === "up" ? "#7FBF52" : "#E76A6A",
             }}
           >
             {r.pctLabel}
@@ -549,9 +549,9 @@ function IndividualView({ analyst }: { analyst: AnalystDisplayRow }) {
                   fontSize: 10,
                   padding: "3px 12px",
                   borderRadius: 20,
-                  border: "0.5px solid #185FA5",
-                  background: "#E6F1FB",
-                  color: "#0C447C",
+                  border: "0.5px solid #C9A55A",
+                  background: "rgba(201, 165, 90, 0.18)",
+                  color: "#C9A55A",
                   cursor: "pointer",
                 }}
               >
@@ -585,7 +585,7 @@ function IndividualView({ analyst }: { analyst: AnalystDisplayRow }) {
                   fontWeight: 500,
                   width: 40,
                   textAlign: "right",
-                  color: p.pctLabel.startsWith("-") ? "#A32D2D" : "#3B6D11",
+                  color: p.pctLabel.startsWith("-") ? "#E76A6A" : "#7FBF52",
                 }}
               >
                 {p.pctLabel}
@@ -621,7 +621,7 @@ function IndividualView({ analyst }: { analyst: AnalystDisplayRow }) {
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 2 }}>
                 <span style={{ fontWeight: 500, color: "var(--color-text-primary)" }}>{t.ticker}</span>
                 <span style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{t.name}</span>
-                <span style={{ color: t.tone === "up" ? "#3B6D11" : t.tone === "dn" ? "#A32D2D" : "#854F0B" }}>{t.pctLabel}</span>
+                <span style={{ color: t.tone === "up" ? "#7FBF52" : t.tone === "dn" ? "#E76A6A" : "#E2BF73" }}>{t.pctLabel}</span>
               </div>
               <div style={{ height: 5, background: "var(--color-background-secondary)", borderRadius: 3, overflow: "hidden", marginTop: 2 }}>
                 <div style={{ height: 5, borderRadius: 3, width: `${t.pct}%`, background: t.barColor }} />
@@ -794,9 +794,9 @@ function Mc({
 }
 
 function toneColor(tone?: "up" | "dn" | "warn" | "neu"): string {
-  if (tone === "up") return "#3B6D11";
-  if (tone === "dn") return "#A32D2D";
-  if (tone === "warn") return "#854F0B";
+  if (tone === "up") return "#7FBF52";
+  if (tone === "dn") return "#E76A6A";
+  if (tone === "warn") return "#E2BF73";
   if (tone === "neu") return "var(--color-text-secondary)";
   return "var(--color-text-primary)";
 }
@@ -811,9 +811,9 @@ function Pill({
   style?: React.CSSProperties;
 }) {
   const map = {
-    bull: { bg: "#EAF3DE", color: "#3B6D11" },
-    bear: { bg: "#FCEBEB", color: "#A32D2D" },
-    mix:  { bg: "#FAEEDA", color: "#854F0B" },
+    bull: { bg: "rgba(127, 191, 82, 0.14)", color: "#7FBF52" },
+    bear: { bg: "rgba(231, 106, 106, 0.14)", color: "#E76A6A" },
+    mix:  { bg: "#FAEEDA", color: "#E2BF73" },
   } as const;
   const c = map[pill];
   return (
@@ -859,9 +859,9 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
         fontSize: 9,
         padding: "2px 8px",
         borderRadius: 20,
-        border: active ? "0.5px solid #185FA5" : "0.5px solid var(--color-border-secondary)",
-        background: active ? "#E6F1FB" : "transparent",
-        color: active ? "#0C447C" : "var(--color-text-secondary)",
+        border: active ? "0.5px solid #C9A55A" : "0.5px solid var(--color-border-secondary)",
+        background: active ? "rgba(201, 165, 90, 0.18)" : "transparent",
+        color: active ? "#C9A55A" : "var(--color-text-secondary)",
         cursor: "pointer",
       }}
     >
@@ -877,9 +877,9 @@ function SortButton({ children, active }: { children: React.ReactNode; active?: 
         fontSize: 10,
         padding: "3px 10px",
         borderRadius: 20,
-        border: active ? "0.5px solid #185FA5" : "0.5px solid var(--color-border-secondary)",
-        background: active ? "#E6F1FB" : "var(--color-background-primary)",
-        color: active ? "#0C447C" : "var(--color-text-secondary)",
+        border: active ? "0.5px solid #C9A55A" : "0.5px solid var(--color-border-secondary)",
+        background: active ? "rgba(201, 165, 90, 0.18)" : "var(--color-background-primary)",
+        color: active ? "#C9A55A" : "var(--color-text-secondary)",
         cursor: "pointer",
       }}
     >
@@ -927,8 +927,8 @@ function AnalystChip({
         cursor: "pointer",
         padding: "5px 3px",
         borderRadius: 8,
-        border: selected ? "0.5px solid #185FA5" : "0.5px solid transparent",
-        background: selected ? "#E6F1FB" : undefined,
+        border: selected ? "0.5px solid #C9A55A" : "0.5px solid transparent",
+        background: selected ? "rgba(201, 165, 90, 0.18)" : undefined,
       }}
     >
       <div
@@ -969,7 +969,7 @@ function renderPostBody(body: string): React.ReactNode {
   const parts = body.split(/(\$[A-Z]+)/);
   return parts.map((part, i) =>
     part.startsWith("$") ? (
-      <span key={i} style={{ color: "#185FA5", fontWeight: 500 }}>
+      <span key={i} style={{ color: "#C9A55A", fontWeight: 500 }}>
         {part}
       </span>
     ) : (
