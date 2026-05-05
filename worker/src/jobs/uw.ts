@@ -66,6 +66,8 @@ function asArray(v: unknown): any[] {
 
 const ts = () => new Date().toISOString();
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 // True if a Date falls inside RTH (09:30–15:59 ET) on a weekday.
 function isIntradayET(date: Date): boolean {
   const fmt = new Intl.DateTimeFormat("en-US", {
@@ -250,7 +252,12 @@ function mapDarkPoolPrint(raw: any): Prisma.DarkPoolPrintCreateManyInput | null 
 // ─── 3. GEX snapshots ────────────────────────────────────────────────────────
 
 export async function pollGex(): Promise<void> {
-  for (const ticker of WATCHED_TICKERS) {
+  // Space ticker requests by 200ms to stay under UW's short-window rate limit
+  // (5 tickers fired serially in <1s was triggering occasional HTTP 429 on SPY).
+  const TICKER_DELAY_MS = 200;
+  for (let i = 0; i < WATCHED_TICKERS.length; i++) {
+    const ticker = WATCHED_TICKERS[i];
+    if (i > 0) await sleep(TICKER_DELAY_MS);
     const json = await uwFetch(`/api/stock/${ticker}/spot-exposures/strike`, `gex:${ticker}`);
     if (!json) continue;
 
