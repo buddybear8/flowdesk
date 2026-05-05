@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   // is parsed/validated here so the URL is still well-formed; honoring it
   // requires a UW endpoint change tracked as post-V1 polish.
   void _expiry;
-  const strikes = Math.max(1, Math.min(100, Number(searchParams.get("strikes") ?? 25)));
+  const strikes = Math.max(1, Math.min(200, Number(searchParams.get("strikes") ?? 100)));
   if (isNaN(strikes)) {
     return NextResponse.json({ error: "Invalid strikes" }, { status: 400 });
   }
@@ -42,11 +42,14 @@ export async function GET(req: NextRequest) {
       )
     : [];
 
-  // Take top N by absolute combined value, then re-sort by strike asc for
-  // chart rendering. This keeps the "around-the-money" strikes in the cut
-  // even when the request asks for fewer than the stored count.
+  // Take the N strikes closest to spot, then re-sort ascending for the chart.
+  // Sorting by |combined| (the prior approach) surfaced deep-OTM strikes with
+  // huge OI — for SPY that meant the chart showed $50–$295 strikes when spot
+  // was $723. The frontend has its own zoom (10/20/40/All); the API's job is
+  // just to ensure the slice is centered on the at-the-money region.
+  const spot = Number(snapshot.spot);
   const topStrikes = [...allStrikes]
-    .sort((a, b) => Math.abs(b.combined) - Math.abs(a.combined))
+    .sort((a, b) => Math.abs(a.strike - spot) - Math.abs(b.strike - spot))
     .slice(0, strikes)
     .sort((a, b) => a.strike - b.strike);
 
