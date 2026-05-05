@@ -39,6 +39,7 @@ export type Sector =
 
 export interface FlowAlert {
   id: string;
+  date: string;           // display-ready "MMM d" (ET, e.g. "May 4")
   time: string;           // display-ready "HH:MM AM/PM"
   ticker: string;
   type: OptionType;

@@ -2,7 +2,7 @@ import type { FlowAlert, FlowStats } from "@/lib/types";
 
 // 13 static FLOW_RAW entries from the mockup (time strings are display-ready).
 export function buildFlowAlerts(): FlowAlert[] {
-  const raw: Omit<FlowAlert, "id" | "strike" | "expiry" | "sector">[] = [
+  const raw: Omit<FlowAlert, "id" | "date" | "strike" | "expiry" | "sector">[] = [
     { time: "11:17 AM", ticker: "MRVL", type: "PUT",  side: "SELL", sentiment: "BULLISH", exec: "SWEEP",  multiLeg: false, contract: "$155P May 15",  size: 1748,  oi: 49,     premium: 2_500_000, spot: 146.80,  rule: "Repeated Hits ↑",       confidence: "HIGH", isNew: true },
     { time: "11:17 AM", ticker: "META", type: "CALL", side: "BUY",  sentiment: "BULLISH", exec: "SINGLE", multiLeg: true,  contract: "$620C Jun 18",  size: 750,   oi: 1823,   premium: 3_100_000, spot: 613.66,  rule: "Repeated Hits ↑",       confidence: "HIGH", isNew: true },
     { time: "11:17 AM", ticker: "ASTS", type: "CALL", side: "BUY",  sentiment: "BULLISH", exec: "FLOOR",  multiLeg: true,  contract: "$80C May 1",    size: 1000,  oi: 134,    premium: 1_000_000, spot: 85.90,   rule: "Floor Trade Large Cap", confidence: "HIGH", isNew: true },
@@ -21,6 +21,7 @@ export function buildFlowAlerts(): FlowAlert[] {
   return raw.map((r, i) => ({
     ...r,
     id: `alert-${i}-${r.ticker}`,
+    date: "Apr 22",
     strike: 0,
     expiry: "",
     sector: "Technology",

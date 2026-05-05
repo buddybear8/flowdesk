@@ -18,6 +18,12 @@ const TIME_LABEL_FMT = new Intl.DateTimeFormat("en-US", {
   hour12: true,
 });
 
+const DATE_LABEL_FMT = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  month: "short",
+  day: "numeric",
+});
+
 const ISO_DATE_FMT = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/New_York",
 });
@@ -52,6 +58,7 @@ export async function GET(req: NextRequest) {
 
   const alerts: FlowAlert[] = rows.map((r) => ({
     id: r.id,
+    date: DATE_LABEL_FMT.format(r.time),
     time: TIME_LABEL_FMT.format(r.time),
     ticker: r.ticker,
     type: r.type as OptionType,

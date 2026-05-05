@@ -14,12 +14,14 @@ type FilterState = {
   rule: string;
   ticker: string;
   sweepOnly: boolean;
+  otmOnly: boolean;
+  sizeOverOi: boolean;
   dte: string;
 };
 
 const INITIAL_FILTER: FilterState = {
   type: "ALL", side: "ALL", sent: "ALL", exec: "ALL", prem: "ALL", conf: "ALL",
-  rule: "ALL", ticker: "", sweepOnly: false, dte: "ALL",
+  rule: "ALL", ticker: "", sweepOnly: false, otmOnly: false, sizeOverOi: false, dte: "ALL",
 };
 
 type SortKey = "time" | "prem" | "size";
@@ -52,6 +54,8 @@ export function FlowView() {
     if (filter.prem === "1M") r = r.filter(x => x.premium >= 1_000_000);
     if (filter.prem === "5M") r = r.filter(x => x.premium >= 5_000_000);
     if (filter.sweepOnly) r = r.filter(x => x.exec === "SWEEP");
+    if (filter.otmOnly) r = r.filter(x => x.type === "CALL" ? x.strike > x.spot : x.strike < x.spot);
+    if (filter.sizeOverOi) r = r.filter(x => x.size > x.oi);
     if (filter.rule !== "ALL") r = r.filter(x => x.rule.startsWith(filter.rule));
     if (filter.ticker) r = r.filter(x => x.ticker.startsWith(filter.ticker));
     if (sortKey === "prem") r.sort((a, b) => b.premium - a.premium);
@@ -117,7 +121,7 @@ export function FlowView() {
           >
             <option value="time">Sort: Time ↓</option>
             <option value="prem">Sort: Premium ↓</option>
-            <option value="size">Sort: Size ↓</option>
+            <option value="size">Sort: Volume ↓</option>
           </select>
         </div>
 
@@ -126,7 +130,7 @@ export function FlowView() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                {["Time", "Ticker", "Type", "Side", "Sentiment", "Exec", "Contract", "Size", "OI", "Premium", "Spot", "Rule", "Conf."].map(h => (
+                {["Date", "Time", "Ticker", "Type", "Side", "Sentiment", "Exec", "Contract", "Volume", "OI", "Premium", "Spot", "Rule", "Conf."].map(h => (
                   <Th key={h}>{h}</Th>
                 ))}
               </tr>
@@ -141,6 +145,7 @@ export function FlowView() {
                     cursor: "pointer",
                   }}
                 >
+                  <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{r.date}</Td>
                   <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{r.time}</Td>
                   <Td style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-primary)" }}>{r.ticker}</Td>
                   <Td><Badge type={r.type === "CALL" ? "call" : "put"}>{r.type}</Badge></Td>
@@ -174,7 +179,7 @@ export function FlowView() {
                   </Td>
                   <Td style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-primary)" }}>{r.contract}</Td>
                   <Td style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
-                    {r.size.toLocaleString()}<span style={{ fontSize: 9, color: "var(--color-text-tertiary)" }}> cts</span>
+                    {r.size.toLocaleString()}
                   </Td>
                   <Td style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{r.oi.toLocaleString()}</Td>
                   <Td
@@ -258,8 +263,16 @@ function FilterPanel({ filter, setFilter }: { filter: FilterState; setFilter: Re
             onChange={v => setFilter(f => ({ ...f, sweepOnly: v }))}
             label="Sweep only"
           />
-          <TogRow checked={false} onChange={() => {}} label="OTM only" />
-          <TogRow checked={false} onChange={() => {}} label="Size > OI" />
+          <TogRow
+            checked={filter.otmOnly}
+            onChange={v => setFilter(f => ({ ...f, otmOnly: v }))}
+            label="OTM only"
+          />
+          <TogRow
+            checked={filter.sizeOverOi}
+            onChange={v => setFilter(f => ({ ...f, sizeOverOi: v }))}
+            label="Size > OI"
+          />
         </div>
         <div className="mb-[12px]">
           <FpLabel>Size range</FpLabel>
