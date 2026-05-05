@@ -23,24 +23,57 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid strikes" }, { status: 400 });
   }
 
-  const snapshot = await prisma.gexSnapshot.findFirst({
-    where: { ticker },
+  // Walk backward through recent snapshots and pick the first one with at
+  // least 5 strikes within ±20% of spot. UW's spot-exposures endpoint is
+  // intermittently noisy — for SPY it alternates between full near-money
+  // chains and pure deep-OTM LEAPS dumps; for QQQ it's been returning only
+  // legacy non-standard strikes (e.g. $174 when spot is $682) every poll.
+  // Falling back to a recent good snapshot avoids flicker between polls.
+  const recent = await prisma.gexSnapshot.findMany({
+    where: {
+      ticker,
+      capturedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) }, // last hour
+    },
     orderBy: { capturedAt: "desc" },
+    take: 60,
   });
 
-  if (!snapshot) {
+  if (recent.length === 0) {
     return NextResponse.json(
       { error: `No GEX data for ${ticker}` },
       { status: 404 }
     );
   }
 
-  // Strikes JSON shape was written by jobs/uw.ts pollGex — fields match GEXLevel.
-  const allStrikes = Array.isArray(snapshot.strikes)
-    ? (snapshot.strikes as unknown as GEXLevel[]).filter(
-        (s) => typeof s?.strike === "number"
-      )
-    : [];
+  const NEAR_SPOT_THRESHOLD = 5;
+  let snapshot = recent[0]!;
+  let allStrikes: GEXLevel[] = [];
+  for (const candidate of recent) {
+    const candidateStrikes = Array.isArray(candidate.strikes)
+      ? (candidate.strikes as unknown as GEXLevel[]).filter(
+          (s) => typeof s?.strike === "number"
+        )
+      : [];
+    const candidateSpot = Number(candidate.spot);
+    const nearSpotCount = candidateStrikes.filter(
+      (s) => Math.abs(s.strike - candidateSpot) <= candidateSpot * 0.2
+    ).length;
+    if (nearSpotCount >= NEAR_SPOT_THRESHOLD) {
+      snapshot = candidate;
+      allStrikes = candidateStrikes;
+      break;
+    }
+  }
+  // If nothing in the last hour passed the threshold (e.g. QQQ), fall back
+  // to the absolute latest so the page shows *something* — empty chart from
+  // the API's own ±20% clamp will still flag the issue.
+  if (allStrikes.length === 0) {
+    allStrikes = Array.isArray(snapshot.strikes)
+      ? (snapshot.strikes as unknown as GEXLevel[]).filter(
+          (s) => typeof s?.strike === "number"
+        )
+      : [];
+  }
 
   // Window the strikes to ±20% of spot, then sort by distance and slice.
   // Sorting by distance alone wasn't enough: when the worker stores a sparse
