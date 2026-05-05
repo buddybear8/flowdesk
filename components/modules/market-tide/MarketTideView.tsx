@@ -102,9 +102,8 @@ export function MarketTideView() {
       {/* Stats strip */}
       <div
         className="grid gap-[10px]"
-        style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", marginBottom: 12 }}
+        style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))", marginBottom: 12 }}
       >
-        <Mc label="SPY" value={noTide ? "—" : `$${data.tide.spyCurrent.toFixed(2)}`} sub="+0.96% vs prev close" subColor="#3B6D11" />
         <Mc label="Volume (5-min bucket)" value={noTide ? "—" : fmtVol(data.tide.volumeCurrent)} sub="rolling" subColor="var(--color-text-secondary)" />
         <Mc label="Net call premium" value={noTide ? "—" : fmtPrem(data.tide.netCallPremiumCurrent)} valueColor="#3B6D11" sub="cumulative today" subColor="#3B6D11" />
         <Mc label="Net put premium" value={noTide ? "—" : fmtPrem(data.tide.netPutPremiumCurrent)} valueColor="#A32D2D" sub="cumulative today" subColor="#A32D2D" />
@@ -115,10 +114,10 @@ export function MarketTideView() {
         <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>
-              SPY + net premium flow
+              Net premium flow
             </div>
             <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 2 }}>
-              Gold = SPY price · Green = net call premium · Red = net put premium
+              Green = net call premium · Red = net put premium
             </div>
           </div>
           <PeriodPills period={period} onChange={setPeriod} />
@@ -167,17 +166,6 @@ function TideChart({ snapshot }: { snapshot: MarketTideSnapshot }) {
       labels,
       datasets: [
         {
-          label: "SPY",
-          data: snapshot.series.map(p => p.spyPrice),
-          borderColor: "#EF9F27",
-          backgroundColor: "rgba(239, 159, 39, 0.08)",
-          borderWidth: 1.8,
-          fill: false,
-          tension: 0.25,
-          pointRadius: 0,
-          yAxisID: "y",
-        },
-        {
           label: "Net call premium",
           data: snapshot.series.map(p => p.netCallPremium / 1_000_000),
           borderColor: "#3B6D11",
@@ -186,7 +174,6 @@ function TideChart({ snapshot }: { snapshot: MarketTideSnapshot }) {
           fill: true,
           tension: 0.25,
           pointRadius: 0,
-          yAxisID: "y1",
         },
         {
           label: "Net put premium",
@@ -197,7 +184,6 @@ function TideChart({ snapshot }: { snapshot: MarketTideSnapshot }) {
           fill: true,
           tension: 0.25,
           pointRadius: 0,
-          yAxisID: "y1",
         },
       ],
     };
@@ -212,7 +198,6 @@ function TideChart({ snapshot }: { snapshot: MarketTideSnapshot }) {
           callbacks: {
             label: c => {
               const v = c.raw as number;
-              if (c.dataset.yAxisID === "y") return `SPY: $${v.toFixed(2)}`;
               const sign = v >= 0 ? "+" : "";
               return `${c.dataset.label}: ${sign}${v.toFixed(0)}M`;
             },
@@ -227,12 +212,6 @@ function TideChart({ snapshot }: { snapshot: MarketTideSnapshot }) {
         y: {
           position: "left",
           grid: { color: "rgba(0,0,0,0.04)" },
-          ticks: { color: "#9B9890", font: { size: 10 }, callback: v => `$${v}` },
-          title: { display: true, text: "SPY price", color: "#9B9890", font: { size: 10 } },
-        },
-        y1: {
-          position: "right",
-          grid: { drawOnChartArea: false },
           ticks: {
             color: "#9B9890",
             font: { size: 10 },
