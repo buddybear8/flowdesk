@@ -13,17 +13,26 @@
 //
 // References: docs/FlowDesk_PRD.md · docs/ARCHITECTURE.md §3.
 
-generator client {
+// Two generator blocks — one per consumer. `prisma generate` runs both
+// sequentially so each environment gets the typed client where it expects
+// to find it.
+//
+// `worker` writes into worker/node_modules so the Railway worker image
+// (which preserves the dev tree layout — /app/worker/ + /app/prisma/
+// side-by-side, see worker/Dockerfile) finds the typed client at runtime.
+//
+// `nextjs` writes into the repo root's node_modules where the Next.js
+// app's `@prisma/client` is installed. This is what Vercel's build step
+// (`prisma generate && next build`, see package.json) populates.
+
+generator worker {
   provider = "prisma-client-js"
-  // V1: only the worker imports @prisma/client. Generate into worker's
-  // node_modules so its stub finds the fresh schema-typed client. When
-  // Phase 4 wires Vercel API routes to Prisma, switch to a workspace
-  // setup or add a second generator block targeting root/node_modules.
-  //
-  // The Docker image preserves the dev tree layout (/app/worker/ +
-  // /app/prisma/ side-by-side, see worker/Dockerfile) so this relative
-  // path resolves correctly in both environments.
   output   = "../worker/node_modules/.prisma/client"
+}
+
+generator nextjs {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
