@@ -42,13 +42,19 @@ export async function GET(req: NextRequest) {
       )
     : [];
 
-  // Take the N strikes closest to spot, then re-sort ascending for the chart.
-  // Sorting by |combined| (the prior approach) surfaced deep-OTM strikes with
-  // huge OI — for SPY that meant the chart showed $50–$295 strikes when spot
-  // was $723. The frontend has its own zoom (10/20/40/All); the API's job is
-  // just to ensure the slice is centered on the at-the-money region.
+  // Window the strikes to ±20% of spot, then sort by distance and slice.
+  // Sorting by distance alone wasn't enough: when the worker stores a sparse
+  // chain (e.g. SPY data clustered at $50–$295 LEAPS strikes far below
+  // spot=$723), "nearest spot" still returns those rows because they're the
+  // only rows that exist. Clamping enforces the at-the-money invariant —
+  // if there's nothing near spot, the chart goes empty and that's a true
+  // signal rather than a misleading deep-OTM fill.
   const spot = Number(snapshot.spot);
-  const topStrikes = [...allStrikes]
+  const window = spot * 0.2;
+  const nearSpot = allStrikes.filter(
+    (s) => Math.abs(s.strike - spot) <= window
+  );
+  const topStrikes = [...nearSpot]
     .sort((a, b) => Math.abs(a.strike - spot) - Math.abs(b.strike - spot))
     .slice(0, strikes)
     .sort((a, b) => a.strike - b.strike);

@@ -341,7 +341,18 @@ export async function pollGex(): Promise<void> {
         strikes: strikes as unknown as Prisma.InputJsonValue,
       },
     });
-    console.log(`[uw:gex:${ticker}] ${ts()} stored snapshot · spot=${spot} flip=${gammaFlip} (${strikes.length} strikes)`);
+    // Diagnostic: log strike-range stats so we can see if UW is returning
+    // a complete chain or a sparse subset. Helpful when the chart looks like
+    // it's missing the at-the-money region (SPY chart was rendering deep
+    // OTM strikes with no near-money rows).
+    const strikePrices = strikes.map((s) => s.strike);
+    const minStrike = Math.min(...strikePrices);
+    const maxStrike = Math.max(...strikePrices);
+    const nearSpotCount = strikes.filter((s) => Math.abs(s.strike - spot) <= spot * 0.1).length;
+    console.log(
+      `[uw:gex:${ticker}] ${ts()} stored snapshot · spot=${spot} flip=${gammaFlip} ` +
+        `(${strikes.length} strikes, range=[$${minStrike}..$${maxStrike}], ${nearSpotCount} within ±10% of spot)`
+    );
   }
 }
 
