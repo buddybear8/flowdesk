@@ -18,6 +18,7 @@ import {
 } from "./jobs/uw.js";
 import { runFlowRetentionSweep, runDpRetentionSweep } from "./jobs/retention.js";
 import { refreshTickerMetadata } from "./jobs/refresh-ticker-metadata.js";
+import { runAiSummarizerGex } from "./jobs/ai-summarizer-gex.js";
 import { disconnectPrisma } from "./lib/prisma.js";
 
 const ts = () => new Date().toISOString();
@@ -55,7 +56,7 @@ cron.schedule("30 */5 9-15 * * 1-5", safe("net-impact", computeNetImpact));
 
 // ─── Daily batches (jobs/* — pending steps 4–6) ──────────────────────────────
 cron.schedule("0 30 5 * * 1-5", safe("refresh-ticker-metadata", refreshTickerMetadata));
-cron.schedule("0 0 7 * * 1-5", todo("ai-summarizer-gex"));          // 07:00 ET
+cron.schedule("0 0 7 * * 1-5", safe("ai-summarizer-gex", runAiSummarizerGex));
 cron.schedule("0 30 7 * * 1-5", todo("hit-list-compute"));          // 07:30 ET
 cron.schedule("0 0 3 * * 1-5", safe("retention-sweeps", async () => {
   await Promise.all([runFlowRetentionSweep(), runDpRetentionSweep()]);
@@ -76,4 +77,4 @@ const shutdown = async (signal: string) => {
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
-console.log(`[${ts()}] [worker] started — 10 schedules registered (UW + retention + refresh-ticker-metadata wired; ai-summarizer, hit-list-compute, s3-import pending)`);
+console.log(`[${ts()}] [worker] started — 10 schedules registered (UW + retention + refresh-ticker-metadata + ai-summarizer-gex wired; hit-list-compute, s3-import pending)`);

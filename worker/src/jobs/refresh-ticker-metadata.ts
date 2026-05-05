@@ -23,13 +23,9 @@
 
 import { prisma } from "../lib/prisma.js";
 import { SECTOR_OVERRIDES, type Sector } from "../lib/sector-overrides.js";
+import { WATCHED_TICKERS } from "../lib/watched-tickers.js";
 
 const ts = () => new Date().toISOString();
-
-// Keep in sync with WATCHED_TICKERS in jobs/uw.ts. Always seed these so they
-// have metadata even before any flow alerts are polled (e.g. first-run, or
-// indices like SPX that don't appear in flow alerts much).
-const WATCHED_TICKERS = ["SPY", "QQQ", "SPX", "NVDA", "TSLA"] as const;
 
 // Look-back window for "recent" tickers. 7 days covers a full trading week
 // of activity; tickers that haven't traded in a week aren't worth refreshing

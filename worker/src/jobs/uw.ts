@@ -17,13 +17,11 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { WATCHED_TICKERS } from "../lib/watched-tickers.js";
 
 export { disconnectPrisma } from "../lib/prisma.js";
 
 const UW_BASE = "https://api.unusualwhales.com";
-
-// 5 watched tickers per PRD §8 (Options GEX module dropdown). Keep in sync.
-const WATCHED_TICKERS = ["SPY", "QQQ", "SPX", "NVDA", "TSLA"] as const;
 
 const uwHeaders = (): Record<string, string> => ({
   Authorization: `Bearer ${process.env.UW_API_TOKEN ?? ""}`,
