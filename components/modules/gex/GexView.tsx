@@ -18,6 +18,7 @@ import { gexLabels } from "@/lib/mock/gex-data";
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
 type Greek = "GEX" | "Vanna" | "Charm";
+type StrikeCount = "10" | "20" | "40" | "all";
 
 const EXPLAINERS: Record<Greek, { color: string; text: string }> = {
   GEX: { color: "#C9A55A", text: "Gamma Exposure (GEX) shows dealer hedging pressure per 1% move. Positive = dealers long gamma (vol suppressor). Negative = dealers short gamma (vol amplifier)." },
@@ -32,6 +33,7 @@ export function GexView() {
   const [greek, setGreek] = useState<Greek>("GEX");
   const [showDV, setShowDV] = useState(true);
   const [showOI, setShowOI] = useState(true);
+  const [strikeCount, setStrikeCount] = useState<StrikeCount>("all");
   const [data, setData] = useState<GEXPayload | null>(null);
 
   useEffect(() => {
@@ -58,7 +60,7 @@ export function GexView() {
       <div className="flex flex-wrap items-start justify-between gap-[8px]" style={{ marginBottom: 12 }}>
         <div>
           <div style={{ fontSize: 17, fontWeight: 500, color: "var(--color-text-primary)" }}>
-            Spot gamma exposure — {greek} overview
+            {greek === "GEX" ? "Spot gamma exposure — GEX overview" : `${greek} overview`}
           </div>
           <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
             Via Unusual Whales API · Real-time · Apr 21, 2026
@@ -108,38 +110,60 @@ export function GexView() {
         {expl.text}
       </div>
 
-      {/* 5 metric cards */}
-      <div className="grid gap-[8px]" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))", marginBottom: 12 }}>
-        <Mc label="Net GEX (OI)" value={labels.o1} valueColor={pos ? "#7FBF52" : "#E76A6A"} sub={`${pos ? "Positive" : "Negative"} regime`} subColor={pos ? "#7FBF52" : "#E76A6A"} />
-        <Mc label="Gamma flip" value={`$${data.keyLevels.gammaFlip.toLocaleString()}`} valueColor="#E2BF73" sub={`${Math.abs(data.keyLevels.spot - data.keyLevels.gammaFlip).toFixed(0)}pts ${data.keyLevels.spot > data.keyLevels.gammaFlip ? "below" : "above"} spot`} subColor="#E2BF73" />
-        <Mc label="Call wall" value={`$${data.keyLevels.callWall.toLocaleString()}`} valueColor="#7FBF52" sub="Resistance" subColor="var(--color-text-secondary)" />
-        <Mc label="Put wall" value={`$${data.keyLevels.putWall.toLocaleString()}`} valueColor="#E76A6A" sub="Support" subColor="var(--color-text-secondary)" />
-        <Mc label="Max pain" value={`$${data.keyLevels.maxPain.toLocaleString()}`} sub="Pinning target" subColor="var(--color-text-secondary)" />
-      </div>
-
-      {/* Chart + details */}
-      <div className="grid gap-[12px]" style={{ gridTemplateColumns: "1fr 240px" }}>
-        <Card>
-          <div className="flex flex-wrap items-start justify-between gap-[7px]" style={{ marginBottom: 10 }}>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>
-                Net {greek} by strike — {ticker}
-              </div>
-              <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 2 }}>
-                Positive = dealer long · Negative = dealer short
-              </div>
-            </div>
-            <div className="flex gap-[5px]">
-              <SeriesButton active={showDV} onClick={() => { if (!(showOI || !showDV)) return; setShowDV(v => !v); }} activeClass="on-dv" color="#378ADD" label="Dir. volume" />
-              <SeriesButton active={showOI} onClick={() => { if (!(showDV || !showOI)) return; setShowOI(v => !v); }} activeClass="on-oi" color="#7F77DD" label="Open interest" />
-            </div>
+      {greek !== "GEX" ? (
+        /* Vanna / Charm — UW Basic tier doesn't expose these endpoints
+           (PRD §4 v1.2.1 decision). Honest placeholder until the upgrade. */
+        <div
+          style={{
+            background: "var(--color-background-primary)",
+            border: "0.5px solid var(--color-border-tertiary)",
+            borderRadius: 12,
+            padding: "60px 40px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: 14, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 8 }}>
+            {greek} data not available yet
           </div>
-          <div style={{ position: "relative", width: "100%", height: 340 }}>
-            <GexBarChart data={data} showDV={showDV} showOI={showOI} />
+          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55, maxWidth: 460, margin: "0 auto" }}>
+            The Unusual Whales Basic tier doesn't expose {greek}-by-strike endpoints. Returning post-V1.
           </div>
-        </Card>
+        </div>
+      ) : (
+        <>
+          {/* 5 metric cards */}
+          <div className="grid gap-[8px]" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))", marginBottom: 12 }}>
+            <Mc label="Net GEX (OI)" value={labels.o1} valueColor={pos ? "#7FBF52" : "#E76A6A"} sub={`${pos ? "Positive" : "Negative"} regime`} subColor={pos ? "#7FBF52" : "#E76A6A"} />
+            <Mc label="Gamma flip" value={`$${data.keyLevels.gammaFlip.toLocaleString()}`} valueColor="#E2BF73" sub={`${Math.abs(data.keyLevels.spot - data.keyLevels.gammaFlip).toFixed(0)}pts ${data.keyLevels.spot > data.keyLevels.gammaFlip ? "below" : "above"} spot`} subColor="#E2BF73" />
+            <Mc label="Call wall" value={`$${data.keyLevels.callWall.toLocaleString()}`} valueColor="#7FBF52" sub="Resistance" subColor="var(--color-text-secondary)" />
+            <Mc label="Put wall" value={`$${data.keyLevels.putWall.toLocaleString()}`} valueColor="#E76A6A" sub="Support" subColor="var(--color-text-secondary)" />
+            <Mc label="Max pain" value={`$${data.keyLevels.maxPain.toLocaleString()}`} sub="Pinning target" subColor="var(--color-text-secondary)" />
+          </div>
 
-        <Card>
+          {/* Chart + details */}
+          <div className="grid gap-[12px]" style={{ gridTemplateColumns: "1fr 240px" }}>
+            <Card>
+              <div className="flex flex-wrap items-start justify-between gap-[7px]" style={{ marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>
+                    Net {greek} by strike — {ticker}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 2 }}>
+                    Positive = dealer long · Negative = dealer short
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-[7px]">
+                  <StrikeCountToggle value={strikeCount} onChange={setStrikeCount} />
+                  <SeriesButton active={showDV} onClick={() => { if (!(showOI || !showDV)) return; setShowDV(v => !v); }} activeClass="on-dv" color="#378ADD" label="Dir. volume" />
+                  <SeriesButton active={showOI} onClick={() => { if (!(showDV || !showOI)) return; setShowOI(v => !v); }} activeClass="on-oi" color="#7F77DD" label="Open interest" />
+                </div>
+              </div>
+              <div style={{ position: "relative", width: "100%", height: 340 }}>
+                <GexBarChart data={data} showDV={showDV} showOI={showOI} strikeCount={strikeCount} />
+              </div>
+            </Card>
+
+            <Card>
           <SectionLabel>Details</SectionLabel>
           <DlRows rows={[["Ticker", ticker], ["ATM strike", `~$${labels.atm.toLocaleString()}`], ["Spot", `$${data.keyLevels.spot.toFixed(2)}`]]} />
           <SectionLabel>Open interest</SectionLabel>
@@ -191,13 +215,49 @@ export function GexView() {
             ))}
         </Card>
       </div>
+        </>
+      )}
     </div>
   );
 }
 
-function GexBarChart({ data, showDV, showOI }: { data: GEXPayload; showDV: boolean; showOI: boolean }) {
+function StrikeCountToggle({ value, onChange }: { value: StrikeCount; onChange: (c: StrikeCount) => void }) {
+  return (
+    <div className="inline-flex rounded-md bg-bg-secondary" style={{ padding: 2, gap: 1 }}>
+      {(["10", "20", "40", "all"] as StrikeCount[]).map(c => (
+        <button
+          key={c}
+          onClick={() => onChange(c)}
+          className={clsx("text-[10px]", value === c ? "font-medium" : "")}
+          style={{
+            padding: "3px 8px",
+            borderRadius: 5,
+            background: value === c ? "var(--color-background-primary)" : "transparent",
+            color: value === c ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+            border: value === c ? "0.5px solid var(--color-border-tertiary)" : "0.5px solid transparent",
+            cursor: "pointer",
+          }}
+        >
+          {c === "all" ? "All" : c}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function GexBarChart({ data, showDV, showOI, strikeCount }: { data: GEXPayload; showDV: boolean; showOI: boolean; strikeCount: StrikeCount }) {
   const { chartData, options } = useMemo(() => {
-    const rows = [...data.strikes].sort((a, b) => b.strike - a.strike);
+    const allSorted = [...data.strikes].sort((a, b) => b.strike - a.strike);
+    // When the user picks N, keep the N strikes nearest spot — that's where
+    // the action is — then re-sort descending for display.
+    const rows = strikeCount === "all"
+      ? allSorted
+      : (() => {
+          const n = parseInt(strikeCount, 10);
+          const spot = data.keyLevels.spot;
+          const byDist = [...allSorted].sort((a, b) => Math.abs(a.strike - spot) - Math.abs(b.strike - spot));
+          return byDist.slice(0, n).sort((a, b) => b.strike - a.strike);
+        })();
     const labels = rows.map(r => `$${r.strike.toLocaleString()}`);
     const datasets: ChartData<"bar">["datasets"] = [];
     if (showDV) {
@@ -248,7 +308,7 @@ function GexBarChart({ data, showDV, showOI }: { data: GEXPayload; showDV: boole
       },
     };
     return { chartData, options };
-  }, [data, showDV, showOI]);
+  }, [data, showDV, showOI, strikeCount]);
 
   return <Bar data={chartData} options={options} />;
 }
