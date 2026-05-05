@@ -27,10 +27,6 @@ const LABEL_FMT = new Intl.DateTimeFormat("en-US", {
   hour12: true,
 });
 
-const ISO_DATE_FMT = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "America/New_York",
-});
-
 export async function GET() {
   const cutoff = new Date(Date.now() - TIDE_LOOKBACK_MS);
 
@@ -72,14 +68,20 @@ export async function GET() {
         series: [],
       };
 
-  // Net Impact: today's snapshot, top-N by signed netPremium. Frontend slices
-  // top 10 by |netPremium| if it wants the symmetric bull/bear split.
-  const todayET = ISO_DATE_FMT.format(new Date());
-  const netImpactRows = await prisma.netImpactDaily.findMany({
-    where: { snapshotDate: new Date(todayET) },
-    orderBy: { netPremium: "desc" },
-    take: NET_IMPACT_LIMIT,
+  // Net Impact: most-recent snapshot date, top-N by signed netPremium.
+  // Querying "today (ET)" left the panel blank between 00:00 ET and the next
+  // 09:30 ET worker write, even though yesterday's session was still in DB.
+  const latest = await prisma.netImpactDaily.findFirst({
+    orderBy: { snapshotDate: "desc" },
+    select: { snapshotDate: true },
   });
+  const netImpactRows = latest
+    ? await prisma.netImpactDaily.findMany({
+        where: { snapshotDate: latest.snapshotDate },
+        orderBy: { netPremium: "desc" },
+        take: NET_IMPACT_LIMIT,
+      })
+    : [];
 
   const netImpact: NetImpactSnapshot = {
     asOf: new Date().toISOString(),

@@ -20,6 +20,13 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineEleme
 
 type Payload = { tide: MarketTideSnapshot; netImpact: NetImpactSnapshot };
 
+const HEADER_DATE_FMT = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
 function fmtPrem(v: number): string {
   const a = Math.abs(v);
   const s = v < 0 ? "-" : "";
@@ -51,6 +58,9 @@ export function MarketTideView() {
     );
   }
 
+  const noTide = data.tide.series.length === 0;
+  const headerDate = HEADER_DATE_FMT.format(new Date(data.tide.asOf));
+
   return (
     <div
       className="flex-1 overflow-y-auto"
@@ -63,7 +73,7 @@ export function MarketTideView() {
             Market Pulse
           </h1>
           <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
-            Apr 22, 2026 · {data.tide.asOfLabel} · SPY price vs net call/put premium flow, updated every 5 minutes
+            {headerDate} · {data.tide.asOfLabel} · SPY price vs net call/put premium flow, updated every 5 minutes
           </p>
         </div>
         <div className="flex items-center gap-[8px]">
@@ -73,12 +83,12 @@ export function MarketTideView() {
               fontSize: 11,
               fontWeight: 500,
               padding: "3px 11px",
-              background: "#E6F1FB",
-              color: "#185FA5",
-              border: "0.5px solid #185FA5",
+              background: noTide ? "#F0EFEC" : "#E6F1FB",
+              color: noTide ? "#6E6B62" : "#185FA5",
+              border: `0.5px solid ${noTide ? "#9B9890" : "#185FA5"}`,
             }}
           >
-            ● Live
+            {noTide ? "● Closed" : "● Live"}
           </span>
           <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Source: Unusual Whales · market-tide</span>
         </div>
@@ -89,10 +99,10 @@ export function MarketTideView() {
         className="grid gap-[10px]"
         style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", marginBottom: 12 }}
       >
-        <Mc label="SPY" value={`$${data.tide.spyCurrent.toFixed(2)}`} sub="+0.96% vs prev close" subColor="#3B6D11" />
-        <Mc label="Volume (5-min bucket)" value={fmtVol(data.tide.volumeCurrent)} sub="rolling" subColor="var(--color-text-secondary)" />
-        <Mc label="Net call premium" value={fmtPrem(data.tide.netCallPremiumCurrent)} valueColor="#3B6D11" sub="cumulative today" subColor="#3B6D11" />
-        <Mc label="Net put premium" value={fmtPrem(data.tide.netPutPremiumCurrent)} valueColor="#A32D2D" sub="cumulative today" subColor="#A32D2D" />
+        <Mc label="SPY" value={noTide ? "—" : `$${data.tide.spyCurrent.toFixed(2)}`} sub="+0.96% vs prev close" subColor="#3B6D11" />
+        <Mc label="Volume (5-min bucket)" value={noTide ? "—" : fmtVol(data.tide.volumeCurrent)} sub="rolling" subColor="var(--color-text-secondary)" />
+        <Mc label="Net call premium" value={noTide ? "—" : fmtPrem(data.tide.netCallPremiumCurrent)} valueColor="#3B6D11" sub="cumulative today" subColor="#3B6D11" />
+        <Mc label="Net put premium" value={noTide ? "—" : fmtPrem(data.tide.netPutPremiumCurrent)} valueColor="#A32D2D" sub="cumulative today" subColor="#A32D2D" />
       </div>
 
       {/* Market Tide chart */}
@@ -109,7 +119,13 @@ export function MarketTideView() {
           <PeriodPills period={period} onChange={setPeriod} />
         </div>
         <div style={{ height: 320 }}>
-          <TideChart snapshot={data.tide} />
+          {noTide ? (
+            <div className="flex h-full items-center justify-center text-text-tertiary text-[12px]" style={{ color: "var(--color-text-tertiary)" }}>
+              No market-tide buckets in the last 6.5 hours · resumes at next open
+            </div>
+          ) : (
+            <TideChart snapshot={data.tide} />
+          )}
         </div>
       </Card>
 
