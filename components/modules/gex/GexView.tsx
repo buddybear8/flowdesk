@@ -18,7 +18,7 @@ import { gexLabels } from "@/lib/mock/gex-data";
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
 type Greek = "GEX" | "Vanna" | "Charm";
-type StrikeCount = "10" | "20" | "40" | "all";
+type StrikeCount = "5" | "10" | "15" | "20" | "25" | "40" | "50";
 
 const EXPLAINERS: Record<Greek, { color: string; text: string }> = {
   GEX: { color: "#C9A55A", text: "Gamma Exposure (GEX) shows dealer hedging pressure per 1% move. Positive = dealers long gamma (vol suppressor). Negative = dealers short gamma (vol amplifier)." },
@@ -33,7 +33,7 @@ export function GexView() {
   const [greek, setGreek] = useState<Greek>("GEX");
   const [showDV, setShowDV] = useState(true);
   const [showOI, setShowOI] = useState(true);
-  const [strikeCount, setStrikeCount] = useState<StrikeCount>("all");
+  const [strikeCount, setStrikeCount] = useState<StrikeCount>("25");
   const [data, setData] = useState<GEXPayload | null>(null);
 
   useEffect(() => {
@@ -224,7 +224,7 @@ export function GexView() {
 function StrikeCountToggle({ value, onChange }: { value: StrikeCount; onChange: (c: StrikeCount) => void }) {
   return (
     <div className="inline-flex rounded-md bg-bg-secondary" style={{ padding: 2, gap: 1 }}>
-      {(["10", "20", "40", "all"] as StrikeCount[]).map(c => (
+      {(["5", "10", "15", "20", "25", "40", "50"] as StrikeCount[]).map(c => (
         <button
           key={c}
           onClick={() => onChange(c)}
@@ -238,7 +238,7 @@ function StrikeCountToggle({ value, onChange }: { value: StrikeCount; onChange: 
             cursor: "pointer",
           }}
         >
-          {c === "all" ? "All" : c}
+          {c}
         </button>
       ))}
     </div>
@@ -247,17 +247,14 @@ function StrikeCountToggle({ value, onChange }: { value: StrikeCount; onChange: 
 
 function GexBarChart({ data, showDV, showOI, strikeCount }: { data: GEXPayload; showDV: boolean; showOI: boolean; strikeCount: StrikeCount }) {
   const { chartData, options } = useMemo(() => {
-    const allSorted = [...data.strikes].sort((a, b) => b.strike - a.strike);
-    // When the user picks N, keep the N strikes nearest spot — that's where
-    // the action is — then re-sort descending for display.
-    const rows = strikeCount === "all"
-      ? allSorted
-      : (() => {
-          const n = parseInt(strikeCount, 10);
-          const spot = data.keyLevels.spot;
-          const byDist = [...allSorted].sort((a, b) => Math.abs(a.strike - spot) - Math.abs(b.strike - spot));
-          return byDist.slice(0, n).sort((a, b) => b.strike - a.strike);
-        })();
+    // Keep the N strikes nearest spot — that's where the action is — then
+    // re-sort descending so the highest strike sits at the top of the bar chart.
+    const n = parseInt(strikeCount, 10);
+    const spot = data.keyLevels.spot;
+    const rows = [...data.strikes]
+      .sort((a, b) => Math.abs(a.strike - spot) - Math.abs(b.strike - spot))
+      .slice(0, n)
+      .sort((a, b) => b.strike - a.strike);
     const labels = rows.map(r => `$${r.strike.toLocaleString()}`);
     const datasets: ChartData<"bar">["datasets"] = [];
     if (showDV) {
