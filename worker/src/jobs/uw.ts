@@ -123,6 +123,48 @@ export async function pollFlowAlerts(): Promise<void> {
   console.log(`[uw:flow] ${ts()} inserted ${result.count} of ${records.length} alerts`);
 }
 
+// pollLottoAlerts — dedicated poll that asks UW for alerts already shaped like
+// Lottos (Common Stock, opening single-leg, ask-side, DTE ≤ 14, %OTM 20–100,
+// vol > OI, premium ≥ $1k). Without this, the unfiltered top-100 stream from
+// pollFlowAlerts can crowd lotto-shape alerts out during heavy big-cap activity.
+//
+// Rows go into the same flow_alerts table; UW alert ids dedupe naturally via
+// `skipDuplicates`, so overlap with pollFlowAlerts is free. The /api/flow/lottos
+// route's WHERE clause is the same regardless of which path inserted the row.
+export async function pollLottoAlerts(): Promise<void> {
+  const params = new URLSearchParams({
+    "issue_types[]": "Common Stock",
+    max_dte: "14",
+    min_diff: "0.2",
+    max_diff: "1.0",
+    all_opening: "true",
+    vol_greater_oi: "true",
+    is_multi_leg: "false",
+    is_ask_side: "true",
+    min_premium: "1000",
+    limit: "200",
+  });
+  const json = await uwFetch(`/api/option-trades/flow-alerts?${params.toString()}`, "lotto");
+  if (!json) return;
+  const items = asArray(json);
+  if (items.length === 0) return;
+
+  const records = items
+    .map(mapFlowAlert)
+    .filter((r): r is Prisma.FlowAlertCreateManyInput => r !== null);
+
+  if (records.length === 0) {
+    console.warn(`[uw:lotto] mapped 0 of ${items.length} raw rows — verify UW response shape`);
+    return;
+  }
+
+  const result = await prisma.flowAlert.createMany({
+    data: records,
+    skipDuplicates: true,
+  });
+  console.log(`[uw:lotto] ${ts()} inserted ${result.count} new of ${records.length} candidates`);
+}
+
 function mapFlowAlert(raw: any): Prisma.FlowAlertCreateManyInput | null {
   if (!raw?.id || !raw?.ticker) return null;
   // Field names verified against live UW /api/option-trades/flow-alerts on

@@ -12,15 +12,14 @@ import type {
   Sector,
 } from "@/lib/types";
 
-// "Lottos" preset — backend-locked filters. NO client-controllable params
-// other than the optional ?date= for historical trading days. The full
-// criteria (and the gaps where UW's public API doesn't expose what UW's UI
-// shows) live in docs/FlowDesk_PRD.md and are mirrored in the SQL below.
+// "Lottos" preset — backend-locked filters. The only client-controllable
+// params are ?date= (historical trading day) and ?exact= (execution-match
+// strictness). All other criteria are intentionally hidden from the UI;
+// they're the product's secret-sauce screen.
 //
 // PRESET (locked):
 //   • Calls + puts
 //   • issue_type = 'Common Stock'   (skips ETFs / ADRs / indices)
-//   • bid_prem = 0  AND  ask_prem ≈ premium   (every trade at ask)
 //   • all_opening = TRUE                       (no closing flow)
 //   • multi_leg = FALSE                        (single-leg only)
 //   • size > oi                                (volume > OI)
@@ -29,9 +28,16 @@ import type {
 //   • |strike − spot| / spot ∈ [0.20, 1.00], directional with type
 //   • premium ≥ $1,000
 //
-// NOT YET ENFORCED (UW's public flow-alerts endpoint does not expose tags
-// for these; UW's UI applies them via internal stock tagging that the API
-// doesn't return — revisit if results look noisy):
+// EXECUTION MATCH (?exact=1 toggles strictness):
+//   • exact = 0 (default) — ask-side or above-ask: ask_prem ≥ bid_prem AND
+//     ask_prem > 0. Includes alerts with some mid trades, as long as the
+//     bulk of premium hit (or pushed through) the ask.
+//   • exact = 1            — every trade at ask: bid_prem = 0 AND
+//     ask_prem ≥ premium − $1 (cent-rounding tolerance).
+//
+// NOT ENFORCED (UW's public flow-alerts endpoint does not expose tags for
+// these; UW's UI applies them via internal stock tagging the API doesn't
+// return — revisit if results look noisy):
 //   • Show China / Volatility, Hide Dividend
 //   • "Cross" flag type (UW UI label, no public API equivalent)
 
@@ -99,6 +105,7 @@ export async function GET(req: NextRequest) {
   if (date != null && !DATE_RE.test(date)) {
     return NextResponse.json({ error: "Invalid date (expected YYYY-MM-DD)" }, { status: 400 });
   }
+  const exactAtAsk = searchParams.get("exact") === "1";
 
   // Trading-day window — defaults to "any time" (no lower bound) so the most
   // recent matching alerts always surface, regardless of poll cadence. When
@@ -110,9 +117,8 @@ export async function GET(req: NextRequest) {
     timeEnd = etMidnightUTC(nextETDate(date));
   }
 
-  // Tolerance: trade premium can include fractional cents that get summed
-  // across many fills. "Exactly at ask" → bid_prem = 0 AND ask_prem within
-  // $1 of total premium. Adjust if real-world rows reveal more drift.
+  // Tolerance for the strict "exactly at ask" path: trade premium can include
+  // fractional cents that get summed across many fills, so allow $1 of drift.
   const ASK_TOLERANCE_USD = 1;
 
   // % OTM band — fractional, not percent. 0.20 = 20% OTM, 1.00 = 100% OTM.
@@ -123,6 +129,13 @@ export async function GET(req: NextRequest) {
   const MIN_DTE = 0;
   const MAX_DTE = 14;
   const MIN_PREMIUM = 1000;
+
+  // Execution-match clause swaps based on the toggle:
+  //   exact=0 (default) → ask-side or above-ask: ask_prem ≥ bid_prem AND ask_prem > 0
+  //   exact=1           → only at the ask: bid_prem = 0 AND ask_prem ≈ premium
+  const execMatch = exactAtAsk
+    ? Prisma.sql`bid_prem = 0 AND ask_prem >= (premium - ${ASK_TOLERANCE_USD})`
+    : Prisma.sql`ask_prem >= bid_prem AND ask_prem > 0`;
 
   const rows = await prisma.$queryRaw<RawLottoRow[]>`
     SELECT
@@ -136,8 +149,7 @@ export async function GET(req: NextRequest) {
       AND multi_leg = FALSE
       AND premium >= ${MIN_PREMIUM}
       AND size > oi
-      AND bid_prem = 0
-      AND ask_prem >= (premium - ${ASK_TOLERANCE_USD})
+      AND ${execMatch}
       AND (expiry - (time AT TIME ZONE 'America/New_York')::date) BETWEEN ${MIN_DTE} AND ${MAX_DTE}
       AND expiry >= (NOW() AT TIME ZONE 'America/New_York')::date
       AND (

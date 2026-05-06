@@ -1,50 +1,42 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { FlowAlert } from "@/lib/types";
-import {
-  Badge,
-  ConfBadge,
-  fmtP,
-  SL,
-  StatGroup,
-  SV,
-  Td,
-  Th,
-} from "./shared";
+import { buildLottoMock } from "@/lib/mock/lotto-alerts";
+import { Badge, fmtP, SL, StatGroup, SV, Td, Th } from "./shared";
 
 type SortKey = "time" | "prem" | "size";
 
 const ET_DATE_FMT = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" });
 const todayET = () => ET_DATE_FMT.format(new Date());
 
-// Server-locked preset — these strings drive the read-only banner. The actual
-// filter logic lives in app/api/flow/lottos/route.ts; this is documentation,
-// not configuration. Edit both if filter rules change.
-const LOTTO_CRITERIA: { label: string; value: string }[] = [
-  { label: "Issue type", value: "Common Stock only" },
-  { label: "Side execution", value: "Exactly at ask (no mid / above ask)" },
-  { label: "DTE", value: "0 – 14" },
-  { label: "% OTM", value: "20% – 100%" },
-  { label: "Premium", value: "≥ $1,000" },
-  { label: "Volume / OI", value: "Volume > Open Interest" },
-  { label: "Trade flag", value: "Opening trades, single-leg" },
-];
-
 export function LottosView() {
+  // ?mock=1 — opt-in preview mode for layout work without a live DB. Read once
+  // on render; toggling the URL switches data source without a hard reload.
+  const useMock = useSearchParams().get("mock") === "1";
+
   const [alerts, setAlerts] = useState<FlowAlert[]>([]);
   const [date, setDate] = useState<string>(() => todayET());
   const [ticker, setTicker] = useState<string>("");
   const [sortKey, setSortKey] = useState<SortKey>("time");
+  const [exactAtAsk, setExactAtAsk] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    if (useMock) {
+      setAlerts(buildLottoMock({ exactAtAsk }));
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    fetch(`/api/flow/lottos?date=${date}`)
+    const qs = new URLSearchParams({ date });
+    if (exactAtAsk) qs.set("exact", "1");
+    fetch(`/api/flow/lottos?${qs.toString()}`)
       .then((r) => r.json())
       .then((r) => setAlerts(r.alerts ?? []))
       .finally(() => setLoading(false));
-  }, [date]);
+  }, [date, exactAtAsk, useMock]);
 
   const rows = useMemo(() => {
     let r = alerts;
@@ -60,7 +52,10 @@ export function LottosView() {
 
   return (
     <div className="flex flex-1 overflow-hidden">
-      {/* LEFT SIDE — locked criteria panel (replaces the editable FilterPanel) */}
+      {/* LEFT SIDE — preset banner + only-user-facing knob (Exactly at ask). The
+          actual filter set is intentionally NOT shown here; it's the product's
+          secret-sauce criteria. Server-locked filters live in
+          app/api/flow/lottos/route.ts. */}
       <aside
         className="flex w-[210px] flex-shrink-0 flex-col overflow-hidden bg-bg-primary"
         style={{ borderRight: "0.5px solid var(--color-border-tertiary)" }}
@@ -75,28 +70,18 @@ export function LottosView() {
             style={{
               fontSize: 9,
               padding: "2px 7px",
-              border: "0.5px solid var(--color-border-info)",
-              color: "var(--color-text-info)",
+              border: `0.5px solid ${useMock ? "#E76A6A" : "var(--color-border-info)"}`,
+              color: useMock ? "#E76A6A" : "var(--color-text-info)",
               letterSpacing: "0.04em",
             }}
           >
-            LOCKED
+            {useMock ? "MOCK" : "LOCKED"}
           </span>
         </div>
         <div className="flex-1 overflow-y-auto px-[12px] py-[10px]">
+          {/* Trading day */}
           <div className="mb-[12px]">
-            <div
-              style={{
-                fontSize: 9,
-                fontWeight: 500,
-                color: "var(--color-text-tertiary)",
-                textTransform: "uppercase",
-                letterSpacing: ".06em",
-                marginBottom: 5,
-              }}
-            >
-              Trading day
-            </div>
+            <FpLabel>Trading day</FpLabel>
             <div className="flex items-center gap-[5px]" style={{ marginTop: 4 }}>
               <input
                 type="date"
@@ -133,34 +118,54 @@ export function LottosView() {
               )}
             </div>
           </div>
-          <div style={{ height: "0.5px", background: "var(--color-border-tertiary)", margin: "8px 0" }} />
+
+          {/* Locked banner — replaces the criteria list. Brand voice intentional. */}
           <div
             style={{
-              fontSize: 10,
-              color: "var(--color-text-tertiary)",
-              lineHeight: 1.5,
-              marginBottom: 10,
+              fontSize: 11,
+              lineHeight: 1.45,
+              padding: "10px 11px",
+              borderRadius: 8,
+              border: "0.5px solid var(--color-border-info)",
+              background: "rgba(201, 165, 90, 0.10)",
+              color: "var(--color-text-secondary)",
+              marginBottom: 14,
             }}
           >
-            Criteria are backend-controlled and cannot be changed from the UI.
+            <span style={{ color: "#E2BF73", fontWeight: 500 }}>
+              Custom Champagne Room Lotto Flow Filters Applied
+            </span>
           </div>
-          {LOTTO_CRITERIA.map((c) => (
-            <div key={c.label} style={{ marginBottom: 9 }}>
-              <div
-                style={{
-                  fontSize: 9,
-                  fontWeight: 500,
-                  color: "var(--color-text-tertiary)",
-                  textTransform: "uppercase",
-                  letterSpacing: ".06em",
-                  marginBottom: 2,
-                }}
-              >
-                {c.label}
-              </div>
-              <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{c.value}</div>
-            </div>
-          ))}
+
+          {/* Single user-facing knob */}
+          <FpLabel>Execution match</FpLabel>
+          <label
+            className="flex items-center gap-[8px] cursor-pointer"
+            style={{
+              fontSize: 11,
+              color: "var(--color-text-primary)",
+              padding: "4px 0 6px",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={exactAtAsk}
+              onChange={(e) => setExactAtAsk(e.target.checked)}
+              style={{ cursor: "pointer", width: 12, height: 12 }}
+            />
+            <span>Exactly at ask</span>
+          </label>
+          <div
+            style={{
+              fontSize: 9,
+              lineHeight: 1.5,
+              color: "var(--color-text-tertiary)",
+            }}
+          >
+            {exactAtAsk
+              ? "Only contracts whose execution price equals the ask. Strictest setting."
+              : "Includes ask-side and above-ask executions. Toggle on to tighten to exactly at ask."}
+          </div>
         </div>
       </aside>
 
@@ -243,6 +248,8 @@ export function LottosView() {
                   "Time",
                   "Ticker",
                   "Type",
+                  "Side",
+                  "Sentiment",
                   "Exec",
                   "Contract",
                   "DTE",
@@ -252,7 +259,6 @@ export function LottosView() {
                   "Premium",
                   "Spot",
                   "Rule",
-                  "Conf.",
                 ].map((h) => (
                   <Th key={h}>{h}</Th>
                 ))}
@@ -262,6 +268,7 @@ export function LottosView() {
               {rows.map((r) => {
                 const dte = daysBetween(r.expiry, todayET());
                 const otmPct = otmPercent(r);
+                const premiumColor = r.sentiment === "BEARISH" ? "#E76A6A" : "#7FBF52";
                 return (
                   <tr
                     key={r.id}
@@ -277,6 +284,20 @@ export function LottosView() {
                     </Td>
                     <Td>
                       <Badge type={r.type === "CALL" ? "call" : "put"}>{r.type}</Badge>
+                    </Td>
+                    <Td>
+                      <Badge type={r.side === "BUY" ? "buy" : "sell"}>{r.side}</Badge>
+                    </Td>
+                    <Td>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 500,
+                          color: r.sentiment === "BULLISH" ? "#7FBF52" : "#E76A6A",
+                        }}
+                      >
+                        {r.sentiment}
+                      </span>
                     </Td>
                     <Td>
                       <Badge
@@ -306,21 +327,20 @@ export function LottosView() {
                     <Td style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
                       {r.oi.toLocaleString()}
                     </Td>
-                    <Td style={{ fontSize: 12, fontWeight: 500, color: "#7FBF52" }}>{fmtP(r.premium)}</Td>
+                    <Td style={{ fontSize: 12, fontWeight: 500, color: premiumColor }}>
+                      {fmtP(r.premium)}
+                    </Td>
                     <Td style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
                       ${r.spot.toFixed(2)}
                     </Td>
                     <Td style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{r.rule}</Td>
-                    <Td>
-                      <ConfBadge conf={r.confidence} />
-                    </Td>
                   </tr>
                 );
               })}
               {!loading && rows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={14}
+                    colSpan={15}
                     style={{
                       padding: "30px 12px",
                       textAlign: "center",
@@ -341,6 +361,23 @@ export function LottosView() {
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+function FpLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        fontSize: 9,
+        fontWeight: 500,
+        color: "var(--color-text-tertiary)",
+        textTransform: "uppercase",
+        letterSpacing: ".06em",
+        marginBottom: 5,
+      }}
+    >
+      {children}
     </div>
   );
 }
