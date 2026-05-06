@@ -19,9 +19,12 @@ WORKDIR /app
 RUN apk add --no-cache openssl
 
 # Install runtime deps inside /app/worker/node_modules/. This layer is cached
-# until package.json/lock changes.
-COPY worker/package.json worker/package-lock.json* ./worker/
-RUN cd worker && npm install --omit=dev
+# until package.json/lock changes. `npm ci` (not `install`) so the install is
+# deterministic against package-lock.json and node_modules is wiped first —
+# avoids the failure mode where a stale Railway build cache served a partial
+# node_modules tree that was missing prisma's bin symlink.
+COPY worker/package.json worker/package-lock.json ./worker/
+RUN cd worker && npm ci --omit=dev
 
 # Copy the Prisma schema (parallel to worker/, matching dev layout) and
 # generate the typed client. The schema's output path resolves to
