@@ -31,13 +31,18 @@ RUN cd worker && npm ci --omit=dev
 # /app/worker/node_modules/.prisma/client.
 #
 # Prisma 5's "auto-install on generate" walks up from the schema dir looking
-# for a package.json — with our split layout (schema at /app/prisma/, worker
-# package.json at /app/worker/package.json) it stops at /app, finds nothing,
-# and tries to bootstrap a new install (which then fails inside the
-# read-only-ish builder). A minimal stub package.json at /app short-circuits
-# that path so Prisma uses the worker's installed prisma instead.
+# for a package.json. With our split layout (schema at /app/prisma/, worker
+# package.json at /app/worker/package.json) it stops at /app, and even with
+# a stub there it then checks whether `prisma` itself is declared as a dep
+# — if not, it tries to bootstrap an install which fails inside the
+# read-only-ish builder. Two defenses:
+#   1. Stub package.json declares prisma + @prisma/client in devDependencies,
+#      satisfying the "is prisma already declared?" check.
+#   2. CI=true makes Prisma's CI detection skip interactive install paths.
+# Together these route Prisma to the binary already at /app/worker/node_modules.
 COPY prisma ./prisma
-RUN echo '{"name":"flowdesk-monorepo","private":true}' > /app/package.json
+RUN echo '{"name":"flowdesk-monorepo","private":true,"devDependencies":{"prisma":"5.22.0","@prisma/client":"5.22.0"}}' > /app/package.json
+ENV CI=true
 RUN cd worker && npx --no-install prisma generate --schema=../prisma/schema.prisma
 
 # Copy worker source last so source-only edits don't bust the deps cache.
