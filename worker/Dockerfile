@@ -29,7 +29,15 @@ RUN cd worker && npm ci --omit=dev
 # Copy the Prisma schema (parallel to worker/, matching dev layout) and
 # generate the typed client. The schema's output path resolves to
 # /app/worker/node_modules/.prisma/client.
+#
+# Prisma 5's "auto-install on generate" walks up from the schema dir looking
+# for a package.json — with our split layout (schema at /app/prisma/, worker
+# package.json at /app/worker/package.json) it stops at /app, finds nothing,
+# and tries to bootstrap a new install (which then fails inside the
+# read-only-ish builder). A minimal stub package.json at /app short-circuits
+# that path so Prisma uses the worker's installed prisma instead.
 COPY prisma ./prisma
+RUN echo '{"name":"flowdesk-monorepo","private":true}' > /app/package.json
 RUN cd worker && npx --no-install prisma generate --schema=../prisma/schema.prisma
 
 # Copy worker source last so source-only edits don't bust the deps cache.
