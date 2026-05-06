@@ -20,13 +20,21 @@ import type {
 // PRESET (locked):
 //   • Calls + puts
 //   • issue_type = 'Common Stock'   (skips ETFs / ADRs / indices)
-//   • all_opening = TRUE                       (no closing flow)
 //   • multi_leg = FALSE                        (single-leg only)
 //   • size > oi                                (volume > OI)
 //   • expiry ≥ today (ET)                      (hide expired)
 //   • DTE ∈ [0, 14]
 //   • |strike − spot| / spot ∈ [0.20, 1.00], directional with type
 //   • premium ≥ $1,000
+//
+// NOTE on "Opening trades": UW's response field `all_opening_trades` is
+// only TRUE when EVERY constituent trade in the alert was opening — empirically
+// rare (~0.4% of Common Stock alerts in 24h). UW UI's "Opening trades" toggle
+// matches a broader set, and pollLottoAlerts already passes `all_opening=true`
+// to UW's server-side filter, which UW treats more loosely. Filtering the DB
+// row again would re-apply the strict response field and eliminate ~99% of
+// otherwise-qualifying rows. So we trust UW's server-side filter and don't
+// re-filter here. If non-opening alerts begin to leak through visibly, revisit.
 //
 // EXECUTION MATCH (?exact=1 toggles strictness):
 //   • exact = 0 (default) — ask-side or above-ask: ask_prem ≥ bid_prem AND
@@ -145,7 +153,6 @@ export async function GET(req: NextRequest) {
     WHERE
       type IN ('CALL', 'PUT')
       AND issue_type = 'Common Stock'
-      AND all_opening = TRUE
       AND multi_leg = FALSE
       AND premium >= ${MIN_PREMIUM}
       AND size > oi

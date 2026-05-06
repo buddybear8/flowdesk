@@ -100,6 +100,36 @@ function logSampleOnce(label: string, sample: unknown): void {
 
 // ─── 1. Flow alerts ──────────────────────────────────────────────────────────
 
+// Upsert helper: Prisma's createMany doesn't merge NULL columns, so when the
+// schema gained the v1.3 fields (ask_prem, bid_prem, all_opening, issue_type,
+// has_floor, has_single_leg) every existing row stayed NULL even though the
+// ingest mapper now had values for them. We need an upsert so revisits of an
+// already-stored alert refresh those fields. UW alert ids are immutable, so
+// `where: { id }` is the right conflict key.
+//
+// Implementation note: `createMany` is faster than per-row upsert when the
+// majority of records are new. For our cadence (30s polls, ~100 records, most
+// previously seen) per-row upsert via Promise.all caps at the connection-pool
+// limit and finishes well under a second. Acceptable trade for correctness.
+async function upsertFlowAlerts(records: Prisma.FlowAlertCreateManyInput[]): Promise<{ inserted: number; updated: number }> {
+  let inserted = 0;
+  let updated = 0;
+  await Promise.all(
+    records.map(async (r) => {
+      const existed = await prisma.flowAlert.findUnique({ where: { id: r.id }, select: { id: true } });
+      const { id, ...rest } = r;
+      await prisma.flowAlert.upsert({
+        where: { id },
+        update: rest,
+        create: r,
+      });
+      if (existed) updated++;
+      else inserted++;
+    })
+  );
+  return { inserted, updated };
+}
+
 export async function pollFlowAlerts(): Promise<void> {
   const json = await uwFetch("/api/option-trades/flow-alerts?limit=100", "flow");
   if (!json) return;
@@ -116,11 +146,8 @@ export async function pollFlowAlerts(): Promise<void> {
     return;
   }
 
-  const result = await prisma.flowAlert.createMany({
-    data: records,
-    skipDuplicates: true,
-  });
-  console.log(`[uw:flow] ${ts()} inserted ${result.count} of ${records.length} alerts`);
+  const { inserted, updated } = await upsertFlowAlerts(records);
+  console.log(`[uw:flow] ${ts()} ${inserted} new + ${updated} updated of ${records.length} alerts`);
 }
 
 // pollLottoAlerts — dedicated poll that asks UW for alerts already shaped like
@@ -158,11 +185,8 @@ export async function pollLottoAlerts(): Promise<void> {
     return;
   }
 
-  const result = await prisma.flowAlert.createMany({
-    data: records,
-    skipDuplicates: true,
-  });
-  console.log(`[uw:lotto] ${ts()} inserted ${result.count} new of ${records.length} candidates`);
+  const { inserted, updated } = await upsertFlowAlerts(records);
+  console.log(`[uw:lotto] ${ts()} ${inserted} new + ${updated} updated of ${records.length} candidates`);
 }
 
 function mapFlowAlert(raw: any): Prisma.FlowAlertCreateManyInput | null {
