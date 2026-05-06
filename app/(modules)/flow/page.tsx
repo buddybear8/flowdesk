@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { TabBar } from "@/components/layout/TabBar";
 import { FlowView } from "@/components/modules/flow/FlowView";
@@ -16,7 +17,19 @@ const TABS = [
   { id: "unusual", label: "Unusual activity" },
 ];
 
+// useSearchParams forces CSR bailout up to the nearest Suspense boundary
+// (Next.js requirement when a client component reads URL state during static
+// prerender). The page-level Suspense lets `next build` succeed; the runtime
+// hydration is unaffected.
 export default function FlowPage() {
+  return (
+    <Suspense fallback={<div className="flex-1" />}>
+      <FlowPageInner />
+    </Suspense>
+  );
+}
+
+function FlowPageInner() {
   const tabIdx = Number(useSearchParams().get("tab") ?? 0);
   const activeId = TABS[tabIdx]?.id ?? "live";
 
