@@ -47,14 +47,19 @@ export async function GET() {
     : []
   ).reverse();
 
+  // UW's net_call_premium / net_put_premium are SIGNED: positive = net buying
+  // (ask-side > bid-side for that contract type), negative = net selling. UW's
+  // own Market Tide chart plots them with this sign convention — both lines
+  // can sit above or below zero independently. The earlier route forced put
+  // premium below zero via -Math.abs(...) to match the V1 mock's red-below-
+  // zero look; that overwrote UW's real direction. Pass the signed value
+  // through unchanged so a net-bought-puts day shows the red line above zero,
+  // matching UW.
   const series: MarketTidePoint[] = bars.map((b) => ({
     time: HHMM_FMT.format(b.bucketStart),
     spyPrice: Number(b.spyPrice),
     netCallPremium: Number(b.netCallPremium),
-    // Mock convention: net put premium is rendered as a negative number.
-    // UW stores the magnitude positive; flip the sign here so the chart's
-    // red-below-zero line behavior matches the V1 mock.
-    netPutPremium: -Math.abs(Number(b.netPutPremium)),
+    netPutPremium: Number(b.netPutPremium),
     volume: Number(b.volume),
   }));
 
@@ -66,7 +71,7 @@ export async function GET() {
         spyCurrent: Number(last.spyPrice),
         volumeCurrent: Number(last.volume),
         netCallPremiumCurrent: Number(last.netCallPremium),
-        netPutPremiumCurrent: -Math.abs(Number(last.netPutPremium)),
+        netPutPremiumCurrent: Number(last.netPutPremium),
         series,
       }
     : {
