@@ -154,10 +154,16 @@ function mapFlowAlert(raw: any): Prisma.FlowAlertCreateManyInput | null {
       ? "BULLISH"
       : "BEARISH";
 
-  // Execution type: from has_* flags. UW doesn't expose FLOOR explicitly in
-  // the response sample we have; revisit if a FLOOR-marker field surfaces.
+  // Execution type. UW does expose `has_floor` (verified from public docs
+  // 2026-05-05); the prior derivation that omitted it was a bug — every floor
+  // trade was being mislabeled as SWEEP/BLOCK/SINGLE. Precedence matches UW's
+  // own UI: sweep wins over floor wins over multi-leg ("block") wins over
+  // single-leg.
   const exec: "SWEEP" | "FLOOR" | "SINGLE" | "BLOCK" =
-    raw.has_sweep ? "SWEEP" : raw.has_multileg ? "BLOCK" : "SINGLE";
+    raw.has_sweep   ? "SWEEP"
+    : raw.has_floor ? "FLOOR"
+    : raw.has_multileg ? "BLOCK"
+    : "SINGLE";
 
   // Confidence: derived from volume/OI ratio (PRD §6 doesn't mandate a
   // formula; this mirrors common "unusualness" heuristics). Tunable.
@@ -190,6 +196,15 @@ function mapFlowAlert(raw: any): Prisma.FlowAlertCreateManyInput | null {
     rule: String(raw.alert_rule ?? raw.rule ?? "Unusual activity"),
     confidence,
     sector: String(raw.sector ?? "Technology"), // TODO Phase 2 step 4: enrich from ticker_metadata
+
+    // v1.3 — capture raw UW fields so /api/flow/{lottos,opening-sweepers} can
+    // filter on them server-side without a second UW request per page load.
+    askPrem: raw.total_ask_side_prem != null ? Number(raw.total_ask_side_prem) : null,
+    bidPrem: raw.total_bid_side_prem != null ? Number(raw.total_bid_side_prem) : null,
+    allOpening: raw.all_opening_trades != null ? Boolean(raw.all_opening_trades) : null,
+    issueType: raw.issue_type != null ? String(raw.issue_type) : null,
+    hasFloor: raw.has_floor != null ? Boolean(raw.has_floor) : null,
+    hasSingleLeg: raw.has_singleleg != null ? Boolean(raw.has_singleleg) : null,
   };
 }
 

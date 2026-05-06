@@ -68,6 +68,16 @@ model FlowAlert {
   confidence String   @db.VarChar(4) // HIGH | MED | LOW (v1.2.1 enum)
   sector     String   @db.VarChar(32) // matches `Sector` union (PRD §18)
 
+  // Added v1.3 for Lottos / Opening Sweepers preset views (PRD §6 tabs).
+  // Nullable so the migration is non-destructive — older rows backfill as NULL,
+  // and any preset view's WHERE clause naturally excludes NULL rows.
+  askPrem      Decimal? @map("ask_prem")       @db.Decimal(16, 2) // total_ask_side_prem from UW
+  bidPrem      Decimal? @map("bid_prem")       @db.Decimal(16, 2) // total_bid_side_prem from UW
+  allOpening   Boolean? @map("all_opening")    // every constituent trade is opening (UW.all_opening_trades)
+  issueType    String?  @map("issue_type")     @db.VarChar(32)    // "Common Stock" | "ETF" | "ADR" | "Index" | …
+  hasFloor     Boolean? @map("has_floor")      // UW.has_floor — distinct from has_sweep
+  hasSingleLeg Boolean? @map("has_single_leg") // UW.has_singleleg — true single-leg vs. multi-leg
+
   @@index([capturedAt(sort: Desc)])
   @@index([ticker, capturedAt(sort: Desc)])
   @@map("flow_alerts")
