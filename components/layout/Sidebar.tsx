@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
@@ -37,19 +38,14 @@ export function Sidebar() {
     >
       <div className="px-3 pt-3 pb-[10px]" style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
         <div className="mb-[9px] flex items-center gap-2">
-          <div
-            className="flex h-[28px] w-[28px] flex-shrink-0 items-center justify-center rounded-md"
-            style={{
-              background: "var(--color-background-tertiary)",
-              border: "1px solid var(--color-border-info)",
-              color: "#C9A55A",
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: "-0.5px",
-            }}
-          >
-            CS
-          </div>
+          <Image
+            src="/logo.png"
+            alt="Champagne Sessions"
+            width={32}
+            height={28}
+            priority
+            className="flex-shrink-0"
+          />
           <div>
             <div className="text-[12px] font-semibold" style={{ color: "#E2BF73", letterSpacing: "0.02em" }}>Champagne Sessions</div>
             <div className="text-[9px] text-text-tertiary" style={{ marginTop: 1 }}>Trading intelligence</div>
