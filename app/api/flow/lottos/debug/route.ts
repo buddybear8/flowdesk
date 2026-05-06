@@ -28,45 +28,42 @@ export async function GET(_req: NextRequest) {
     counts[label] = Number(r[0]?.c ?? 0);
   };
 
+  // Mirrors the chain in app/api/flow/lottos/route.ts after the all_opening
+  // filter was relaxed. Each step adds one predicate so we can see attrition.
   await cnt("0_total_24h", lastDay);
   await cnt(
     "1_issue_type_common_stock",
     Prisma.sql`${lastDay} AND issue_type = 'Common Stock'`
   );
   await cnt(
-    "2_+all_opening_true",
-    Prisma.sql`${lastDay} AND issue_type = 'Common Stock' AND all_opening = TRUE`
+    "2_+multi_leg_false",
+    Prisma.sql`${lastDay} AND issue_type = 'Common Stock' AND multi_leg = FALSE`
   );
   await cnt(
-    "3_+multi_leg_false",
-    Prisma.sql`${lastDay} AND issue_type = 'Common Stock' AND all_opening = TRUE AND multi_leg = FALSE`
+    "3_+premium_gte_1000",
+    Prisma.sql`${lastDay} AND issue_type = 'Common Stock' AND multi_leg = FALSE AND premium >= ${MIN_PREMIUM}`
   );
   await cnt(
-    "4_+premium_gte_1000",
-    Prisma.sql`${lastDay} AND issue_type = 'Common Stock' AND all_opening = TRUE AND multi_leg = FALSE AND premium >= ${MIN_PREMIUM}`
+    "4_+size_gt_oi",
+    Prisma.sql`${lastDay} AND issue_type = 'Common Stock' AND multi_leg = FALSE AND premium >= ${MIN_PREMIUM} AND size > oi`
   );
   await cnt(
-    "5_+size_gt_oi",
-    Prisma.sql`${lastDay} AND issue_type = 'Common Stock' AND all_opening = TRUE AND multi_leg = FALSE AND premium >= ${MIN_PREMIUM} AND size > oi`
+    "5_+ask_side_default_toggle",
+    Prisma.sql`${lastDay} AND issue_type = 'Common Stock' AND multi_leg = FALSE AND premium >= ${MIN_PREMIUM} AND size > oi AND ask_prem >= bid_prem AND ask_prem > 0`
   );
   await cnt(
-    "6_+ask_side_default_toggle",
-    Prisma.sql`${lastDay} AND issue_type = 'Common Stock' AND all_opening = TRUE AND multi_leg = FALSE AND premium >= ${MIN_PREMIUM} AND size > oi AND ask_prem >= bid_prem AND ask_prem > 0`
+    "6_+dte_0_14",
+    Prisma.sql`${lastDay} AND issue_type = 'Common Stock' AND multi_leg = FALSE AND premium >= ${MIN_PREMIUM} AND size > oi AND ask_prem >= bid_prem AND ask_prem > 0 AND (expiry - (time AT TIME ZONE 'America/New_York')::date) BETWEEN ${MIN_DTE} AND ${MAX_DTE}`
   );
   await cnt(
-    "7_+dte_0_14",
-    Prisma.sql`${lastDay} AND issue_type = 'Common Stock' AND all_opening = TRUE AND multi_leg = FALSE AND premium >= ${MIN_PREMIUM} AND size > oi AND ask_prem >= bid_prem AND ask_prem > 0 AND (expiry - (time AT TIME ZONE 'America/New_York')::date) BETWEEN ${MIN_DTE} AND ${MAX_DTE}`
+    "7_+expiry_not_passed",
+    Prisma.sql`${lastDay} AND issue_type = 'Common Stock' AND multi_leg = FALSE AND premium >= ${MIN_PREMIUM} AND size > oi AND ask_prem >= bid_prem AND ask_prem > 0 AND (expiry - (time AT TIME ZONE 'America/New_York')::date) BETWEEN ${MIN_DTE} AND ${MAX_DTE} AND expiry >= (NOW() AT TIME ZONE 'America/New_York')::date`
   );
   await cnt(
-    "8_+expiry_not_passed",
-    Prisma.sql`${lastDay} AND issue_type = 'Common Stock' AND all_opening = TRUE AND multi_leg = FALSE AND premium >= ${MIN_PREMIUM} AND size > oi AND ask_prem >= bid_prem AND ask_prem > 0 AND (expiry - (time AT TIME ZONE 'America/New_York')::date) BETWEEN ${MIN_DTE} AND ${MAX_DTE} AND expiry >= (NOW() AT TIME ZONE 'America/New_York')::date`
-  );
-  await cnt(
-    "9_+otm_window_20_100",
+    "8_+otm_window_20_100__final_route_count",
     Prisma.sql`
       ${lastDay}
       AND issue_type = 'Common Stock'
-      AND all_opening = TRUE
       AND multi_leg = FALSE
       AND premium >= ${MIN_PREMIUM}
       AND size > oi
@@ -78,6 +75,39 @@ export async function GET(_req: NextRequest) {
         OR
         (type = 'PUT'  AND strike < spot AND (spot - strike) / spot BETWEEN ${MIN_OTM} AND ${MAX_OTM})
       )
+    `
+  );
+
+  // Also show what would land if we relax `size > oi` and the OTM window
+  // separately, so we can see which constraint is doing the most cutting.
+  await cnt(
+    "alt_no_size_gt_oi",
+    Prisma.sql`
+      ${lastDay}
+      AND issue_type = 'Common Stock'
+      AND multi_leg = FALSE
+      AND premium >= ${MIN_PREMIUM}
+      AND ask_prem >= bid_prem AND ask_prem > 0
+      AND (expiry - (time AT TIME ZONE 'America/New_York')::date) BETWEEN ${MIN_DTE} AND ${MAX_DTE}
+      AND expiry >= (NOW() AT TIME ZONE 'America/New_York')::date
+      AND (
+        (type = 'CALL' AND strike > spot AND (strike - spot) / spot BETWEEN ${MIN_OTM} AND ${MAX_OTM})
+        OR
+        (type = 'PUT'  AND strike < spot AND (spot - strike) / spot BETWEEN ${MIN_OTM} AND ${MAX_OTM})
+      )
+    `
+  );
+  await cnt(
+    "alt_no_otm_window",
+    Prisma.sql`
+      ${lastDay}
+      AND issue_type = 'Common Stock'
+      AND multi_leg = FALSE
+      AND premium >= ${MIN_PREMIUM}
+      AND size > oi
+      AND ask_prem >= bid_prem AND ask_prem > 0
+      AND (expiry - (time AT TIME ZONE 'America/New_York')::date) BETWEEN ${MIN_DTE} AND ${MAX_DTE}
+      AND expiry >= (NOW() AT TIME ZONE 'America/New_York')::date
     `
   );
 
