@@ -70,7 +70,7 @@ export function GexView() {
             Spot gamma exposure — GEX overview
           </div>
           <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
-            Via Unusual Whales API · Real-time · Apr 21, 2026
+            Real-time
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-[7px]">

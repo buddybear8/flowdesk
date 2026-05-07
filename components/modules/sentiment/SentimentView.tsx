@@ -497,7 +497,7 @@ function BuySellCard({
       ))}
       <Divider compact />
       <div style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>
-        % = today's price change · Unusual Whales
+        % = today&apos;s price change
       </div>
     </Card>
   );

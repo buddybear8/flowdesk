@@ -95,7 +95,6 @@ export function MarketTideView() {
           >
             {isLive ? "● Live" : "● Closed"}
           </span>
-          <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>Source: Unusual Whales · market-tide</span>
         </div>
       </div>
 
