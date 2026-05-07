@@ -189,6 +189,45 @@ export async function pollLottoAlerts(): Promise<void> {
   console.log(`[uw:lotto] ${ts()} ${inserted} new + ${updated} updated of ${records.length} candidates`);
 }
 
+// pollSweeperAlerts — second backend-locked preset. Asks UW for alerts already
+// shaped like Opening Sweepers (Common Stock, opening single-leg, ask-side,
+// DTE ≤ 14, %OTM 0–12, vol > OI, sweep execution, premium ≥ $100k, underlying
+// ≤ $13). Same dedup pattern as pollLottoAlerts: rows go into the shared
+// flow_alerts table; the /api/flow/sweepers WHERE clause applies the strict
+// final filter (Min/Max Ask %, Min Vol/OI ratio = 3, exec = 'SWEEP'). UW's
+// public flow-alerts endpoint accepts the params below; finer constraints
+// not exposed server-side are enforced in the SQL route.
+export async function pollSweeperAlerts(): Promise<void> {
+  const params = new URLSearchParams({
+    "issue_types[]": "Common Stock",
+    max_dte: "14",
+    min_diff: "0",
+    max_diff: "0.12",
+    all_opening: "true",
+    vol_greater_oi: "true",
+    is_multi_leg: "false",
+    is_ask_side: "true",
+    min_premium: "100000",
+    limit: "200",
+  });
+  const json = await uwFetch(`/api/option-trades/flow-alerts?${params.toString()}`, "sweeper");
+  if (!json) return;
+  const items = asArray(json);
+  if (items.length === 0) return;
+
+  const records = items
+    .map(mapFlowAlert)
+    .filter((r): r is Prisma.FlowAlertCreateManyInput => r !== null);
+
+  if (records.length === 0) {
+    console.warn(`[uw:sweeper] mapped 0 of ${items.length} raw rows — verify UW response shape`);
+    return;
+  }
+
+  const { inserted, updated } = await upsertFlowAlerts(records);
+  console.log(`[uw:sweeper] ${ts()} ${inserted} new + ${updated} updated of ${records.length} candidates`);
+}
+
 function mapFlowAlert(raw: any): Prisma.FlowAlertCreateManyInput | null {
   if (!raw?.id || !raw?.ticker) return null;
   // Field names verified against live UW /api/option-trades/flow-alerts on

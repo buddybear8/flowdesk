@@ -13,6 +13,7 @@ import cron from "node-cron";
 import {
   pollFlowAlerts,
   pollLottoAlerts,
+  pollSweeperAlerts,
   pollDarkPool,
   pollGex,
   pollMarketTide,
@@ -42,10 +43,10 @@ const safe =
 
 // ─── UW polling (jobs/uw.ts) ─────────────────────────────────────────────────
 cron.schedule("*/30 * 9-15 * * 1-5", safe("uw-poll-mkt", async () => {
-  await Promise.all([pollFlowAlerts(), pollLottoAlerts(), pollDarkPool()]);
+  await Promise.all([pollFlowAlerts(), pollLottoAlerts(), pollSweeperAlerts(), pollDarkPool()]);
 }));
 cron.schedule("0 */5 0-8,16-23 * * 1-5", safe("uw-poll-off", async () => {
-  await Promise.all([pollFlowAlerts(), pollLottoAlerts(), pollDarkPool()]);
+  await Promise.all([pollFlowAlerts(), pollLottoAlerts(), pollSweeperAlerts(), pollDarkPool()]);
 }));
 cron.schedule("*/60 * 9-15 * * 1-5", safe("gex-poll", pollGex));
 cron.schedule("0 */5 9-15 * * 1-5", safe("market-tide", pollMarketTide));
