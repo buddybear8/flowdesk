@@ -10,6 +10,31 @@ import authConfig from "./auth.config";
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   adapter: PrismaAdapter(prisma),
+  debug: true,
+  logger: {
+    error(error) {
+      console.error("[auth][error]", error.message);
+      const anyErr = error as unknown as {
+        cause?: {
+          err?: unknown;
+          error?: unknown;
+          error_description?: unknown;
+          response?: { status?: number; statusText?: string; url?: string };
+        };
+        stack?: string;
+      };
+      if (anyErr.cause) {
+        console.error("[auth][error.cause]", JSON.stringify(anyErr.cause, null, 2));
+      }
+      if (anyErr.stack) console.error("[auth][error.stack]", anyErr.stack);
+    },
+    warn(code) {
+      console.warn("[auth][warn]", code);
+    },
+    debug(code, metadata) {
+      console.log("[auth][debug]", code, metadata ? JSON.stringify(metadata).slice(0, 500) : "");
+    },
+  },
   callbacks: {
     async signIn({ account, profile }) {
       if (account?.provider !== "whop") return false;
