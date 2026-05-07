@@ -14,6 +14,9 @@ export default {
       clientId: process.env.WHOP_CLIENT_ID,
       clientSecret: process.env.WHOP_CLIENT_SECRET,
       authorization: { params: { scope: "openid profile email" } },
+      // Whop strictly enforces nonce for the openid scope. Auth.js v5
+      // defaults to ["pkce", "state"] for OIDC providers; we add nonce here.
+      checks: ["pkce", "state", "nonce"],
       profile(profile) {
         return {
           id: profile.sub as string,
