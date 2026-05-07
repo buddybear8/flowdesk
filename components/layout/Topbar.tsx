@@ -7,7 +7,7 @@ const MODULES: Record<string, { label: string; tabs: string[] }> = {
   sentiment:    { label: "Sentiment tracker", tabs: ["Overview", "Analyst intelligence"] },
   "market-tide":{ label: "Market Pulse",       tabs: [] },
   gex:          { label: "Options GEX",       tabs: ["GEX overview", "By strike", "By expiry", "Vanna & charm", "Key levels"] },
-  flow:       { label: "Flow alerts",       tabs: ["Live feed", "Lottos", "Opening Sweeps", "0DTE flow", "Unusual activity"] },
+  flow:       { label: "Flow alerts",       tabs: ["Live feed", "Lottos", "Opening Sweeps"] },
   darkpool:   { label: "Dark pools",        tabs: ["Ranked feed", "DP levels"] },
   watchlists: { label: "Watchlists",        tabs: [] },
   alerts:     { label: "Alerts",            tabs: [] },

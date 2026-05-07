@@ -7,14 +7,11 @@ import { FlowView } from "@/components/modules/flow/FlowView";
 import { LottosView } from "@/components/modules/flow/LottosView";
 import { SweepersView } from "@/components/modules/flow/SweepersView";
 
-// Order must match Topbar's MODULES.flow.tabs. The placeholder entries
-// (0DTE / Unusual) fall back to FlowView until built.
+// Order must match Topbar's MODULES.flow.tabs.
 const TABS = [
   { id: "live", label: "Live feed" },
   { id: "lottos", label: "Lottos" },
   { id: "sweep", label: "Opening Sweeps" },
-  { id: "zdte", label: "0DTE flow" },
-  { id: "unusual", label: "Unusual activity" },
 ];
 
 // useSearchParams forces CSR bailout up to the nearest Suspense boundary
