@@ -33,11 +33,46 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return false;
         }
         const data = (await res.json()) as { has_access?: boolean };
-        return Boolean(data.has_access);
+        if (!data.has_access) return false;
       } catch (err) {
         console.error("[auth] Whop access check threw:", err);
         return false;
       }
+
+      // Upsert the User row so the `users` table is the source of truth for
+      // who's signed in. PrismaAdapter is configured but appears to no-op
+      // silently under JWT session strategy when the schema has required
+      // custom fields (whopMembershipId). Doing it explicitly here also lets
+      // us refresh lastLoginAt + membershipCheckedAt on every login.
+      try {
+        const email = typeof profile.email === "string" ? profile.email : `${sub}@user.whop.local`;
+        const name = typeof profile.name === "string" ? profile.name : null;
+        const image = typeof profile.picture === "string" ? profile.picture : null;
+
+        await prisma.user.upsert({
+          where: { whopMembershipId: sub },
+          create: {
+            whopMembershipId: sub,
+            email,
+            name,
+            image,
+            lastLoginAt: new Date(),
+            membershipCheckedAt: new Date(),
+          },
+          update: {
+            email,
+            name,
+            image,
+            lastLoginAt: new Date(),
+            membershipCheckedAt: new Date(),
+          },
+        });
+      } catch (err) {
+        // Don't block sign-in on a DB hiccup — JWT cookie is still authoritative.
+        console.error("[auth] User upsert failed:", err);
+      }
+
+      return true;
     },
     async jwt({ token, user }) {
       if (user) {
