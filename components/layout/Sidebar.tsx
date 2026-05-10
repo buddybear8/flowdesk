@@ -23,11 +23,6 @@ const MODULES: NavEntry[] = [
   { href: "/darkpool",    label: "Dark pools",        icon: "🌊" },
 ];
 
-const ACCOUNT: NavEntry[] = [
-  { href: "/watchlists", label: "Watchlists", icon: "★" },
-  { href: "/alerts",     label: "Alerts",     icon: "🔔",  badge: { text: "3", variant: "red" } },
-];
-
 export function Sidebar() {
   const pathname = usePathname();
 
@@ -64,11 +59,6 @@ export function Sidebar() {
         {MODULES.map(item => (
           <NavRow key={item.href} entry={item} active={pathname.startsWith(item.href)} />
         ))}
-        <div className="mx-[2px] my-[6px] h-[0.5px]" style={{ background: "var(--color-border-tertiary)" }} />
-        <SectionLabel>Account</SectionLabel>
-        {ACCOUNT.map(item => (
-          <NavRow key={item.href} entry={item} active={pathname.startsWith(item.href)} smallIcon />
-        ))}
       </nav>
 
       <div className="px-[6px] py-[7px]" style={{ borderTop: "0.5px solid var(--color-border-tertiary)" }}>
@@ -98,7 +88,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function NavRow({ entry, active, smallIcon }: { entry: NavEntry; active: boolean; smallIcon?: boolean }) {
+function NavRow({ entry, active }: { entry: NavEntry; active: boolean }) {
   return (
     <Link
       href={entry.href}
@@ -114,7 +104,7 @@ function NavRow({ entry, active, smallIcon }: { entry: NavEntry; active: boolean
       <span
         className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-md"
         style={{
-          fontSize: smallIcon ? 12 : 13,
+          fontSize: 13,
           background: active ? "rgba(24,95,165,0.15)" : "var(--color-background-secondary)",
         }}
       >

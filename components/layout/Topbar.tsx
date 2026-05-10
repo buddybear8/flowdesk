@@ -9,8 +9,6 @@ const MODULES: Record<string, { label: string; tabs: string[] }> = {
   gex:          { label: "Options GEX",       tabs: ["GEX overview", "By strike", "By expiry", "Vanna & charm", "Key levels"] },
   flow:       { label: "Flow alerts",       tabs: ["Live feed", "Lottos", "Opening Sweeps"] },
   darkpool:   { label: "Dark pools",        tabs: ["Ranked feed", "DP levels"] },
-  watchlists: { label: "Watchlists",        tabs: [] },
-  alerts:     { label: "Alerts",            tabs: [] },
   settings:   { label: "Settings",          tabs: [] },
 };
 
