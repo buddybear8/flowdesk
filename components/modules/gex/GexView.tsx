@@ -7,8 +7,10 @@ import {
   LinearScale,
   BarElement,
   Tooltip,
+  type Chart,
   type ChartData,
   type ChartOptions,
+  type Plugin,
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import { clsx } from "clsx";
@@ -17,6 +19,59 @@ import { gexLabels } from "@/lib/mock/gex-data";
 import { pickStrikesCentered } from "@/lib/utils";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
+
+// Draws a horizontal "spot price" line across the GEX strike chart. Strikes
+// are categorical y-axis labels (sorted descending), so we interpolate spot's
+// pixel position between the two strikes that bracket it. The line is hidden
+// when spot falls outside the currently-visible strike range so the chart
+// doesn't render a marker pinned to its top/bottom edge.
+const SPOT_LINE_COLOR = "#22D3EE";
+const spotLinePlugin: Plugin<"bar"> = {
+  id: "spotLine",
+  afterDatasetsDraw(chart: Chart<"bar">) {
+    const opts = (chart.options.plugins as any)?.spotLine as
+      | { spot: number; sortedStrikes: number[] }
+      | undefined;
+    if (!opts?.spot || !opts.sortedStrikes?.length) return;
+    const { spot, sortedStrikes } = opts;
+    if (sortedStrikes.length < 2) return;
+
+    const max = sortedStrikes[0]!;
+    const min = sortedStrikes[sortedStrikes.length - 1]!;
+    if (spot > max || spot < min) return;
+
+    let yPx: number | null = null;
+    for (let i = 0; i < sortedStrikes.length - 1; i++) {
+      const upper = sortedStrikes[i]!;
+      const lower = sortedStrikes[i + 1]!;
+      if (upper >= spot && lower <= spot) {
+        const range = upper - lower;
+        const upperPx = chart.scales.y.getPixelForValue(i);
+        const lowerPx = chart.scales.y.getPixelForValue(i + 1);
+        const fraction = range === 0 ? 0 : (upper - spot) / range;
+        yPx = upperPx + (lowerPx - upperPx) * fraction;
+        break;
+      }
+    }
+    if (yPx == null) return;
+
+    const { ctx, chartArea } = chart;
+    ctx.save();
+    ctx.strokeStyle = SPOT_LINE_COLOR;
+    ctx.lineWidth = 1.25;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(chartArea.left, yPx);
+    ctx.lineTo(chartArea.right, yPx);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = SPOT_LINE_COLOR;
+    ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(`Spot $${spot.toFixed(2)}`, chartArea.left + 6, yPx - 3);
+    ctx.restore();
+  },
+};
 
 type StrikeCount = "5" | "10" | "15" | "20" | "25" | "40" | "50";
 
@@ -244,6 +299,7 @@ function GexBarChart({ data, showDV, showOI, strikeCount }: { data: GEXPayload; 
       });
     }
     const chartData: ChartData<"bar"> = { labels, datasets };
+    const sortedStrikes = rows.map(r => r.strike);
     const options: ChartOptions<"bar"> = {
       indexAxis: "y",
       responsive: true,
@@ -256,7 +312,8 @@ function GexBarChart({ data, showDV, showOI, strikeCount }: { data: GEXPayload; 
             label: c => `${c.dataset.label}: ${(c.raw as number) >= 0 ? "+" : ""}${Math.round(c.raw as number)}M`,
           },
         },
-      },
+        spotLine: { spot, sortedStrikes },
+      } as ChartOptions<"bar">["plugins"],
       scales: {
         x: {
           grid: { color: "rgba(255,255,255,0.06)" },
@@ -271,7 +328,7 @@ function GexBarChart({ data, showDV, showOI, strikeCount }: { data: GEXPayload; 
     return { chartData, options };
   }, [data, showDV, showOI, strikeCount]);
 
-  return <Bar data={chartData} options={options} />;
+  return <Bar data={chartData} options={options} plugins={[spotLinePlugin]} />;
 }
 
 function Select({ value, options, onChange }: { value: string; options: { id: string; label: string }[]; onChange: (id: string) => void }) {
