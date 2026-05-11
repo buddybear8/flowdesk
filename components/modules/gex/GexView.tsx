@@ -15,8 +15,16 @@ import {
 import { Bar } from "react-chartjs-2";
 import { clsx } from "clsx";
 import type { GEXPayload } from "@/lib/types";
-import { gexLabels } from "@/lib/mock/gex-data";
-import { pickStrikesCentered } from "@/lib/utils";
+import { formatUsd, pickStrikesCentered } from "@/lib/utils";
+
+// Dollar gamma per 1% move is related to "gamma in shares" by:
+//   dollarGamma = gammaShares × spot² × 0.01
+// UW exposes both numbers side-by-side in their Details panel; we derive the
+// share-count form from the dollar form we already store.
+function gammaShares(dollarGamma: number, spot: number): number {
+  if (!spot) return 0;
+  return Math.round(dollarGamma / (spot * spot * 0.01));
+}
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
@@ -106,13 +114,17 @@ export function GexView() {
       .then(setData);
   }, [ticker]);
 
-  const labels = gexLabels(ticker);
-
   if (!data) {
     return <div className="flex flex-1 items-center justify-center text-text-tertiary text-[12px]">Loading GEX…</div>;
   }
 
   const pos = data.gammaRegime === "POSITIVE";
+  const spot = data.keyLevels.spot;
+  const netGexOiUsd = formatUsd(data.netGexOI);
+  const netGexDvUsd = formatUsd(data.netGexDV);
+  const netGammaOi = gammaShares(data.netGexOI, spot).toLocaleString("en-US");
+  const netGammaDv = gammaShares(data.netGexDV, spot).toLocaleString("en-US");
+  const dvPositive = data.netGexDV >= 0;
 
   return (
     <div
@@ -153,7 +165,7 @@ export function GexView() {
 
       {/* 5 metric cards */}
       <div className="grid gap-[8px]" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))", marginBottom: 12 }}>
-        <Mc label="Net GEX (OI)" value={labels.o1} valueColor={pos ? "#7FBF52" : "#E76A6A"} sub={`${pos ? "Positive" : "Negative"} regime`} subColor={pos ? "#7FBF52" : "#E76A6A"} />
+        <Mc label="Net GEX (OI)" value={netGexOiUsd} valueColor={pos ? "#7FBF52" : "#E76A6A"} sub={`${pos ? "Positive" : "Negative"} regime`} subColor={pos ? "#7FBF52" : "#E76A6A"} />
         <Mc label="Gamma flip" value={`$${data.keyLevels.gammaFlip.toLocaleString()}`} valueColor="#E2BF73" sub={`${Math.abs(data.keyLevels.spot - data.keyLevels.gammaFlip).toFixed(0)}pts ${data.keyLevels.spot > data.keyLevels.gammaFlip ? "below" : "above"} spot`} subColor="#E2BF73" />
         <Mc label="Call wall" value={`$${data.keyLevels.callWall.toLocaleString()}`} valueColor="#7FBF52" sub="Resistance" subColor="var(--color-text-secondary)" />
         <Mc label="Put wall" value={`$${data.keyLevels.putWall.toLocaleString()}`} valueColor="#E76A6A" sub="Support" subColor="var(--color-text-secondary)" />
@@ -188,8 +200,13 @@ export function GexView() {
           <DlRows rows={[["Ticker", ticker], ["ATM strike", `~$${atmStrike(data).toLocaleString()}`], ["Spot", `$${data.keyLevels.spot.toFixed(2)}`]]} />
           <SectionLabel>Open interest</SectionLabel>
           <DlRows
-            rows={[["Gamma per 1% move", labels.o1], ["Net GEX", labels.o2]]}
+            rows={[["Gamma per 1% move", netGexOiUsd], ["Net gamma exposure", netGammaOi]]}
             valueColor={pos ? "#7FBF52" : "#E76A6A"}
+          />
+          <SectionLabel>Directionalized volume</SectionLabel>
+          <DlRows
+            rows={[["Gamma per 1% move", netGexDvUsd], ["Net gamma exposure", netGammaDv]]}
+            valueColor={dvPositive ? "#7FBF52" : "#E76A6A"}
           />
           <SectionLabel>Gamma regime</SectionLabel>
           <div
