@@ -4,8 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { DarkPoolPrint } from "@/lib/types";
 
 type DPFilter = {
-  rankMin: number;
-  rankMax: number;
+  onlyRanked: boolean;
   hideETF: boolean;
   intradayOnly: boolean;
   regularHour: boolean;
@@ -16,14 +15,15 @@ type DPFilter = {
 type SortKey = "time" | "rank" | "prem";
 
 const INITIAL: DPFilter = {
-  rankMin: 1,
-  rankMax: 100,
+  onlyRanked: false,
   hideETF: false,
   intradayOnly: false,
   regularHour: true,
   extendedHour: true,
   ticker: "",
 };
+
+const TICKER_RE = /^[A-Z]{1,5}$/;
 
 function fmtP(v: number): string {
   const a = Math.abs(v);
@@ -59,25 +59,39 @@ export function DarkpoolView() {
   const [filter, setFilter] = useState<DPFilter>(INITIAL);
   const [sortKey, setSortKey] = useState<SortKey>("time");
 
+  // Refetch whenever a server-side filter changes. onlyRanked flips the
+  // backend between live-feed (recent by time, all rows) and corpus mode
+  // (rank 1–100 ordered ASC). Ticker filter is server-side too so a
+  // ticker search can pull the full top-100 for that ticker even though
+  // those rows would never fit in the live-feed's most-recent window.
   useEffect(() => {
-    fetch("/api/darkpool").then(r => r.json()).then(r => setPrints(r.prints ?? []));
-  }, []);
+    const params = new URLSearchParams();
+    if (filter.onlyRanked) params.set("onlyRanked", "true");
+    if (filter.ticker && TICKER_RE.test(filter.ticker)) params.set("ticker", filter.ticker);
+    const qs = params.toString();
+    fetch(`/api/darkpool${qs ? `?${qs}` : ""}`)
+      .then(r => r.json())
+      .then(r => setPrints(r.prints ?? []));
+  }, [filter.onlyRanked, filter.ticker]);
 
   const rows = useMemo(() => {
-    // all_time_rank === 0 = "unranked" (live UW polls don't carry rank — that
-    // arrives via the S3 backfill). Pass those through; a real rank filter
-    // applies only to backfilled rows.
-    let r = prints.filter(p => p.all_time_rank === 0 || (p.all_time_rank >= filter.rankMin && p.all_time_rank <= filter.rankMax));
+    // Rank and ticker filtering happen server-side. Client only handles
+    // local-only toggles (ETF / hours) and ordering.
+    let r = prints;
     if (filter.hideETF) r = r.filter(p => !p.is_etf);
     if (filter.intradayOnly) r = r.filter(p => !p.is_extended);
     if (!filter.regularHour) r = r.filter(p => p.is_extended);
     if (!filter.extendedHour) r = r.filter(p => !p.is_extended);
-    if (filter.ticker) r = r.filter(p => p.ticker.startsWith(filter.ticker));
-    if (sortKey === "rank") r = [...r].sort((a, b) => a.all_time_rank - b.all_time_rank);
+    if (sortKey === "rank") r = [...r].sort((a, b) => {
+      // Unranked rows (0) sink to the bottom regardless of direction.
+      const ar = a.all_time_rank || Infinity;
+      const br = b.all_time_rank || Infinity;
+      return ar - br;
+    });
     else if (sortKey === "prem") r = [...r].sort((a, b) => b.premium - a.premium);
     else r = [...r].sort((a, b) => b.executed_at.localeCompare(a.executed_at));
     return r;
-  }, [prints, filter, sortKey]);
+  }, [prints, filter.hideETF, filter.intradayOnly, filter.regularHour, filter.extendedHour, sortKey]);
 
   const totalPrem = rows.reduce((s, r) => s + r.premium, 0);
   const totalVol = rows.reduce((s, r) => s + r.volume, 0);
@@ -106,22 +120,16 @@ export function DarkpoolView() {
 
         <div className="flex-1 overflow-y-auto px-[12px] py-[10px]">
           <div className="mb-[12px]">
-            <FpLabel>Trade rank</FpLabel>
-            <div className="flex items-center gap-[6px]" style={{ marginBottom: 6 }}>
-              <RankIn value={filter.rankMin} onChange={v => setFilter(f => ({ ...f, rankMin: v }))} />
-              <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>—</span>
-              <RankIn value={filter.rankMax} onChange={v => setFilter(f => ({ ...f, rankMax: v }))} />
-            </div>
-            <input
-              type="range"
-              min={1}
-              max={100}
-              value={filter.rankMax}
-              onChange={e => setFilter(f => ({ ...f, rankMax: Number(e.target.value) }))}
-              style={{ width: "100%", accentColor: "#C9A55A" }}
+            <FpLabel>Ranking</FpLabel>
+            <Tog
+              label="Only ranked prints"
+              checked={filter.onlyRanked}
+              onChange={v => setFilter(f => ({ ...f, onlyRanked: v }))}
             />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--color-text-tertiary)", marginTop: 2 }}>
-              <span>Rank 1</span><span>Top 100</span>
+            <div style={{ fontSize: 10, color: "var(--color-text-tertiary)", marginTop: 6, lineHeight: 1.4 }}>
+              {filter.onlyRanked
+                ? "Top-100 per ticker, all-time. Historical Polygon corpus + live UW rolling."
+                : "All dark-pool prints, most recent first."}
             </div>
           </div>
           <Divider />
@@ -273,29 +281,6 @@ function FpLabel({ children }: { children: React.ReactNode }) {
     >
       {children}
     </div>
-  );
-}
-
-function RankIn({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <input
-      type="number"
-      min={1}
-      max={100}
-      value={value}
-      onInput={e => onChange(Number((e.target as HTMLInputElement).value) || 1)}
-      style={{
-        width: "100%",
-        fontSize: 11,
-        padding: "5px 7px",
-        borderRadius: 8,
-        border: "0.5px solid var(--color-border-secondary)",
-        background: "var(--color-background-secondary)",
-        color: "var(--color-text-primary)",
-        outline: "none",
-        textAlign: "center",
-      }}
-    />
   );
 }
 
