@@ -399,9 +399,13 @@ export async function pollGex(): Promise<void> {
     // the selection, just the band. Verified live on 2026-05-11:
     //   retried with bounds [$627..$850] → 50 strikes, range [$650..$738],
     //   still hasAbove=false even though the band spans both sides of $738.63.
-    // Real fix: split into two explicit requests so each side of spot gets
-    // its own 50-strike quota from UW, then merge. Skip the split when the
-    // initial response is already centered to keep the request cost low.
+    // Fix: split into two requests for the above- and below-spot halves so
+    // each side gets its own 50-strike quota. Keep the bands tight (±5% per
+    // side) so the per-side strike count is well under UW's 50-cap and we
+    // get every near-money strike rather than UW's gamma-weighted top-50.
+    // At ±10% we observed UW still picking deep-ITM strikes (50 strikes in
+    // $665..$714 plus a single near-spot row) and skipping the contiguous
+    // $715..$738 region that the chart actually wants.
     if (spot) {
       const tightBand = spot * 0.02;
       const sideBand = spot * 0.05;
@@ -419,8 +423,8 @@ export async function pollGex(): Promise<void> {
       const centered = tightCount >= 3 && hasAboveSpot && hasBelowSpot;
       if (!centered) {
         const aboveMin = Math.floor(spot);
-        const aboveMax = Math.ceil(spot * 1.10);
-        const belowMin = Math.floor(spot * 0.90);
+        const aboveMax = Math.ceil(spot * 1.05);
+        const belowMin = Math.floor(spot * 0.95);
         const belowMax = Math.ceil(spot);
         await sleep(TICKER_DELAY_MS);
         const aboveJson = await uwFetch(
