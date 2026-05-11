@@ -96,12 +96,19 @@ export async function importDarkpoolHistory(): Promise<void> {
     console.log(`[s3-darkpool-import] ${ts()} cleared ${overlapCleared} UW-sourced rows in Polygon coverage window`);
   }
 
-  // 3. Process each ticker corpus.
+  // 3. Process each ticker corpus. Only tickers that ACTUALLY received new
+  //    rows are queued for re-rank — on a no-op re-run nothing gets queued
+  //    and the rerank pass below is skipped entirely. Inter-ticker delay
+  //    keeps Postgres WAL from spiking the way the initial unthrottled
+  //    backfill did (which filled a 500 MB volume mid-recovery).
+  const INTER_TICKER_DELAY_MS = 50;
   let totalInserted = 0;
   let totalSkipped = 0;
   let totalErrored = 0;
-  const importedTickers = new Set<string>();
-  for (const key of topKeys) {
+  const dirtyTickers: string[] = [];
+  for (let i = 0; i < topKeys.length; i++) {
+    if (i > 0) await sleep(INTER_TICKER_DELAY_MS);
+    const key = topKeys[i]!;
     const ticker = extractTicker(key, prefix);
     try {
       const rows = await downloadAndParse(s3, bucket, key);
@@ -118,7 +125,7 @@ export async function importDarkpoolHistory(): Promise<void> {
       });
       totalInserted += inserted.count;
       totalSkipped += records.length - inserted.count;
-      importedTickers.add(ticker);
+      if (inserted.count > 0) dirtyTickers.push(ticker);
     } catch (err) {
       totalErrored++;
       console.error(`[s3-darkpool-import] ${ticker}: ${err instanceof Error ? err.message : err}`);
@@ -129,12 +136,17 @@ export async function importDarkpoolHistory(): Promise<void> {
     `[s3-darkpool-import] ${ts()} loaded ${totalInserted} new, ${totalSkipped} dup, ${totalErrored} err of ${topKeys.length} tickers`
   );
 
-  // 4. Re-rank every ticker we just touched. Even if Polygon's `rank` is
-  //    pre-populated, UW prints after 2026-05-04 may have already arrived
-  //    and need their position in the combined corpus computed.
+  // 4. Re-rank only tickers that received new rows. On an idempotent re-run
+  //    this is a no-op — no inserts means no rerank work.
+  if (dirtyTickers.length === 0) {
+    console.log(`[s3-darkpool-import] ${ts()} no new rows — re-rank skipped`);
+    return;
+  }
   let rerankedTickers = 0;
   let rerankedRowsTouched = 0;
-  for (const ticker of importedTickers) {
+  for (let i = 0; i < dirtyTickers.length; i++) {
+    if (i > 0) await sleep(INTER_TICKER_DELAY_MS);
+    const ticker = dirtyTickers[i]!;
     try {
       const n = await rerankDarkPool(ticker);
       rerankedTickers++;
@@ -146,6 +158,10 @@ export async function importDarkpoolHistory(): Promise<void> {
   console.log(
     `[s3-darkpool-import] ${ts()} re-ranked ${rerankedTickers} tickers (${rerankedRowsTouched} rows updated)`
   );
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function listTopKeys(s3: S3Client, bucket: string, prefix: string): Promise<string[]> {
