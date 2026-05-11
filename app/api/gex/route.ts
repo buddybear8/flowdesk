@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { GEXPayload, GEXLevel, GammaRegime } from "@/lib/types";
+import { pickStrikesCentered } from "@/lib/utils";
 
 const TICKER_RE = /^[A-Z]{1,5}$/;
 const ALLOWED_EXPIRIES = ["all", "weekly", "monthly"] as const;
@@ -43,15 +44,13 @@ export async function GET(req: NextRequest) {
 
   // Only show strikes surrounding spot — ±10%. Deep-OTM LEAPS and
   // corp-action-adjusted legacy strikes (e.g. UW returns $174 strikes for
-  // QQQ when spot is $682) are excluded. If the latest snapshot has no
-  // near-spot strikes, the chart goes empty rather than backfilling with
-  // irrelevant deep-OTM rows.
+  // QQQ when spot is $682) are excluded. The remaining strikes are picked
+  // centered on spot (half below, half at-or-above) so a chain UW returned
+  // lopsided still renders a balanced selection where data exists on both
+  // sides; the chart layer enforces the same rule at the strikeCount toggle.
   const spot = Number(snapshot.spot);
-  const topStrikes = allStrikes
-    .filter((s) => Math.abs(s.strike - spot) <= spot * 0.1)
-    .sort((a, b) => Math.abs(a.strike - spot) - Math.abs(b.strike - spot))
-    .slice(0, strikes)
-    .sort((a, b) => a.strike - b.strike);
+  const inBand = allStrikes.filter((s) => Math.abs(s.strike - spot) <= spot * 0.1);
+  const topStrikes = pickStrikesCentered(inBand, spot, strikes);
 
   const payload: GEXPayload = {
     ticker: snapshot.ticker,

@@ -50,3 +50,27 @@ export function seededRng(seed: number): () => number {
 export function pick<T>(arr: readonly T[], rng: () => number): T {
   return arr[Math.floor(rng() * arr.length)]!;
 }
+
+// Select up to N strikes centered on `spot`. Targets floor(N/2) strikes
+// strictly below spot and ceil(N/2) strikes at-or-above spot; if one side
+// is short, takes more from the other so the total still hits N when data
+// allows. Returned rows are sorted ascending by strike. Used by the GEX
+// chart so a lopsided UW chain can't render a chart pinned entirely above
+// or below spot — same selection rule is applied at the API and chart layers.
+export function pickStrikesCentered<T extends { strike: number }>(
+  items: readonly T[],
+  spot: number,
+  n: number,
+): T[] {
+  const asc = [...items].sort((a, b) => a.strike - b.strike);
+  const below = asc.filter((s) => s.strike < spot);
+  const above = asc.filter((s) => s.strike >= spot);
+  const wantBelow = Math.floor(n / 2);
+  const wantAbove = n - wantBelow;
+  const takeAbove = Math.min(wantAbove + Math.max(0, wantBelow - below.length), above.length);
+  const takeBelow = Math.min(wantBelow + Math.max(0, wantAbove - takeAbove), below.length);
+  return [
+    ...below.slice(below.length - takeBelow), // nearest takeBelow below spot
+    ...above.slice(0, takeAbove),             // nearest takeAbove at-or-above spot
+  ];
+}

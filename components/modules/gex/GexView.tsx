@@ -14,6 +14,7 @@ import { Bar } from "react-chartjs-2";
 import { clsx } from "clsx";
 import type { GEXPayload } from "@/lib/types";
 import { gexLabels } from "@/lib/mock/gex-data";
+import { pickStrikesCentered } from "@/lib/utils";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
@@ -209,14 +210,15 @@ function StrikeCountToggle({ value, onChange }: { value: StrikeCount; onChange: 
 
 function GexBarChart({ data, showDV, showOI, strikeCount }: { data: GEXPayload; showDV: boolean; showOI: boolean; strikeCount: StrikeCount }) {
   const { chartData, options } = useMemo(() => {
-    // Keep the N strikes nearest spot — that's where the action is — then
-    // re-sort descending so the highest strike sits at the top of the bar chart.
+    // Pick N strikes centered on spot — half below, half at-or-above — so the
+    // chart is anchored at spot rather than skewed by whichever side has the
+    // tighter strike spacing. Re-sort descending so the highest strike sits
+    // at the top of the bar chart.
     const n = parseInt(strikeCount, 10);
     const spot = data.keyLevels.spot;
-    const rows = [...data.strikes]
-      .sort((a, b) => Math.abs(a.strike - spot) - Math.abs(b.strike - spot))
-      .slice(0, n)
-      .sort((a, b) => b.strike - a.strike);
+    const rows = pickStrikesCentered(data.strikes, spot, n).sort(
+      (a, b) => b.strike - a.strike,
+    );
     const labels = rows.map(r => `$${r.strike.toLocaleString()}`);
     const datasets: ChartData<"bar">["datasets"] = [];
     if (showDV) {

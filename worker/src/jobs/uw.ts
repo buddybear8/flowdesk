@@ -393,18 +393,34 @@ export async function pollGex(): Promise<void> {
     let spot = Number((strikesRaw[0] as any).price ?? 0);
 
     // UW's /spot-exposures/strike caps at 500 rows and returns them unfiltered.
-    // For some tickers (notably QQQ every poll; SPY/NVDA/TSLA intermittently)
-    // those rows are dominated by corp-action-adjusted legacy contracts or
-    // deep-OTM LEAPS whose strikes sit nowhere near spot, leaving the chart
-    // empty. When we detect that case, re-request with min_strike/max_strike
-    // (±15% of spot) so UW filters at source. The endpoint has no expiry/
-    // is_standard param and the response payload has no marker field to do
-    // the filtering ourselves — strike bounds are the only lever.
+    // Two failure modes seen in prod:
+    //   (1) QQQ-style dump: hundreds of legacy / corp-action-adjusted strikes
+    //       far from spot, none anywhere near. Old "<5 within ±10%" check
+    //       caught this.
+    //   (2) SPY-style lopsided chain: dozens of strikes clustered all on one
+    //       side of spot (e.g. 12 strikes at $664–$675 when spot is $737.57)
+    //       so the ±10% count passes but the chart renders entirely below or
+    //       above spot. Old check missed this.
+    // Treat the chain as miscentered unless there are strikes inside a tight
+    // band of spot AND strikes on both sides of spot within a moderate band.
+    // When miscentered, re-request with min_strike/max_strike (±15% of spot)
+    // so UW filters at source.
     if (spot) {
-      const initialNearSpot = strikesRaw.filter(
-        (s: any) => Math.abs(Number(s.strike) - spot) <= spot * 0.1
+      const tightBand = spot * 0.02;
+      const sideBand = spot * 0.05;
+      const tightCount = strikesRaw.filter(
+        (s: any) => Math.abs(Number(s.strike) - spot) <= tightBand
       ).length;
-      if (initialNearSpot < 5) {
+      const hasAboveSpot = strikesRaw.some((s: any) => {
+        const k = Number(s.strike);
+        return k > spot && k - spot <= sideBand;
+      });
+      const hasBelowSpot = strikesRaw.some((s: any) => {
+        const k = Number(s.strike);
+        return k < spot && spot - k <= sideBand;
+      });
+      const centered = tightCount >= 3 && hasAboveSpot && hasBelowSpot;
+      if (!centered) {
         await sleep(TICKER_DELAY_MS);
         const minStrike = Math.floor(spot * 0.85);
         const maxStrike = Math.ceil(spot * 1.15);
@@ -417,7 +433,9 @@ export async function pollGex(): Promise<void> {
           if (retryStrikes.length > 0) {
             console.log(
               `[uw:gex:${ticker}] retried with bounds [$${minStrike}..$${maxStrike}] — ` +
-                `${retryStrikes.length} strikes (initial ${strikesRaw.length}, ${initialNearSpot} near spot)`
+                `${retryStrikes.length} strikes ` +
+                `(initial ${strikesRaw.length}, tightCount=${tightCount}, ` +
+                `hasAbove=${hasAboveSpot}, hasBelow=${hasBelowSpot})`
             );
             strikesRaw = retryStrikes;
             json = retryJson;
