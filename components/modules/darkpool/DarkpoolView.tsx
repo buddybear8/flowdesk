@@ -32,13 +32,6 @@ function fmtP(v: number): string {
   return "$" + a;
 }
 
-function fmtVol(v: number): string {
-  if (v >= 1e9) return (v / 1e9).toFixed(1) + "B";
-  if (v >= 1e6) return (v / 1e6).toFixed(1) + "M";
-  if (v >= 1e3) return Math.round(v / 1e3) + "K";
-  return String(v);
-}
-
 function rankClass(rank: number): { bg: string; color: string; border: string } {
   if (rank <= 3) return { bg: "#FAEEDA", color: "#633806", border: "#C9A55A" };
   if (rank <= 10) return { bg: "rgba(127, 191, 82, 0.14)", color: "#7FBF52", border: "#7FBF52" };
@@ -48,10 +41,17 @@ function rankClass(rank: number): { bg: string; color: string; border: string } 
 }
 
 function formatTime(iso: string): string {
-  // "2026-04-21T11:17:42Z" → "04/21 11:17:42"
-  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2}:\d{2})/);
+  // "2026-04-21T11:17:42Z" → "04/21/2026 11:17:42 AM" (12-hour clock).
+  // ISO is UTC-zulu off the wire; we preserve that — display time matches
+  // the executedAt timestamp the worker stored rather than reinterpreting
+  // it in the browser's local zone.
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
   if (!m) return iso;
-  return `${m[2]}/${m[3]} ${m[4]}`;
+  const [, year, month, day, hh, mm, ss] = m;
+  const h = Number(hh);
+  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `${month}/${day}/${year} ${hour12}:${mm}:${ss} ${ampm}`;
 }
 
 export function DarkpoolView() {
@@ -94,7 +94,6 @@ export function DarkpoolView() {
   }, [prints, filter.hideETF, filter.intradayOnly, filter.regularHour, filter.extendedHour, sortKey]);
 
   const totalPrem = rows.reduce((s, r) => s + r.premium, 0);
-  const totalVol = rows.reduce((s, r) => s + r.volume, 0);
   const bestRank = rows.length ? Math.min(...rows.map(r => r.all_time_rank)) : "-";
 
   return (
@@ -151,7 +150,6 @@ export function DarkpoolView() {
         >
           <StatGroup><SV color="#C9A55A">{rows.length}</SV><SL>&nbsp;PRINTS</SL></StatGroup>
           <StatGroup><SV color="#7FBF52">{fmtP(totalPrem)}</SV><SL>&nbsp;TOTAL PREMIUM</SL></StatGroup>
-          <StatGroup><SV color="#E2BF73">{fmtVol(totalVol)}</SV><SL>&nbsp;TOTAL VOLUME</SL></StatGroup>
           <StatGroup last><SV color="#534AB7">#{bestRank}</SV><SL>&nbsp;TOP RANK</SL></StatGroup>
         </div>
 
@@ -202,7 +200,7 @@ export function DarkpoolView() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <Th>Time</Th><Th>Ticker</Th><Th>Price</Th><Th>Size</Th><Th>Premium</Th><Th>Volume</Th><Th center>Trade rank</Th>
+                <Th>Time</Th><Th>Ticker</Th><Th>Price</Th><Th>Size</Th><Th>Premium</Th><Th center>Trade rank</Th>
               </tr>
             </thead>
             <tbody>
@@ -237,7 +235,6 @@ export function DarkpoolView() {
                     <Td style={{ fontSize: 12, color: "var(--color-text-primary)" }}>${r.price.toFixed(4)}</Td>
                     <Td style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{r.size.toLocaleString()}</Td>
                     <Td style={{ fontSize: 12, fontWeight: 500, color: "#7FBF52" }}>{fmtP(r.premium)}</Td>
-                    <Td style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{fmtVol(r.volume)}</Td>
                     <Td center>
                       <span
                         style={{
