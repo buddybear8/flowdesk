@@ -1,201 +1,257 @@
-# FlowDesk — Build Progress
+# Champagne Sessions — Build Progress
 
-Last updated: 2026-04-30 (v1.2.3 — Sentiment Tracker archived from V1)
+Last updated: 2026-05-10
+Current `main` head: **`f383db6`** (Vercel + Railway auto-deploy on push)
 
----
-
-## Deployment
-
-| Target | Status | Notes |
-|--------|--------|-------|
-| GitHub repo | ✅ Live | github.com/buddybear8/flowdesk |
-| Vercel deployment | ✅ Live | Auto-deploys on push to `main` |
-| Environment config | ✅ Done | `USE_MOCK_DATA=true` set in Vercel |
-| Database (Prisma/PostgreSQL) | ⬜ Not connected | Schema defined; no live DB wired for demo |
+> Product was rebranded from "FlowDesk" → "Champagne Sessions" (commit `bbecffb`, late April). Repo path is still `flowdesk/`, GitHub remote is still `github.com/buddybear8/flowdesk`. Every user-facing string says Champagne Sessions; backend names and file paths were intentionally not churned.
 
 ---
 
-## Modules
+## Deployment status
+
+| Surface | Status | Notes |
+|---|---|---|
+| GitHub repo | ✅ Live | `github.com/buddybear8/flowdesk` |
+| Vercel (Next.js app) | ✅ Live, auto-deploys on push to `main` | Domain: `flowdesk-puce.vercel.app` |
+| Railway Postgres | ✅ Live | v1.3 schema migration applied 2026-05-06 (`ask_prem`, `bid_prem`, `all_opening`, `issue_type`, `has_floor`, `has_single_leg`) |
+| Railway worker (`flowdesk-worker`) | ✅ Live, auto-deploys | 11 cron schedules (1 stub: `s3-darkpool-import`); includes `pollFlowAlerts`, `pollLottoAlerts`, `pollSweeperAlerts` |
+| Auth (Whop OAuth via Auth.js v5) | ✅ Live | All `/api/*` routes 401 without a session; page routes redirect to `/login` |
+
+---
+
+## Modules (V1 active)
 
 ### 1. Daily Watches (`/watches`) — PRD §1
-- ✅ Hit list table with rank, ticker, price, direction, confidence, premium, contract
+- ✅ Hit list table with rank, ticker, price, direction, confidence, premium, contract (`WatchesView.tsx`)
 - ✅ Detail panel (right pane) — thesis, contracts, sector peers, related theme
 - ✅ Sort by rank / premium / confidence
-- ✅ Session meta strip (date, overall sentiment, total premium, call/put ratio, lead sector)
-- ✅ Sector flow sidebar
-- ✅ Mock data (`lib/mock/watches-data.ts`)
+- ✅ Session meta strip + sector flow sidebar
+- ⏸ **"Coming Soon" placeholder** active in `app/(modules)/watches/page.tsx` (2026-05-10). Full UI in `WatchesView.tsx` is preserved and ready — one-line swap when the upstream ML model is producing rows. Comment in `page.tsx` documents the swap path.
 - ⬜ Criteria config tab (tab exists in topbar, view not built)
-- ⬜ Live data — UW "daily watches" hit-list endpoint not wired
+- ⬜ Live data — upstream ML model still in development (separate workstream, user-owned)
 
 ### 2. Sentiment Tracker (`/sentiment`) — 🗄 ARCHIVED in v1.2.3
-- 🗄 **Archived from V1 scope (Apr 30, 2026)** due to X API Basic ($100/mo) cost. Module remains in repo (route, page, mock data, component, types) for future reactivation. Sidebar entry hidden in `components/layout/Sidebar.tsx`. See PRD §7 archive banner for reactivation steps.
-- ✅ *(retained in repo)* Overview tab — overall sentiment score, bull/bear/neutral breakdown, top velocity movers
-- ✅ *(retained in repo)* Divergence alerts (price vs. sentiment direction mismatch)
-- ✅ *(retained in repo)* Sector sentiment breakdown
-- ✅ *(retained in repo)* New entrants & sentiment flips list
-- ✅ *(retained in repo)* Notable posts feed (safe rendering via `renderPostBody`, XSS fix applied)
-- ✅ *(retained in repo)* AI summary card
-- ✅ *(retained in repo)* Analyst intelligence tab — analyst profiles, accuracy leaderboard, top buys/sells
-- ✅ *(retained in repo)* Mock data (`lib/mock/sentiment-data.ts`)
-- 🚫 Live data — X API + sentiment AI summary pipeline **deferred from V1**
+- 🗄 Archived from V1 scope (Apr 30, 2026) due to X API Basic ($100/mo) cost. Module remains in repo (route, page, mock data, component, types) for future reactivation. Sidebar entry hidden. See PRD §7 archive banner for reactivation steps.
+- 🚫 Live data — X API + sentiment AI summary pipeline deferred from V1
 
 ### 3. Market Pulse (`/market-tide`) — PRD §3
-- ✅ Market Tide line chart — SPY price (gold) + net call premium (green) + net put premium (red), 5-min buckets
+- ✅ Market Tide line chart — SPY price + net call/put premium, 5-min buckets
 - ✅ Top Net Impact horizontal bar chart — 20 tickers ranked by net options premium
-- ✅ Stats strip — SPY price, volume, net call/put premium totals
+- ✅ Stats strip
 - ✅ Period toggle UI (1H / 4H / 1D)
-- ✅ Mock data mirroring UW Market Tide screen (`lib/mock/market-tide-data.ts`)
-- ⬜ Period toggle wired to API (currently UI-only; mock returns same data regardless)
-- ⬜ Live data — UW `market-tide` and `net-impact` endpoints not wired
+- ✅ **Live data** via worker `pollMarketTide` + `computeNetImpact` jobs
+- ✅ UW source attribution dropped from user-facing copy (2026-05-06)
+- ⬜ Period toggle wired to API param (currently UI-only)
 
 ### 4. Options GEX (`/gex`) — PRD §4
 - ✅ GEX bar chart by strike (net OI + net DV overlaid)
-- ✅ Ticker selector (SPY, QQQ, SPX, NVDA, TSLA)
+- ✅ Ticker selector (SPY, QQQ, SPX, NVDA, TSLA) — 200ms inter-call spacing to dodge UW rate limit
 - ✅ Key levels panel (call wall, put wall, gamma flip, max pain, spot)
-- ✅ Gamma regime indicator (Positive / Negative)
-- ✅ Show/hide OI and DV series toggles
-- ✅ Mock data (`lib/mock/gex-data.ts`)
-- ⚠️ Greek switcher (GEX / Vanna / Charm) — **removed from V1** (v1.2.1 decision; UW Basic tier doesn't expose Vanna/Charm endpoints; returns post-V1)
-- ⬜ AI explanation modal — pre-computed daily in 07:00 ET batch with static-as-of-market-open header note (PRD §8); not yet wired
-- ⬜ By strike / By expiry / Vanna & charm / Key levels tabs (topbar tabs defined, views not built)
-- ⬜ Live data — UW GEX endpoint not wired
+- ✅ Gamma regime indicator
+- ✅ Bounded retry when UW returns far-from-spot chains (`min_strike`/`max_strike` fallback)
+- ✅ **Live data** via worker `pollGex` (60s market hours, 10m off-hours per ticker)
+- ✅ UW source attribution dropped from user-facing copy
+- ⚠️ Greek switcher (Vanna/Charm) **removed from V1** (UW Basic tier doesn't expose those endpoints)
+- ⬜ AI explanation modal — pre-computed daily by `ai-summarizer-gex` cron at 07:00 ET; wiring to a modal UI pending
+- ⬜ By strike / By expiry / Key levels secondary tabs (topbar tabs defined, views not built)
 
 ### 5. Flow Alerts (`/flow`) — PRD §5
 - ✅ Live feed table — time, ticker, type, side, exec, contract, strike, expiry, size, OI, premium, spot, confidence
 - ✅ Filter panel — type, side, sentiment, exec type, premium threshold, confidence, rule, ticker, sweep-only toggle, DTE
-- ✅ Sort by time / premium / size
 - ✅ Stats bar — alert count, call/put split, total premium
-- ✅ Mock data (`lib/mock/flow-alerts.ts`)
-- ⬜ Sweep scanner / 0DTE flow / Unusual activity tabs (defined in topbar, views not built)
-- ⬜ Live data — UW flow endpoint not wired
+- ✅ **Live data** via worker `pollFlowAlerts` (30s market hours, 5m off-hours)
+- ✅ **Lottos** preset tab (2026-05-06) — backend-locked WHERE; dedicated `pollLottoAlerts` worker job; "Exactly at ask" client toggle is the only user-facing knob; sidebar shows gold-bordered "Custom Champagne Room Lotto Flow Filters Applied" banner
+- ✅ **Opening Sweeps** preset tab (2026-05-07) — same backend-locked pattern; dedicated `pollSweeperAlerts` worker job; sidebar shows "Custom Champagne Room Opening Sweeper Filters Applied" banner; no user-facing knobs
+- ❌ 0DTE flow and Unusual activity tabs **removed 2026-05-07** (both were placeholder tabs falling back to FlowView; will re-add when distinct views exist)
 
 ### 6. Dark Pools (`/darkpool`) — PRD §3.5
 - ✅ Ranked feed table — time, ticker, price, size, premium, volume, ETF flag, extended-hours flag, all-time rank, percentile
 - ✅ Filter panel — rank range, ETF toggle, regular/extended hours toggles, ticker search
 - ✅ Sort by time / rank / premium
-- ✅ Mock data (`lib/mock/dark-pool-prints.ts`)
+- ✅ Stats bar
+- ✅ **Live data** via worker `pollDarkPool` (30s market hours)
 - ⬜ DP levels tab (defined in topbar, view not built)
-- ⬜ Live data — UW `/api/darkpool/recent` + `/api/darkpool/{ticker}` not wired
-- ⬜ Historical DP backfill — Polygon-sourced files land in S3 (extraction handled in a separate workstream); `worker/src/jobs/import-darkpool-history.ts` to consume them and write to `dark_pool_prints`
+- ⬜ Historical DP backfill — `s3-darkpool-import` is a documented stub waiting on AWS env vars + the upstream Polygon extraction pipeline (separate workstream)
 
 ---
 
 ## Infrastructure & Data Layer
 
 | Item | Status | Notes |
-|------|--------|-------|
-| Prisma schema | ⚠️ Partial | Has `DarkPoolPrint`, `WatchesCriteria`, `SentimentSnapshot`, `AiSummary`. V1-active still needed per ARCHITECTURE §3: `FlowAlert`, `GexSnapshot`, `MarketTideBar`, `NetImpactDaily`, `User`, `TickerMetadata`, `HitListDaily`. 🗄 Archived in v1.2.3: `XPost`, `SentimentSnapshot`, `AnalystProfile`, `DivergenceAlert` |
-| Database migrations | ⬜ Not run | `npx prisma migrate deploy` needed against Railway Postgres once schema is complete |
-| `USE_MOCK_DATA` flag | ✅ Wired | All 6 API routes check this env var before hitting live sources |
-| Live UW API integration | ⬜ Not started | Token placeholder in `.env.local` |
-| Live X API v2 integration | 🗄 **Archived in v1.2.3** | Sentiment Tracker module deferred from V1 due to X API cost |
-| Live Anthropic (AI summaries) | ⬜ Not started | Key placeholder in `.env.local` |
-| S3 → Postgres dark-pool history import | ⬜ Not started | Polygon extraction is a separate workstream; this codebase only consumes S3 files via `import-darkpool-history.ts` |
-| Retention sweeps (60d flow / 30d DP except top-100 perpetual) | ⬜ Not started | Two cron sweeps to add at 03:00 ET (PRD §3.5 / ARCHITECTURE §2.1) |
-| Auth (Auth.js v5 + Whop OAuth) | ⬜ Not started | Free Whop product, OAuth app + Vercel env vars (`WHOP_CLIENT_ID/SECRET/PRODUCT_ID`, `NEXTAUTH_URL/SECRET`); 3-line `auth()` check on every `/api/*` route |
-| `Sector` enum + `ticker_metadata` table | ✅ Type tightened | Mocks normalized; `refresh-ticker-metadata` worker job not yet built |
-| `hit-list-compute` daily job | ⬜ Not started | 07:30 ET; writes to `hit_list_daily`; same-day rebuild on criteria save |
-| `divergence_alerts` materialization | ⬜ Not started | Inside the 07:00 ET ai-summarizer batch per PRD §7 rule |
+|---|---|---|
+| Prisma schema (V1-active models) | ✅ Complete | `FlowAlert` (with v1.3 fields), `GexSnapshot`, `MarketTideBar`, `NetImpactDaily`, `DarkPoolPrint`, `User`, `Account`, `Session`, `VerificationToken`, `TickerMetadata`, `HitListDaily`, `WatchesCriteria`, `AiSummary` |
+| Database migrations | ✅ Applied | All migrations run on Railway Postgres |
+| Live UW API integration | ✅ Live | `UW_API_TOKEN` set in Railway worker; 5 polling jobs live |
+| Live Anthropic (AI summaries) | ✅ Live | `ai-summarizer-gex` cron at 07:00 ET writes to `ai_summaries` (GEX explanations only — sentiment workload archived) |
+| Live X API | 🗄 Archived in v1.2.3 | |
+| S3 → Postgres dark-pool history import | ⏸ Stub | `s3-darkpool-import` waits on AWS env vars + upstream Polygon pipeline |
+| Retention sweeps | ✅ Live | 60-day flow / conditional 30-day DP (top-100 perpetual) at 03:00 ET Mon–Fri |
+| `refresh-ticker-metadata` daily job | ✅ Live | 05:30 ET |
+| `hit-list-compute` daily job | ⚠️ Live but no upstream | Cron runs at 07:30 ET; waits on the ML model to produce inputs for `hit_list_daily` |
+| Sector enum + `ticker_metadata` table | ✅ Live | |
 
 ---
 
-## Backend Services & Railway (added 2026-04-28)
-
-### Railway project
-
-| Item | Value |
-|------|-------|
-| Project name | `flowdesk-production` |
-| Workspace | `buddybear8's Projects` |
-| Environment | `production` (default; no staging yet) |
-| Project ID | `09aba296-5461-4a0e-8a2d-ebfce3d9d4a6` |
-| Dashboard | https://railway.com/project/09aba296-5461-4a0e-8a2d-ebfce3d9d4a6 |
-| Services attached | None yet |
-| CLI | Railway CLI 4.43.0, logged in as `buddybear7531@gmail.com`; local repo linked |
-
-### Repo scaffolding
-
-```
-services/
-  websocket-server/   src/index.ts (stub), package.json, tsconfig.json, Dockerfile
-  data-ingestion/     src/index.ts (stub), package.json, tsconfig.json, Dockerfile
-lambdas/
-  sentiment-batch/index.ts   (export async handler() stub)
-  dp-ranking/index.ts        (export async handler() stub)
-  hitlist-compute/index.ts   (export async handler() stub)
-scripts/
-  backfill-darkpool.ts       (main()/process.exit stub)
-```
+## Auth (Phase F, shipped 2026-05-06)
 
 | Item | Status | Notes |
-|------|--------|-------|
-| `services/websocket-server/` scaffolding | ✅ Created | Deps: `@clerk/backend`, `ioredis`, `ws` (per spec) |
-| `services/data-ingestion/` scaffolding | ✅ Created | Deps: `ioredis`, `pg` — placeholders, revisit |
-| Both `tsconfig.json` | ✅ Created | ES2022 / CommonJS / strict |
-| Both `Dockerfile` | ✅ Created | 2-stage Node 20-alpine; ws-server EXPOSE 8080 |
-| `lambdas/*/index.ts` | ✅ Created | Plain `export async function handler()` — not AWS-Lambda-typed |
-| `scripts/backfill-darkpool.ts` | ✅ Created | Stub only |
-| Root monorepo wiring (workspaces / turbo) | ⬜ Not set up | Each service has its own `package.json` |
-| `npm install` inside services | ⬜ Not run | Will run during Docker build |
+|---|---|---|
+| Auth.js v5 (`next-auth@5.0.0-beta.31`) | ✅ Installed | Plus `@auth/prisma-adapter@2.11.2` |
+| Whop OIDC provider | ✅ Wired | `issuer: https://api.whop.com`; PKCE + state + nonce checks (Whop strictly enforces nonce) |
+| Custom Whop App | ✅ Created | App: "Champagne Sessions Intelligence" in Whop developer dashboard; `oauth:token_exchange` permission enabled; client_secret regenerated after permission grant |
+| Whop access pass | ✅ Created | Auto-created free pass `prod_kcPrE6qVHJbp1` ("Champagne Sessions Intelligence" — same name as the App) |
+| `signIn` callback access check | ✅ Live | Hits `GET https://api.whop.com/api/v1/users/{sub}/access/{passId}` with Bearer token; returns false if `has_access` is false |
+| User upsert on sign-in | ✅ Live | PrismaAdapter silently no-ops under JWT strategy when User schema has required custom fields; explicit upsert in `signIn` callback populates `users` table and refreshes `lastLoginAt` + `membershipCheckedAt` |
+| Session strategy | JWT | `maxAge: 30 days`; cookie-only so the proxy can run edge-safe |
+| `proxy.ts` (was `middleware.ts`) | ✅ Live | Edge-safe; gates all requests. `/api/auth/*` passes through; `/api/*` returns 401 JSON; everything else redirects to `/login` with `?from=` param |
+| `/login` page | ✅ Live | Centered Whop button + AccessDenied error banner; chrome-free (lives outside `(modules)` route group) |
+| Type augmentation | ✅ Live | `next-auth.d.ts` extends User with `whopMembershipId` and Session with `user.id` |
+| Env vars (Vercel + local) | ✅ Set | `AUTH_SECRET`, `AUTH_URL`, `WHOP_CLIENT_ID`, `WHOP_CLIENT_SECRET`, `WHOP_ACCESS_PASS_ID` |
+| Sign-out UI button | ⬜ TODO | Phase F polish — not blocking |
+| `accounts` table population | ⬜ Not populated | PrismaAdapter's `linkAccount` doesn't fire under our flow. Not blocking V1 (we don't read Account anywhere). Revisit if account-linking features are added. |
 
-### Placeholder choices to revisit
+**Smoke test on the live deploy (2026-05-06 / 2026-05-07):**
+- Test 1 — Unauthenticated page request → redirects to `/login`: ✅
+- Test 2 — Unauthenticated API request → 401 JSON: ✅
+- Test 3 — Authenticated API request → returns data: ✅
+- Test 4 — Signed-in user hitting `/login` → bounces to `/`: ✅
+- Test 5 — `?from=` deep-link redirect after login: ✅
+- Test 6 — User row written to Postgres on first sign-in: ✅ (after upsert added in `9766ebe`)
+- Test 7 — Access pass enforcement (skipped, destructive)
 
-- **`data-ingestion` deps** (`ioredis` + `pg`) are guesses — real set depends on which providers it pulls (Polygon SDK? Finnhub? UW?).
-- **Lambda handler shape** is plain async fn. If these run on AWS Lambda, signatures need `APIGatewayEvent`/`Context` types.
-- **`websocket-server` Dockerfile EXPOSEs 8080** but `src/index.ts` doesn't read `process.env.PORT` yet — Railway injects PORT and the server must bind to it.
-- **TS target ES2022/CommonJS** — switch to ESM if the rest of the stack expects it.
+---
 
-### Open questions (v1.2.2 status)
+## UI / UX polish
 
-**Closed in v1.2.2:**
-- ✅ Single worker vs multi-service → **single worker (option A)** locked. `services/websocket-server` and `services/data-ingestion` stay dormant. `lambdas/sentiment-batch`, `lambdas/hitlist-compute`, `lambdas/dp-ranking`, `scripts/backfill-darkpool.ts` move to `worker/src/jobs/` once worker is stood up.
-- ✅ Next.js app deployment → **stays on Vercel**.
-- ✅ API authentication → **Auth.js v5 + Whop OAuth provider** (PRD §13 / ARCHITECTURE §6 Phase F). Whop manages access list via free product/access pass.
-- ✅ Sector enum → **expanded to 15 values** (11 GICS + 4 ETF asset classes). Tightened from `string` in `lib/types/index.ts`.
-- ✅ Hit list compute → **daily 07:30 ET worker job** writing to `hit_list_daily`; criteria save triggers same-day rebuild.
-- ✅ Divergence rule → **|Δsentiment| ≥ 30 + opposite price direction over 3 trading days**, severity tiered red/amber/green.
-- ✅ Dark Pools "Intraday only" toggle → **time-of-day window** filter (09:30–16:00 ET).
-- ✅ AI prompt templates → **locked in PRD §3.4** (sentiment summary + per-ticker GEX explanation).
-- ✅ GEX key levels → **worker computes** call wall / put wall / gamma flip; max pain from UW if available.
-- ✅ Disaster recovery → **Railway 4-day daily snapshots** accepted.
-
-**Closed in v1.2.3 (scope reduction):**
-- 🗄 Sentiment Tracker module → **archived from V1** (X API Basic $100/mo unaffordable). Module + route + page + mock + types + components retained in repo; sidebar entry hidden. ~$100/mo savings. Reactivation path documented in PRD §7 archive banner.
-
-**Still open:**
-- Top Net Impact source — preferred is a UW endpoint exposing the bid/ask formula directly; fallback is worker aggregation. Confirm with UW support.
-- UW multi-user license posture — Basic tier is for single-user; ~100-user company deployment likely needs a team/enterprise agreement. Confirm with UW sales.
-- Sentiment reactivation criteria — what threshold (cost, alternative source, demand) brings the archived module back? Track as a post-V1 product decision.
+| Item | Status | Notes |
+|---|---|---|
+| Sidebar logo (`public/logo.png`) | ✅ Live | Champagne bottle + chart on navy |
+| Sidebar Account section | ❌ Removed 2026-05-09 | Watchlists + Alerts entries deleted (linked to dead `/watchlists` and `/alerts` routes); matching dead entries removed from Topbar `MODULES` dict |
+| Topbar "Market open/closed" badge | ✅ Real | Driven by ET wallclock; Mon–Fri 09:30–16:00 ET = green "Market open", else gray "Market closed"; re-checks every 60s; DST handled by Intl |
+| US market holiday calendar | ⬜ TODO | Punch-list item; Thanksgiving/Christmas/etc. still show "open" if they fall on a weekday inside the window |
+| UW source attribution | ❌ Removed 2026-05-06 | Dropped from Market Pulse pill, GEX subtitle, Sentiment legend |
 
 ---
 
 ## Security
 
-| Item | Status |
-|------|--------|
-| `.env.local` excluded from git | ✅ |
-| XSS — `dangerouslySetInnerHTML` removed | ✅ Fixed 2026-04-22 |
-| Security headers (HSTS, X-Frame-Options, etc.) | ✅ Added 2026-04-22 |
-| Input validation on all API routes | ✅ Added 2026-04-22 |
-| API authentication | ⬜ Not implemented — needed before live data |
-| Dependency upgrades (Prisma 5→7, Tailwind 3→4) | ⬜ Deferred — breaking changes |
+| Item | Status | Notes |
+|---|---|---|
+| `.env.local` excluded from git | ✅ | |
+| XSS — `dangerouslySetInnerHTML` removed | ✅ | Fixed 2026-04-22 |
+| Security headers (HSTS, X-Frame-Options) | ✅ | Added 2026-04-22 |
+| Input validation on all API routes | ✅ | Added 2026-04-22 |
+| API authentication (Auth.js v5 + Whop OAuth) | ✅ Live 2026-05-06 | Phase F shipped — see Auth section above |
+| Dependency upgrades (Prisma 5→7, Tailwind 3→4) | ⬜ Deferred | Breaking changes; revisit post-V1 |
 
 ---
 
-## What's Left Before Live Data
+## Next priorities (in order)
 
-1. **Add the 7 V1-active Prisma models** — `FlowAlert`, `GexSnapshot`, `MarketTideBar`, `NetImpactDaily`, `User`, `TickerMetadata`, `HitListDaily` per ARCHITECTURE §3. 🗄 Skip the 4 archived models (`XPost`, `SentimentSnapshot`, `AnalystProfile`, `DivergenceAlert`).
-2. **Create Railway Postgres service** and run `npx prisma migrate deploy`.
-3. **Set environment variables in Railway worker** — `UW_API_TOKEN`, `ANTHROPIC_API_KEY`, `DATABASE_URL`, `TZ=America/New_York`, plus AWS S3 vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `DARKPOOL_S3_BUCKET`, `DARKPOOL_S3_PREFIX`). 🗄 Skip `X_BEARER_TOKEN`.
-4. **Set environment variables in Vercel** — `DATABASE_URL` (public URL), `USE_MOCK_DATA=false`, `NEXT_PUBLIC_APP_URL`, plus auth: `WHOP_CLIENT_ID`, `WHOP_CLIENT_SECRET`, `WHOP_PRODUCT_ID`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`.
-5. **Stand up the single Node worker** on Railway per ARCHITECTURE §6 — UW polling (flow / GEX / DP / market tide), Net Impact aggregation (5m mkt), AI-summary batch (07:00 ET, **per-ticker GEX explanations only** in V1), hit-list-compute (07:30 ET), refresh-ticker-metadata (05:30 ET), retention sweeps (03:00 ET), S3 dark-pool history import (02:00 ET). 🗄 Skip the 06:00 ET X-batch cron.
-6. **Move scaffolding to worker** — relocate `lambdas/hitlist-compute`, `lambdas/dp-ranking` into `worker/src/jobs/`. Park `lambdas/sentiment-batch` under `worker/src/jobs/_archived/` for future reactivation. Delete `services/websocket-server` and `services/data-ingestion` (option A doesn't use them).
-7. **Implement retention enforcement** — 60-day flow sweep, conditional 30-day DP sweep that preserves top-100 ranked rows in perpetuity.
-8. **Implement the GEX prompt file** — `worker/src/prompts/gex.ts` per the template locked in PRD §3.4. 🗄 Skip `prompts/sentiment.ts` (archived).
-9. **Implement `lib/sector-overrides.ts`** for ETFs UW returns no sector for (SPY → "Index", GLD → "Commodities", TLT → "Bonds", UVXY → "Volatility", etc.).
-10. **Replace mock branches** in each V1-active `route.ts` with Prisma reads. (Skip `app/api/sentiment/route.ts` — archived; returns mock when `USE_MOCK_DATA=true`, 501 otherwise.)
-11. **Stand up Auth.js v5 with Whop OAuth provider** per ARCHITECTURE §6 Phase F — create free Whop product/access pass, configure OAuth app, install Auth.js v5 + `@auth/prisma-adapter`, implement custom Whop provider, gate every V1-active `/api/*` route with the 3-line `auth()` check, build the `/login` page.
-12. **Build secondary tab views** — Criteria config, Sweep scanner, 0DTE flow, Unusual activity, DP levels.
-13. **Wire the Market Pulse period toggle** to the UW `market-tide` interval param.
-14. **Confirm Top Net Impact source with UW** — preferred is a UW endpoint exposing the bid/ask formula directly (PRD §11); fallback is worker-side aggregation.
-15. **Confirm UW multi-user license posture** before onboarding past initial-user testing.
+1. **Daily Watches data pipeline** — wait on the ML model to produce rows for `hit_list_daily`. Swap `app/(modules)/watches/page.tsx` body back to `<WatchesView />` when ready (one-line change; comment in file documents the path).
+2. **GEX AI explanation modal** — frontend wiring of the cached AI summaries already produced by `ai-summarizer-gex`.
+3. **Secondary tab views** — Watches Criteria config, GEX By strike / By expiry / Key levels, Dark Pools DP levels.
+4. **Phase F polish** — sign-out button + Sidebar user menu; periodic access-pass re-check cron (using existing `membershipCheckedAt` field).
+5. **US holiday calendar** for the Market open/closed badge + `priorTradingDay()` helpers.
+6. **Same-day hit-list rebuild** on `POST /api/admin/criteria` — extract `computeHitList()` to a shared module so the Next.js root can import it cross-package.
+7. **UW 429 throttling on flow + DP polls** — port the GEX 200ms inter-call sleep pattern. Recovers on next poll; small data loss, not urgent.
+8. **`s3-darkpool-import`** — depends on AWS env vars + upstream Polygon extraction pipeline.
+9. **Remove `/api/flow/lottos/debug`** (or gate behind a query secret) before broader rollout.
+
+---
+
+## Known data-quality issues (UW upstream, not our bugs)
+
+UW's `/api/stock/{ticker}/spot-exposures/strike` is unreliable per ticker:
+
+| Ticker | Behavior |
+|---|---|
+| **SPY** | Alternates between full near-money chains and pure deep-OTM dumps |
+| **QQQ** | Always returns legacy non-standard strikes ($174–$310 when spot ~$691) |
+| **NVDA** | Often returns far-from-spot strikes; bounded retry triggers and recovers ~36 near-spot strikes per poll |
+| **TSLA** | Mix of near-money and deep-OTM LEAPS |
+| **SPX** | Clean, full chains every poll |
+
+Current handling: bounded retry in `pollGex` triggers when `<5` strikes land within ±10% of spot ([worker/src/jobs/uw.ts:273](worker/src/jobs/uw.ts#L273)). API band-aid still filters strikes to ±10% of spot before display.
+
+---
+
+## Other known issues / polish
+
+- **Pre-redeploy NULL rows** in `flow_alerts` — alerts captured before the 2026-05-06 worker redeploy don't have v1.3 fields (`ask_prem`, `issue_type`, etc.). They roll out of the 24h window naturally and won't backfill. A `older_than=`-paginated backfill script is ~30 lines if a future schema migration adds more fields.
+- **UW 429 throttling** on `/flow` and `/darkpool` polls (occasional, self-recovers next poll).
+- **Light cream/lavender chip backgrounds** in Watches / Dark Pools / GEX details panel persist intentionally as champagne accents.
+- **Mock data files** (`lib/mock/*-data.ts`) are dormant. `lib/mock/lotto-alerts.ts` is gated behind `?mock=1` as a preview tool. Worth a sweep to delete unused files post-V1.
+- **Dark Pools rank chip** still shows `0` for unranked rows. Cosmetic — swap to "—".
+- **Date helpers duplicated** between `worker/src/jobs/hit-list-compute.ts` and `app/api/watches/route.ts`. Extract once a cross-package import path exists.
+
+---
+
+## Backend Services & Railway
+
+### Railway project
+
+| Item | Value |
+|---|---|
+| Project name | `flowdesk-production` |
+| Workspace | `buddybear8's Projects` |
+| Environment | `production` |
+| Project ID | `09aba296-5461-4a0e-8a2d-ebfce3d9d4a6` |
+| Services | Postgres (live) + `flowdesk-worker` (live) |
+| CLI | Railway CLI 4.43.0, logged in as `buddybear7531@gmail.com`; local repo linked |
+
+### Env vars
+
+**Railway → flowdesk-worker → Variables**:
+- `UW_API_TOKEN` ✅
+- `TZ=America/New_York` ✅
+- `NODE_OPTIONS=--dns-result-order=ipv4first` ✅
+- `DATABASE_URL` ✅ (internal reference)
+- `ANTHROPIC_API_KEY` ✅
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `DARKPOOL_S3_BUCKET`, `DARKPOOL_S3_PREFIX` — pending (`s3-darkpool-import` waits on these)
+
+**Vercel → flowdesk → Environment Variables**:
+- `DATABASE_URL` ✅ (Railway public URL)
+- `AUTH_SECRET`, `AUTH_URL`, `WHOP_CLIENT_ID`, `WHOP_CLIENT_SECRET`, `WHOP_ACCESS_PASS_ID` ✅
+
+### Worker cron schedule
+
+```
+*/30 * 9-15  * * 1-5   uw-poll-mkt        pollFlowAlerts + pollLottoAlerts + pollSweeperAlerts + pollDarkPool
+0 */5 0-8,16-23 * * 1-5  uw-poll-off       same as above, slower cadence
+*/60  * 9-15  * * 1-5   gex-poll           pollGex (200ms inter-ticker spacing)
+0 */5 9-15   * * 1-5   market-tide        pollMarketTide
+30 */5 9-15  * * 1-5   net-impact         computeNetImpact
+0 30 5  * * 1-5         refresh-ticker-metadata
+0 0  7  * * 1-5         ai-summarizer-gex  (per-ticker GEX explanations; sentiment workload archived)
+0 30 7  * * 1-5         hit-list-compute   (waiting on ML upstream)
+0 0  3  * * 1-5         retention-sweeps   (flow + DP)
+0 0  2  * * 1-5         s3-darkpool-import (stub — waits on AWS env vars)
+```
+
+---
+
+## Prompt for a fresh context window
+
+```
+I was building software with you in another context window and hit
+the limit. Read progress.md (canonical state snapshot, 2026-05-10),
+then docs/FlowDesk_PRD.md and docs/ARCHITECTURE.md as the spec when
+you need to verify anything.
+
+Don't trust progress.md blindly for any code references — verify
+against the actual files and git log before recommending or building
+on them.
+
+Branding: the project is "Champagne Sessions". Repo path is still
+flowdesk/, GitHub remote is still github.com/buddybear8/flowdesk,
+but every user-facing string says Champagne Sessions.
+
+Live deploy: Vercel auto-deploys frontend on push to main; Railway
+worker auto-deploys too. Auth is live (Phase F shipped 2026-05-06)
+— every /api/* route requires a session; page routes redirect to
+/login if unauthenticated.
+
+Once you're caught up, summarize where things stand and what's
+next, and wait for me to pick a thread.
+```
