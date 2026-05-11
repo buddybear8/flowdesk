@@ -17,6 +17,7 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { rerankDarkPool } from "../lib/rerank-darkpool.js";
 import { WATCHED_TICKERS } from "../lib/watched-tickers.js";
 
 export { disconnectPrisma } from "../lib/prisma.js";
@@ -336,6 +337,25 @@ export async function pollDarkPool(): Promise<void> {
     skipDuplicates: true,
   });
   console.log(`[uw:dp] ${ts()} inserted ${result.count} of ${records.length} prints`);
+
+  // Re-rank only the tickers that actually got new prints. Each call
+  // touches one ticker's rows; the SQL filters to rank-changed rows so
+  // a poll that brings in a print outside the top-200 is essentially
+  // a no-op write.
+  if (result.count > 0) {
+    const touchedTickers = Array.from(new Set(records.map((r) => r.ticker)));
+    let updated = 0;
+    for (const ticker of touchedTickers) {
+      try {
+        updated += await rerankDarkPool(ticker);
+      } catch (err) {
+        console.error(`[uw:dp] rerank ${ticker} failed: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+    if (updated > 0) {
+      console.log(`[uw:dp] rerank touched ${updated} rows across ${touchedTickers.length} tickers`);
+    }
+  }
 }
 
 function mapDarkPoolPrint(raw: any): Prisma.DarkPoolPrintCreateManyInput | null {
