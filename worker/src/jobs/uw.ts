@@ -392,19 +392,16 @@ export async function pollGex(): Promise<void> {
     // response root (verified 2026-05-04). Take from the first row.
     let spot = Number((strikesRaw[0] as any).price ?? 0);
 
-    // UW's /spot-exposures/strike caps at 500 rows and returns them unfiltered.
-    // Two failure modes seen in prod:
-    //   (1) QQQ-style dump: hundreds of legacy / corp-action-adjusted strikes
-    //       far from spot, none anywhere near. Old "<5 within ±10%" check
-    //       caught this.
-    //   (2) SPY-style lopsided chain: dozens of strikes clustered all on one
-    //       side of spot (e.g. 12 strikes at $664–$675 when spot is $737.57)
-    //       so the ±10% count passes but the chart renders entirely below or
-    //       above spot. Old check missed this.
-    // Treat the chain as miscentered unless there are strikes inside a tight
-    // band of spot AND strikes on both sides of spot within a moderate band.
-    // When miscentered, re-request with min_strike/max_strike (±15% of spot)
-    // so UW filters at source.
+    // UW's /spot-exposures/strike caps its response at 50 strikes and selects
+    // them by gamma magnitude. For tickers with put-heavy institutional OI
+    // (SPY/SPX especially) the top 50 routinely sit entirely on one side of
+    // spot — and a bounded retry with min_strike/max_strike doesn't change
+    // the selection, just the band. Verified live on 2026-05-11:
+    //   retried with bounds [$627..$850] → 50 strikes, range [$650..$738],
+    //   still hasAbove=false even though the band spans both sides of $738.63.
+    // Real fix: split into two explicit requests so each side of spot gets
+    // its own 50-strike quota from UW, then merge. Skip the split when the
+    // initial response is already centered to keep the request cost low.
     if (spot) {
       const tightBand = spot * 0.02;
       const sideBand = spot * 0.05;
@@ -421,26 +418,41 @@ export async function pollGex(): Promise<void> {
       });
       const centered = tightCount >= 3 && hasAboveSpot && hasBelowSpot;
       if (!centered) {
+        const aboveMin = Math.floor(spot);
+        const aboveMax = Math.ceil(spot * 1.10);
+        const belowMin = Math.floor(spot * 0.90);
+        const belowMax = Math.ceil(spot);
         await sleep(TICKER_DELAY_MS);
-        const minStrike = Math.floor(spot * 0.85);
-        const maxStrike = Math.ceil(spot * 1.15);
-        const retryJson = await uwFetch(
-          `/api/stock/${ticker}/spot-exposures/strike?min_strike=${minStrike}&max_strike=${maxStrike}`,
-          `gex:${ticker}:bounded`
+        const aboveJson = await uwFetch(
+          `/api/stock/${ticker}/spot-exposures/strike?min_strike=${aboveMin}&max_strike=${aboveMax}`,
+          `gex:${ticker}:above`
         );
-        if (retryJson) {
-          const retryStrikes = asArray((retryJson as any).strikes ?? retryJson);
-          if (retryStrikes.length > 0) {
-            console.log(
-              `[uw:gex:${ticker}] retried with bounds [$${minStrike}..$${maxStrike}] — ` +
-                `${retryStrikes.length} strikes ` +
-                `(initial ${strikesRaw.length}, tightCount=${tightCount}, ` +
-                `hasAbove=${hasAboveSpot}, hasBelow=${hasBelowSpot})`
-            );
-            strikesRaw = retryStrikes;
-            json = retryJson;
-            spot = Number((strikesRaw[0] as any).price ?? spot);
+        await sleep(TICKER_DELAY_MS);
+        const belowJson = await uwFetch(
+          `/api/stock/${ticker}/spot-exposures/strike?min_strike=${belowMin}&max_strike=${belowMax}`,
+          `gex:${ticker}:below`
+        );
+        const aboveArr = aboveJson ? asArray((aboveJson as any).strikes ?? aboveJson) : [];
+        const belowArr = belowJson ? asArray((belowJson as any).strikes ?? belowJson) : [];
+        if (aboveArr.length > 0 || belowArr.length > 0) {
+          // Dedup by strike — the two requests overlap at the spot boundary.
+          const seen = new Set<number>();
+          const merged: any[] = [];
+          for (const row of [...belowArr, ...aboveArr]) {
+            const k = Number((row as any).strike);
+            if (seen.has(k)) continue;
+            seen.add(k);
+            merged.push(row);
           }
+          console.log(
+            `[uw:gex:${ticker}] split-fetch — above=${aboveArr.length}, ` +
+              `below=${belowArr.length}, merged=${merged.length} ` +
+              `(initial ${strikesRaw.length}, tightCount=${tightCount}, ` +
+              `hasAbove=${hasAboveSpot}, hasBelow=${hasBelowSpot})`
+          );
+          strikesRaw = merged;
+          json = aboveJson ?? belowJson ?? json;
+          spot = Number((strikesRaw[0] as any).price ?? spot);
         }
       }
     }
