@@ -1,0 +1,171 @@
+{
+  "lifetime_total": 5465305.03,
+  "screenshot_count": 952,
+  "date_range": {
+    "start": "2023-10",
+    "end": "2026-05"
+  },
+  "updated_at": "2026-05-13T17:41:08+00:00",
+  "monthly": [
+    {
+      "month": "2023-10",
+      "monthly": 7913.89,
+      "cumulative": 7913.89
+    },
+    {
+      "month": "2023-11",
+      "monthly": 26704.91,
+      "cumulative": 34618.8
+    },
+    {
+      "month": "2023-12",
+      "monthly": 128233.12,
+      "cumulative": 162851.92
+    },
+    {
+      "month": "2024-01",
+      "monthly": 66066.0,
+      "cumulative": 228917.92
+    },
+    {
+      "month": "2024-02",
+      "monthly": 199282.8,
+      "cumulative": 428200.72
+    },
+    {
+      "month": "2024-03",
+      "monthly": 170451.28,
+      "cumulative": 598652.0
+    },
+    {
+      "month": "2024-04",
+      "monthly": 45141.58,
+      "cumulative": 643793.58
+    },
+    {
+      "month": "2024-05",
+      "monthly": 54002.59,
+      "cumulative": 697796.17
+    },
+    {
+      "month": "2024-06",
+      "monthly": 187300.6,
+      "cumulative": 885096.77
+    },
+    {
+      "month": "2024-07",
+      "monthly": 216230.4,
+      "cumulative": 1101327.17
+    },
+    {
+      "month": "2024-08",
+      "monthly": 245358.65,
+      "cumulative": 1346685.82
+    },
+    {
+      "month": "2024-09",
+      "monthly": 53510.54,
+      "cumulative": 1400196.36
+    },
+    {
+      "month": "2024-10",
+      "monthly": 11251.0,
+      "cumulative": 1411447.36
+    },
+    {
+      "month": "2024-11",
+      "monthly": 45494.49,
+      "cumulative": 1456941.85
+    },
+    {
+      "month": "2024-12",
+      "monthly": 90446.0,
+      "cumulative": 1547387.85
+    },
+    {
+      "month": "2025-01",
+      "monthly": 10612.55,
+      "cumulative": 1558000.4
+    },
+    {
+      "month": "2025-02",
+      "monthly": 172924.39,
+      "cumulative": 1730924.79
+    },
+    {
+      "month": "2025-03",
+      "monthly": 289350.11,
+      "cumulative": 2020274.9
+    },
+    {
+      "month": "2025-04",
+      "monthly": 455105.4,
+      "cumulative": 2475380.3
+    },
+    {
+      "month": "2025-05",
+      "monthly": 304868.08,
+      "cumulative": 2780248.38
+    },
+    {
+      "month": "2025-06",
+      "monthly": 63751.81,
+      "cumulative": 2844000.19
+    },
+    {
+      "month": "2025-07",
+      "monthly": 186157.47,
+      "cumulative": 3030157.66
+    },
+    {
+      "month": "2025-08",
+      "monthly": 751558.29,
+      "cumulative": 3781715.95
+    },
+    {
+      "month": "2025-09",
+      "monthly": 202199.2,
+      "cumulative": 3983915.15
+    },
+    {
+      "month": "2025-10",
+      "monthly": 467430.37,
+      "cumulative": 4451345.52
+    },
+    {
+      "month": "2025-11",
+      "monthly": 137084.78,
+      "cumulative": 4588430.3
+    },
+    {
+      "month": "2025-12",
+      "monthly": 6080.0,
+      "cumulative": 4594510.3
+    },
+    {
+      "month": "2026-01",
+      "monthly": 726279.69,
+      "cumulative": 5320789.99
+    },
+    {
+      "month": "2026-02",
+      "monthly": 11971.88,
+      "cumulative": 5332761.87
+    },
+    {
+      "month": "2026-03",
+      "monthly": 95596.9,
+      "cumulative": 5428358.77
+    },
+    {
+      "month": "2026-04",
+      "monthly": 22027.26,
+      "cumulative": 5450386.03
+    },
+    {
+      "month": "2026-05",
+      "monthly": 14919.0,
+      "cumulative": 5465305.03
+    }
+  ]
+}

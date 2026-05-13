@@ -23,6 +23,10 @@ const MODULES: NavEntry[] = [
   { href: "/darkpool",    label: "Dark pools",        icon: "🌊" },
 ];
 
+const COMMUNITY_PERFORMANCE: NavEntry[] = [
+  { href: "/community-gains", label: "Community Gains", icon: "🍾" },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
 
@@ -57,6 +61,10 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto px-[6px] py-[8px]">
         <SectionLabel>Modules</SectionLabel>
         {MODULES.map(item => (
+          <NavRow key={item.href} entry={item} active={pathname.startsWith(item.href)} />
+        ))}
+        <SectionLabel>Community performance</SectionLabel>
+        {COMMUNITY_PERFORMANCE.map(item => (
           <NavRow key={item.href} entry={item} active={pathname.startsWith(item.href)} />
         ))}
       </nav>
