@@ -17,15 +17,17 @@
 import { prisma } from "../lib/prisma.js";
 import { rerankDarkPool } from "../lib/rerank-darkpool.js";
 import { fetchTradesSince } from "../lib/polygon-rest.js";
-import { filterAndMap, TICKER_SET } from "../lib/polygon-trade-filter.js";
+import { filterAndMap, passesPreFilter, TICKER_SET } from "../lib/polygon-trade-filter.js";
+import type { RawPolygonTrade } from "../lib/polygon-trade-filter.js";
 
 const ts = () => new Date().toISOString();
 
 const CONCURRENCY = 8;
-// If a ticker has no rows yet, start from this lookback (1 day) rather than
-// pulling years of history. The daily flat-file job owns the historical
-// backfill; the hourly job only catches new trades.
-const COLD_START_LOOKBACK_NS = 24n * 60n * 60n * 1_000_000_000n;
+// Maximum lookback for the REST cursor. The hourly job is designed for small
+// incremental fetches (~1-hour windows). If the cursor is older than this
+// (e.g., first run after a multi-day gap), cap at this lookback — the daily
+// flat-file job owns multi-day backfills.
+const MAX_LOOKBACK_NS = 24n * 60n * 60n * 1_000_000_000n;
 
 export async function pollPolygonIntraday(): Promise<void> {
   if (!process.env.POLYGON_API_KEY) {
@@ -92,11 +94,15 @@ interface PerTickerResult {
 
 async function pollOneTicker(ticker: string): Promise<PerTickerResult> {
   const cursor = await getCursor(ticker);
-  const survivors = [];
+  // Inline pre-filter during REST iteration: REST can return tens of thousands
+  // of trades per page for mega-caps; only ones passing ticker+threshold get
+  // buffered. The ticker check is redundant (REST query is per-ticker) but
+  // cheap, and the threshold check is what bounds memory.
+  const survivors: RawPolygonTrade[] = [];
   let raw = 0;
   for await (const row of fetchTradesSince(ticker, cursor)) {
     raw++;
-    survivors.push(row);
+    if (passesPreFilter(row)) survivors.push(row);
   }
 
   if (raw === 0) return { rawCount: 0, afterDedup: 0, inserted: 0 };
@@ -122,15 +128,20 @@ async function pollOneTicker(ticker: string): Promise<PerTickerResult> {
  * handle the boundary row.
  */
 async function getCursor(ticker: string): Promise<bigint> {
+  const nowNs = BigInt(Date.now()) * 1_000_000n;
+  const floor = nowNs - MAX_LOOKBACK_NS;
+
   const row = await prisma.darkPoolPrint.findFirst({
     where: { ticker, uwId: { startsWith: "polygon:" } },
     orderBy: { executedAt: "desc" },
     select: { executedAt: true },
   });
   if (row) {
-    return BigInt(row.executedAt.getTime()) * 1_000_000n;
+    const fromDb = BigInt(row.executedAt.getTime()) * 1_000_000n;
+    // Cap at MAX_LOOKBACK_NS: if the cursor is stale (multi-day gap before
+    // the first hourly run), don't try to backfill via REST — that's the
+    // daily flat-file job's responsibility.
+    return fromDb > floor ? fromDb : floor;
   }
-  // Cold ticker: only look at the last 24h. Daily flat-file owns deeper history.
-  const nowNs = BigInt(Date.now()) * 1_000_000n;
-  return nowNs - COLD_START_LOOKBACK_NS;
+  return floor;
 }
