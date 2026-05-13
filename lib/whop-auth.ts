@@ -26,10 +26,11 @@ export async function requireAccess(user: WhopUser): Promise<AccessResult> {
   }
   try {
     const res = await whopsdk.users.checkAccess(passId, { id: user.userId });
+    const accessLevel = res.access_level ?? "no_access";
     return {
       ...user,
-      hasAccess: res.has_access ?? false,
-      accessLevel: res.access_level ?? "no_access",
+      hasAccess: (res.has_access ?? false) || accessLevel === "admin",
+      accessLevel,
     };
   } catch {
     return { ...user, hasAccess: false, accessLevel: "no_access" };
