@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { WhopApp } from "@whop/react/components";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <WhopApp>{children}</WhopApp>
+      </body>
     </html>
   );
 }
