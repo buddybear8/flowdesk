@@ -247,15 +247,11 @@ export function CommunityGainsView() {
 
       {data && (
         <>
-          <section className="mb-4 grid grid-cols-3 gap-3">
+          <section className="mb-4 grid grid-cols-2 gap-3">
             <StatCard
               label="Lifetime verified"
               value={formatMoney(data.lifetime_total)}
               accent
-            />
-            <StatCard
-              label="Verified screenshots"
-              value={data.screenshot_count.toLocaleString()}
             />
             <StatCard
               label="Date range"
