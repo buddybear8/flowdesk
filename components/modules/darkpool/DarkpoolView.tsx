@@ -240,7 +240,7 @@ export function DarkpoolView() {
                       )}
                     </Td>
                     <Td style={{ fontSize: 13, fontWeight: 500, color: r.is_etf ? "#534AB7" : "#C9A55A" }}>{r.ticker}</Td>
-                    <Td style={{ fontSize: 12, color: "var(--color-text-primary)" }}>${r.price.toFixed(4)}</Td>
+                    <Td style={{ fontSize: 12, color: "var(--color-text-primary)" }}>${r.price.toFixed(2)}</Td>
                     <Td style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{r.size.toLocaleString()}</Td>
                     <Td style={{ fontSize: 12, fontWeight: 500, color: "#7FBF52" }}>{fmtP(r.premium)}</Td>
                     <Td center>
