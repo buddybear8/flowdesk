@@ -51,15 +51,30 @@ export default async function LoginPage({
 
         {error === "AccessDenied" && (
           <div
-            className="w-full rounded-lg px-4 py-3 text-sm"
+            className="w-full rounded-lg px-4 py-3 text-sm flex flex-col gap-3"
             style={{
               background: "rgba(220, 38, 38, 0.12)",
               color: "#FCA5A5",
               border: "1px solid rgba(220, 38, 38, 0.4)",
             }}
           >
-            Your Whop account doesn&apos;t have access to Champagne Sessions.
-            If you believe this is a mistake, reach out for support.
+            <p>
+              Your Whop account doesn&apos;t hold the Champagne Sessions
+              Intelligence access pass. Join the free product, then sign in
+              again.
+            </p>
+            <a
+              href="https://whop.com/the-champagne-room/champagne-sessions-intelligenc/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block w-full text-center rounded-lg px-3 py-2 font-medium transition-opacity hover:opacity-90"
+              style={{
+                background: "var(--color-brand-gold, #C9A55A)",
+                color: "#0F2040",
+              }}
+            >
+              Join free product on Whop →
+            </a>
           </div>
         )}
 
