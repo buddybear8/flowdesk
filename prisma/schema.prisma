@@ -106,6 +106,27 @@ model GexSnapshot {
   @@map("gex_snapshots")
 }
 
+// GEX heatmap snapshots — per-(strike × expiration) net gamma.
+// Sibling of GexSnapshot: same poll cadence (60s during market hours, fired
+// from pollGex), but stores the cross-section UW returns when /spot-exposures/
+// strike is called with ?expiry=YYYY-MM-DD for each of the 5 nearest
+// expirations. Powers the GEX → Heatmap tab.
+// JSON `cells` shape:
+//   { expirations: [{date: "YYYY-MM-DD", dte: 0}],
+//     strikes: [{ strike: 590, byExp: { "YYYY-MM-DD": {netOI, netDV}, ... } }] }
+// Row count: 5 tickers × 1 row/min × 6.5h = ~2K rows/day, 30-day retention.
+model GexHeatmapSnapshot {
+  id         BigInt   @id @default(autoincrement())
+  capturedAt DateTime @map("captured_at")
+  ticker     String   @db.VarChar(10)
+  asOf       DateTime @map("as_of")
+  spot       Decimal  @db.Decimal(12, 4)
+  cells      Json
+
+  @@index([ticker, capturedAt(sort: Desc)])
+  @@map("gex_heatmap_snapshots")
+}
+
 // Dark pool prints — populated by both:
 //   (a) live UW polling: GET /api/darkpool/recent every 30s during mkt
 //   (b) historical Polygon-sourced S3 backfill (out-of-band; see PRD §3.5)

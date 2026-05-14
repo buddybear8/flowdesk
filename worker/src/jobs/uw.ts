@@ -19,6 +19,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { rerankDarkPool } from "../lib/rerank-darkpool.js";
 import { WATCHED_TICKERS } from "../lib/watched-tickers.js";
+import { nearestExpirations } from "../lib/option-expirations.js";
 
 export { disconnectPrisma } from "../lib/prisma.js";
 
@@ -570,6 +571,87 @@ export async function pollGex(): Promise<void> {
       `[uw:gex:${ticker}] ${ts()} stored snapshot · spot=${spot} flip=${gammaFlip} ` +
         `(${strikes.length} strikes, range=[$${minStrike}..$${maxStrike}], ${nearSpotCount} within ±10% of spot)`
     );
+
+    // ─── Heatmap snapshot: per-(strike × expiration) cross-section ─────────
+    // Same endpoint, but called with ?expiry=YYYY-MM-DD for each of the 5
+    // nearest expirations. UW returns the same row shape — we collapse to
+    // {strike, netOI, netDV} and pivot into a `cells` JSON blob.
+    try {
+      const expiryDates = nearestExpirations(ticker, 5);
+      const perExpiry: { date: string; dte: number; rows: { strike: number; netOI: number; netDV: number }[] }[] = [];
+      for (let e = 0; e < expiryDates.length; e++) {
+        const date = expiryDates[e]!;
+        await sleep(TICKER_DELAY_MS);
+        const expJson = await uwFetch(
+          `/api/stock/${ticker}/spot-exposures/strike?expiry=${date}`,
+          `gex-heatmap:${ticker}:${date}`,
+        );
+        if (!expJson) continue;
+        const rawRows = asArray((expJson as any).strikes ?? expJson);
+        if (!rawRows.length) {
+          console.warn(`[uw:gex-heatmap:${ticker}:${date}] empty rows (holiday / no chain?)`);
+          continue;
+        }
+        const parsed = rawRows.map((s: any) => {
+          const callOI = Number(s.call_gamma_oi ?? 0);
+          const putOI = Number(s.put_gamma_oi ?? 0);
+          const callBid = Number(s.call_gamma_bid ?? 0);
+          const callAsk = Number(s.call_gamma_ask ?? 0);
+          const putBid = Number(s.put_gamma_bid ?? 0);
+          const putAsk = Number(s.put_gamma_ask ?? 0);
+          return {
+            strike: Number(s.strike),
+            netOI: callOI + putOI,
+            netDV: callBid + callAsk + putBid + putAsk,
+          };
+        });
+        perExpiry.push({ date, dte: e, rows: parsed });
+      }
+
+      if (perExpiry.length > 0) {
+        // Union of strikes across all expirations, sorted descending so the
+        // JSON's natural order matches the visual top-to-bottom layout.
+        const strikeUnion = new Set<number>();
+        for (const exp of perExpiry) for (const r of exp.rows) strikeUnion.add(r.strike);
+        const sortedStrikes = Array.from(strikeUnion).sort((a, b) => b - a);
+
+        const cellStrikes = sortedStrikes.map((strike) => {
+          const byExp: Record<string, { netOI: number; netDV: number }> = {};
+          for (const exp of perExpiry) {
+            const row = exp.rows.find((r) => r.strike === strike);
+            if (row) byExp[exp.date] = { netOI: row.netOI, netDV: row.netDV };
+          }
+          return { strike, byExp };
+        });
+
+        const cells = {
+          expirations: perExpiry.map((e) => ({ date: e.date, dte: e.dte })),
+          strikes: cellStrikes,
+        };
+
+        await prisma.gexHeatmapSnapshot.create({
+          data: {
+            capturedAt: new Date(),
+            ticker,
+            asOf,
+            spot,
+            cells: cells as unknown as Prisma.InputJsonValue,
+          },
+        });
+        console.log(
+          `[uw:gex-heatmap:${ticker}] ${ts()} stored heatmap · ` +
+            `${perExpiry.length}/${expiryDates.length} expirations · ` +
+            `${sortedStrikes.length} strike union`,
+        );
+      } else {
+        console.warn(`[uw:gex-heatmap:${ticker}] no expiration data — skipping heatmap snapshot`);
+      }
+    } catch (err) {
+      console.error(
+        `[uw:gex-heatmap:${ticker}] failed:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
   }
 }
 

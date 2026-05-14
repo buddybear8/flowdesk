@@ -1,9 +1,13 @@
 // jobs/retention.ts — nightly DB retention sweeps.
 //
 // Retention rules (v1.4 — Polygon backfill landed):
-//   • flow_alerts:      60-day rolling window
-//   • dark_pool_prints: ANY ranked print           = PERPETUAL
-//                       rank IS NULL & older 30d  = deleted
+//   • flow_alerts:           60-day rolling window
+//   • dark_pool_prints:      ANY ranked print           = PERPETUAL
+//                            rank IS NULL & older 30d  = deleted
+//   • gex_heatmap_snapshots: 30-day rolling window (heatmap powers the
+//                            GEX → Heatmap tab; ~5 rows/min × 6.5 hr ×
+//                            21 trading days ≈ 41K rows steady-state)
+// Note: gex_snapshots itself has no sweep yet — pre-existing gap.
 //
 // Why the change: pre-Polygon, "ranked" meant rank ≤ 100 inside a UW-only
 // corpus and rank > 100 was treated as deletable noise. After the Polygon
@@ -61,6 +65,22 @@ export async function runDpRetentionSweep(): Promise<void> {
     );
   } catch (err) {
     console.error("[retention:dp] failed:", err instanceof Error ? err.message : err);
+  }
+}
+
+// ─── GEX heatmap snapshots: 30-day rolling delete ───────────────────────────
+
+export async function runGexHeatmapRetentionSweep(): Promise<void> {
+  try {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const result = await prisma.gexHeatmapSnapshot.deleteMany({
+      where: { capturedAt: { lt: cutoff } },
+    });
+    console.log(
+      `[retention:gex-heatmap] ${ts()} deleted ${result.count} snapshots older than ${cutoff.toISOString()}`
+    );
+  } catch (err) {
+    console.error("[retention:gex-heatmap] failed:", err instanceof Error ? err.message : err);
   }
 }
 

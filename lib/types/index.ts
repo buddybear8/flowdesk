@@ -120,6 +120,31 @@ export interface GEXPayload {
   gammaRegime: GammaRegime;
 }
 
+// ---------- 3b. Heatmap payload (Module 3 → Heatmap tab) ----------
+
+export interface HeatmapExpiration {
+  date: string;       // ISO YYYY-MM-DD
+  label: string;      // "MM/DD (0DTE)" or "MM/DD (Nd)"
+  dte: number;        // 0..N
+}
+
+export interface HeatmapCell {
+  strike: number;
+  exp: string;        // matches HeatmapExpiration.date
+  netOI: number;      // $ gamma per 1% move, OI-based
+  netDV: number;      // $ gamma per 1% move, directionalized volume
+}
+
+export interface HeatmapPayload {
+  ticker: string;
+  asOf: string;
+  capturedAt: string;
+  spot: number;
+  expirations: HeatmapExpiration[];
+  strikes: number[];  // descending, 50 closest to spot
+  cells: HeatmapCell[];
+}
+
 // ---------- 4. HitListItem (Module 1) ----------
 
 export interface HitListContract {
