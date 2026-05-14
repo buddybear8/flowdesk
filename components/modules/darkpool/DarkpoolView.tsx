@@ -28,6 +28,7 @@ const TICKER_RE = /^[A-Z]{1,5}$/;
 
 function fmtP(v: number): string {
   const a = Math.abs(v);
+  if (a >= 1e9) return "$" + (a / 1e9).toFixed(2) + "B";
   if (a >= 1e6) return "$" + (a / 1e6).toFixed(1) + "M";
   if (a >= 1e3) return "$" + Math.round(a / 1e3) + "K";
   return "$" + a;
