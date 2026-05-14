@@ -597,11 +597,15 @@ export async function pollGex(): Promise<void> {
         `gex-heatmap:${ticker}:expiries`,
       );
       const expiryRows = expiryListJson ? asArray((expiryListJson as any).data ?? []) : [];
+      // Over-request 10 candidates from /greek-exposure/expiry. The API
+      // filter drops any expiry whose near-spot cell count is zero (UW
+      // sometimes returns a far-OTM-only chain for a given expiry while
+      // populating others fully), and keeps the 5 best.
       const nearest = expiryRows
         .map((r: any) => ({ date: String(r.expiry), dte: Number(r.dte) }))
         .filter((e: { date: string; dte: number }) => Number.isFinite(e.dte) && e.dte >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(e.date))
         .sort((a: { dte: number }, b: { dte: number }) => a.dte - b.dte)
-        .slice(0, 5);
+        .slice(0, 10);
 
       if (nearest.length === 0) {
         console.warn(`[uw:gex-heatmap:${ticker}] no expirations from /greek-exposure/expiry`);

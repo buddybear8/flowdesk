@@ -57,11 +57,29 @@ export async function GET(req: NextRequest) {
   // top-down by descending price, so reverse here.
   const orderedStrikes = [...picked].sort((a, b) => b.strike - a.strike);
 
-  const expirations: HeatmapExpiration[] = cells.expirations.map((e) => ({
-    date: e.date,
-    label: fmtExpirationLabel(e.date, e.dte),
-    dte: e.dte,
-  }));
+  // Drop expirations that have zero cells in the visible strike range — UW
+  // sometimes returns a far-OTM-only chain for a given expiry while having
+  // full coverage for others, which would otherwise render an empty column
+  // (see git history for the diagnosis). Sort the survivors by DTE and keep
+  // up to 5 — matches the original "5 nearest expirations" spec.
+  const MIN_CELLS_PER_EXP = 5;
+  const MAX_EXPIRATIONS = 5;
+  const expirations: HeatmapExpiration[] = cells.expirations
+    .map((e) => {
+      const populated = orderedStrikes.reduce(
+        (n, s) => n + (s.byExp[e.date] ? 1 : 0),
+        0,
+      );
+      return { e, populated };
+    })
+    .filter((x) => x.populated >= MIN_CELLS_PER_EXP)
+    .sort((a, b) => a.e.dte - b.e.dte)
+    .slice(0, MAX_EXPIRATIONS)
+    .map((x) => ({
+      date: x.e.date,
+      label: fmtExpirationLabel(x.e.date, x.e.dte),
+      dte: x.e.dte,
+    }));
 
   const flatCells: HeatmapCell[] = [];
   for (const s of orderedStrikes) {
