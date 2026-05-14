@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:whop": "whop-proxy --command 'next dev'",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint"
@@ -12,8 +11,6 @@
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",
     "@prisma/client": "^5.22.0",
-    "@whop/react": "^0.3.2",
-    "@whop/sdk": "^0.0.39",
     "chart.js": "^4.4.6",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
@@ -27,7 +24,6 @@
     "@types/node": "^20.17.6",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@whop-apps/dev-proxy": "^0.0.1-canary.117",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "prisma": "^5.22.0",

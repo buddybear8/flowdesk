@@ -1,15 +1,15 @@
-// Full Auth.js v5 config with Prisma adapter + Whop access-pass verification.
-// The signIn callback hits Whop's check-access endpoint and rejects users
-// who don't hold an active membership for WHOP_ACCESS_PASS_ID.
+// Auth.js v5 with JWT sessions + Whop access-pass verification. No Prisma
+// adapter — we mint sessions from the JWT and upsert the User row explicitly
+// in the signIn callback. The adapter's createUser/linkAccount flow would
+// trip on schema fields it doesn't know about (whopMembershipId) and break
+// first-time logins for new users.
 
 import NextAuth from "next-auth";
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "./prisma";
 import authConfig from "./auth.config";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  adapter: PrismaAdapter(prisma),
   callbacks: {
     async signIn({ account, profile }) {
       if (account?.provider !== "whop") return false;
@@ -40,10 +40,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
 
       // Upsert the User row so the `users` table is the source of truth for
-      // who's signed in. PrismaAdapter is configured but appears to no-op
-      // silently under JWT session strategy when the schema has required
-      // custom fields (whopMembershipId). Doing it explicitly here also lets
-      // us refresh lastLoginAt + membershipCheckedAt on every login.
+      // who's signed in, and refresh lastLoginAt + membershipCheckedAt on
+      // every login.
       try {
         const email = typeof profile.email === "string" ? profile.email : `${sub}@user.whop.local`;
         const name = typeof profile.name === "string" ? profile.name : null;

@@ -13,11 +13,6 @@ import authConfig from "@/lib/auth.config";
 const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
-  // Requests proxied through Whop's iframe CDN carry x-whop-user-token. Let
-  // them pass and defer auth to the server component / API handler, which
-  // uses lib/whop-auth.ts to verify the token via @whop/sdk.
-  if (req.headers.get("x-whop-user-token")) return;
-
   const isLoggedIn = !!req.auth;
   const path = req.nextUrl.pathname;
 
