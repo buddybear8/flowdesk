@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { DarkPoolPrint } from "@/lib/types";
+import { TRACKED_TICKERS } from "@/lib/tracked-tickers";
 
 type DPFilter = {
   onlyRanked: boolean;
@@ -15,7 +16,7 @@ type DPFilter = {
 type SortKey = "time" | "rank" | "prem";
 
 const INITIAL: DPFilter = {
-  onlyRanked: false,
+  onlyRanked: true,
   hideETF: false,
   intradayOnly: false,
   regularHour: true,
@@ -161,9 +162,9 @@ export function DarkpoolView() {
             <span className="blink" style={{ width: 7, height: 7, borderRadius: "50%", background: "#7FBF52", display: "inline-block" }} />
             Live · updating
           </div>
-          <input
-            placeholder="Filter ticker..."
-            onInput={e => setFilter(f => ({ ...f, ticker: (e.target as HTMLInputElement).value.toUpperCase() }))}
+          <select
+            value={filter.ticker}
+            onChange={e => setFilter(f => ({ ...f, ticker: e.target.value }))}
             style={{
               fontSize: 11,
               padding: "4px 8px",
@@ -173,8 +174,14 @@ export function DarkpoolView() {
               color: "var(--color-text-primary)",
               outline: "none",
               width: 130,
+              cursor: "pointer",
             }}
-          />
+          >
+            <option value="">All tickers</option>
+            {TRACKED_TICKERS.map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
           <select
             value={sortKey}
             onChange={e => setSortKey(e.target.value as SortKey)}
