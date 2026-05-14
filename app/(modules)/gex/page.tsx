@@ -10,10 +10,6 @@ import { GexHeatmapView } from "@/components/modules/gex/GexHeatmapView";
 const TABS = [
   { id: "overview", label: "GEX overview" },
   { id: "heatmap", label: "Heatmap" },
-  { id: "by-strike", label: "By strike" },
-  { id: "by-expiry", label: "By expiry" },
-  { id: "vc", label: "Vanna & charm" },
-  { id: "key-levels", label: "Key levels" },
 ];
 
 export default function GexPage() {

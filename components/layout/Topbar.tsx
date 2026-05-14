@@ -27,7 +27,7 @@ const MODULES: Record<string, { label: string; tabs: string[] }> = {
   watches:      { label: "Daily watches",     tabs: ["Hit list", "Criteria config"] },
   sentiment:    { label: "Sentiment tracker", tabs: ["Overview", "Analyst intelligence"] },
   "market-tide":{ label: "Market Pulse",       tabs: [] },
-  gex:          { label: "Options GEX",       tabs: ["GEX overview", "Heatmap", "By strike", "By expiry", "Vanna & charm", "Key levels"] },
+  gex:          { label: "Options GEX",       tabs: ["GEX overview", "Heatmap"] },
   flow:       { label: "Flow alerts",       tabs: ["Live feed", "Lottos", "Opening Sweeps"] },
   darkpool:   { label: "Dark pools",        tabs: ["Ranked feed", "DP levels"] },
   settings:   { label: "Settings",          tabs: [] },

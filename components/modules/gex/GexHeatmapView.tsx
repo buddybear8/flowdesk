@@ -30,13 +30,14 @@ function cellBg(v: number, maxAbs: number): string {
     : `rgba(231, 106, 106, ${a.toFixed(3)})`;
 }
 
+// Auto-suffix formatter. Values are in raw dollars; we abbreviate so a $2.15B
+// cell doesn't render as "$2,154,135K" (technically thousands-of-thousands).
 function fmtGex(v: number): string {
   const sign = v < 0 ? "−" : "";
   const abs = Math.abs(v);
-  const k = abs / 1_000;
-  if (k >= 1) {
-    return `${sign}$${k.toLocaleString("en-US", { maximumFractionDigits: 1, minimumFractionDigits: 1 })}K`;
-  }
+  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(1)}K`;
   return `${sign}$${abs.toFixed(0)}`;
 }
 

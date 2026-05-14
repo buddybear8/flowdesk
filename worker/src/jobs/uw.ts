@@ -19,7 +19,6 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { rerankDarkPool } from "../lib/rerank-darkpool.js";
 import { WATCHED_TICKERS } from "../lib/watched-tickers.js";
-import { nearestExpirations } from "../lib/option-expirations.js";
 
 export { disconnectPrisma } from "../lib/prisma.js";
 
@@ -573,61 +572,94 @@ export async function pollGex(): Promise<void> {
     );
 
     // ─── Heatmap snapshot: per-(strike × expiration) cross-section ─────────
-    // Same endpoint, but called with ?expiry=YYYY-MM-DD for each of the 5
-    // nearest expirations. UW returns the same row shape — we collapse to
-    // {strike, netOI, netDV} and pivot into a `cells` JSON blob.
+    // Uses /spot-exposures/expiry-strike — the only UW endpoint that actually
+    // filters by expiry. (The /spot-exposures/strike?expiry= variant silently
+    // ignores its filter and returns the aggregated chain — see git history
+    // for the bug + diagnosis.)
+    //
+    // Expiration discovery: UW's chain coverage per ticker has gaps that the
+    // static M/W/F/DAILY calendar can't predict (e.g. NVDA may have 5/15 +
+    // 5/18 but not 5/20 in a given week). Source-of-truth is
+    // /greek-exposure/expiry which lists every expiration UW has GEX for,
+    // with `dte`. We take the 5 lowest-DTE entries.
+    //
+    // Param encoding: expirations[]=YYYY-MM-DD repeated. The single-param
+    // form expirations=...&expirations=... keeps only the last value (UW
+    // quirk). Returns rows {strike, expiry, call_gamma_*, put_gamma_*, ...}
+    // — we group by strike and pivot to {strike, byExp: {...}} cells JSON.
+    //
+    // Pagination: limit=500 max per page; chains broad enough to exceed 500
+    // (e.g. SPY across 5 expirations) need 2-3 pages. Cap at MAX_PAGES.
     try {
-      const expiryDates = nearestExpirations(ticker, 5);
-      const perExpiry: { date: string; dte: number; rows: { strike: number; netOI: number; netDV: number }[] }[] = [];
-      for (let e = 0; e < expiryDates.length; e++) {
-        const date = expiryDates[e]!;
-        await sleep(TICKER_DELAY_MS);
+      await sleep(TICKER_DELAY_MS);
+      const expiryListJson = await uwFetch(
+        `/api/stock/${ticker}/greek-exposure/expiry`,
+        `gex-heatmap:${ticker}:expiries`,
+      );
+      const expiryRows = expiryListJson ? asArray((expiryListJson as any).data ?? []) : [];
+      const nearest = expiryRows
+        .map((r: any) => ({ date: String(r.expiry), dte: Number(r.dte) }))
+        .filter((e: { date: string; dte: number }) => Number.isFinite(e.dte) && e.dte >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(e.date))
+        .sort((a: { dte: number }, b: { dte: number }) => a.dte - b.dte)
+        .slice(0, 5);
+
+      if (nearest.length === 0) {
+        console.warn(`[uw:gex-heatmap:${ticker}] no expirations from /greek-exposure/expiry`);
+        throw new Error("no expirations");
+      }
+      const expiryDates: string[] = nearest.map((e: { date: string }) => e.date);
+      const expParam = expiryDates.map((d) => `expirations[]=${d}`).join("&");
+      const PAGE_LIMIT = 500;
+      const MAX_PAGES = 5;
+      const allRows: any[] = [];
+      for (let page = 1; page <= MAX_PAGES; page++) {
+        if (page > 1) await sleep(TICKER_DELAY_MS);
         const expJson = await uwFetch(
-          `/api/stock/${ticker}/spot-exposures/strike?expiry=${date}`,
-          `gex-heatmap:${ticker}:${date}`,
+          `/api/stock/${ticker}/spot-exposures/expiry-strike?${expParam}&limit=${PAGE_LIMIT}&page=${page}`,
+          `gex-heatmap:${ticker}:p${page}`,
         );
-        if (!expJson) continue;
-        const rawRows = asArray((expJson as any).strikes ?? expJson);
-        if (!rawRows.length) {
-          console.warn(`[uw:gex-heatmap:${ticker}:${date}] empty rows (holiday / no chain?)`);
-          continue;
-        }
-        const parsed = rawRows.map((s: any) => {
-          const callOI = Number(s.call_gamma_oi ?? 0);
-          const putOI = Number(s.put_gamma_oi ?? 0);
-          const callBid = Number(s.call_gamma_bid ?? 0);
-          const callAsk = Number(s.call_gamma_ask ?? 0);
-          const putBid = Number(s.put_gamma_bid ?? 0);
-          const putAsk = Number(s.put_gamma_ask ?? 0);
-          return {
-            strike: Number(s.strike),
+        if (!expJson) break;
+        const pageRows = asArray((expJson as any).data ?? []);
+        if (!pageRows.length) break;
+        allRows.push(...pageRows);
+        if (pageRows.length < PAGE_LIMIT) break;
+      }
+
+      if (allRows.length > 0) {
+        const byStrike = new Map<number, Record<string, { netOI: number; netDV: number }>>();
+        const seenExpiries = new Set<string>();
+        for (const r of allRows) {
+          const strike = Number(r.strike);
+          const expiry = String(r.expiry);
+          if (!Number.isFinite(strike) || !expiry) continue;
+          seenExpiries.add(expiry);
+          const callOI = Number(r.call_gamma_oi ?? 0);
+          const putOI = Number(r.put_gamma_oi ?? 0);
+          const callBid = Number(r.call_gamma_bid ?? 0);
+          const callAsk = Number(r.call_gamma_ask ?? 0);
+          const putBid = Number(r.put_gamma_bid ?? 0);
+          const putAsk = Number(r.put_gamma_ask ?? 0);
+          if (!byStrike.has(strike)) byStrike.set(strike, {});
+          byStrike.get(strike)![expiry] = {
             netOI: callOI + putOI,
             netDV: callBid + callAsk + putBid + putAsk,
           };
-        });
-        perExpiry.push({ date, dte: e, rows: parsed });
-      }
+        }
 
-      if (perExpiry.length > 0) {
-        // Union of strikes across all expirations, sorted descending so the
-        // JSON's natural order matches the visual top-to-bottom layout.
-        const strikeUnion = new Set<number>();
-        for (const exp of perExpiry) for (const r of exp.rows) strikeUnion.add(r.strike);
-        const sortedStrikes = Array.from(strikeUnion).sort((a, b) => b - a);
+        const sortedStrikes = Array.from(byStrike.keys()).sort((a, b) => b - a);
+        const cellStrikes = sortedStrikes.map((strike) => ({
+          strike,
+          byExp: byStrike.get(strike)!,
+        }));
 
-        const cellStrikes = sortedStrikes.map((strike) => {
-          const byExp: Record<string, { netOI: number; netDV: number }> = {};
-          for (const exp of perExpiry) {
-            const row = exp.rows.find((r) => r.strike === strike);
-            if (row) byExp[exp.date] = { netOI: row.netOI, netDV: row.netDV };
-          }
-          return { strike, byExp };
-        });
+        // Use the real dte from /greek-exposure/expiry; only include expiries
+        // that /spot-exposures/expiry-strike actually returned rows for (the
+        // two endpoints can disagree at the margins for thin chains).
+        const presentExpirations = nearest
+          .filter((e: { date: string }) => seenExpiries.has(e.date))
+          .map((e: { date: string; dte: number }) => ({ date: e.date, dte: e.dte }));
 
-        const cells = {
-          expirations: perExpiry.map((e) => ({ date: e.date, dte: e.dte })),
-          strikes: cellStrikes,
-        };
+        const cells = { expirations: presentExpirations, strikes: cellStrikes };
 
         await prisma.gexHeatmapSnapshot.create({
           data: {
@@ -640,11 +672,11 @@ export async function pollGex(): Promise<void> {
         });
         console.log(
           `[uw:gex-heatmap:${ticker}] ${ts()} stored heatmap · ` +
-            `${perExpiry.length}/${expiryDates.length} expirations · ` +
-            `${sortedStrikes.length} strike union`,
+            `${presentExpirations.length}/${expiryDates.length} expirations · ` +
+            `${sortedStrikes.length} strikes · ${allRows.length} rows`,
         );
       } else {
-        console.warn(`[uw:gex-heatmap:${ticker}] no expiration data — skipping heatmap snapshot`);
+        console.warn(`[uw:gex-heatmap:${ticker}] no rows returned — skipping`);
       }
     } catch (err) {
       console.error(
