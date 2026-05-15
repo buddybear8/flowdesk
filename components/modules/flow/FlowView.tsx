@@ -69,8 +69,14 @@ export function FlowView() {
   const [sortKey, setSortKey] = useState<SortKey>("time");
 
   useEffect(() => {
-    fetch(`/api/flow?date=${filter.date}`).then(r => r.json()).then(r => setAlerts(r.alerts ?? []));
-  }, [filter.date]);
+    const params = new URLSearchParams({ date: filter.date });
+    const t = filter.ticker.trim().toUpperCase();
+    if (t) params.set("ticker", t);
+    if (filter.sector !== "ALL") params.set("sector", filter.sector);
+    fetch(`/api/flow?${params.toString()}`)
+      .then((r) => r.json())
+      .then((r) => setAlerts(r.alerts ?? []));
+  }, [filter.date, filter.ticker, filter.sector]);
 
   const rows = useMemo(() => {
     let r = [...alerts];
@@ -90,8 +96,9 @@ export function FlowView() {
     const premMax = Number(filter.premMax);
     if (filter.premMax && Number.isFinite(premMax)) r = r.filter(x => x.premium <= premMax);
     if (filter.rule !== "ALL") r = r.filter(x => x.rule.startsWith(filter.rule));
-    if (filter.sector !== "ALL") r = r.filter(x => x.sector === filter.sector);
-    if (filter.ticker) r = r.filter(x => x.ticker.startsWith(filter.ticker));
+    // ticker + sector are applied server-side now (URL params on the /api/flow
+    // fetch). Without that, the route's MAX_ROWS=200 global cap would starve
+    // any single ticker that doesn't dominate the most-recent window.
     if (sortKey === "prem") r.sort((a, b) => b.premium - a.premium);
     else if (sortKey === "size") r.sort((a, b) => b.size - a.size);
     return r;

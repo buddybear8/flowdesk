@@ -66,12 +66,29 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid date (expected YYYY-MM-DD)" }, { status: 400 });
   }
 
+  // Ticker filter — uppercase, allow 1-5 letters (covers SPXW etc.).
+  const rawTicker = searchParams.get("ticker");
+  let ticker: string | null = null;
+  if (rawTicker) {
+    const t = rawTicker.trim().toUpperCase();
+    if (!/^[A-Z]{1,6}$/.test(t)) {
+      return NextResponse.json({ error: "Invalid ticker" }, { status: 400 });
+    }
+    ticker = t;
+  }
+
+  // Sector filter — matches the Sector union; "ALL" is a no-op.
+  const rawSector = searchParams.get("sector");
+  const sector = rawSector && rawSector !== "ALL" ? rawSector : null;
+
   const where: Prisma.FlowAlertWhereInput = {};
   if (type !== "ALL") where.type = type;
   if (side !== "ALL") where.side = side;
   if (exec !== "ALL") where.exec = exec;
   if (conf !== "ALL") where.confidence = conf;
   if (minPrem > 0) where.premium = { gte: minPrem };
+  if (ticker) where.ticker = ticker;
+  if (sector) where.sector = sector;
   if (date) {
     const start = etMidnightUTC(date);
     const end = etMidnightUTC(nextETDate(date));
