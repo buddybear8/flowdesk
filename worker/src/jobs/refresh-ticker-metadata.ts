@@ -22,7 +22,7 @@
 // follow-up commit.
 
 import { prisma } from "../lib/prisma.js";
-import { SECTOR_OVERRIDES, type Sector } from "../lib/sector-overrides.js";
+import { resolveTickerSector } from "../lib/sector-overrides.js";
 import { WATCHED_TICKERS } from "../lib/watched-tickers.js";
 
 const ts = () => new Date().toISOString();
@@ -77,7 +77,7 @@ export async function refreshTickerMetadata(): Promise<void> {
     let upserted = 0;
     let unresolved = 0;
     for (const ticker of allTickers) {
-      const resolved = resolveTickerMeta(ticker, latestSector.get(ticker));
+      const resolved = resolveTickerSector(ticker, latestSector.get(ticker));
       if (resolved.unresolved) unresolved++;
       await prisma.tickerMetadata.upsert({
         where: { ticker },
@@ -108,75 +108,5 @@ export async function refreshTickerMetadata(): Promise<void> {
   }
 }
 
-interface ResolvedMeta {
-  sector: Sector;
-  isEtf: boolean;
-  name?: string;
-  // True when neither override nor flow-alert sector resolved — caller
-  // counts these for the run summary so we can spot growing blind spots.
-  unresolved: boolean;
-}
-
-function resolveTickerMeta(
-  ticker: string,
-  rawFlowSector: string | undefined
-): ResolvedMeta {
-  // (a) Override always wins.
-  const override = SECTOR_OVERRIDES[ticker];
-  if (override) {
-    return {
-      sector: override.sector,
-      isEtf: override.isEtf,
-      name: override.name,
-      unresolved: false,
-    };
-  }
-
-  // (b) Most recent sector from flow_alerts (UW's classification).
-  const normalized = normalizeSector(rawFlowSector);
-  if (normalized) {
-    return { sector: normalized, isEtf: false, unresolved: false };
-  }
-
-  // (c) Default fallback. isEtf=false is a guess; if this ticker IS an ETF,
-  // adding it to SECTOR_OVERRIDES is the right fix.
-  return { sector: "Technology", isEtf: false, unresolved: true };
-}
-
-// Map UW's sector strings to the Sector union. UW uses Yahoo-style names
-// for some equities; the lower-cased keys cover the common cases. Returns
-// null for unknown values so the caller can fall through to the default.
-function normalizeSector(raw: string | null | undefined): Sector | null {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  return SECTOR_NORMALIZE[trimmed.toLowerCase()] ?? null;
-}
-
-const SECTOR_NORMALIZE: Record<string, Sector> = {
-  // Direct matches (the 15 union values, lowercased).
-  "technology": "Technology",
-  "communication": "Communication",
-  "consumer discretionary": "Consumer Discretionary",
-  "consumer staples": "Consumer Staples",
-  "energy": "Energy",
-  "financials": "Financials",
-  "health care": "Health Care",
-  "industrials": "Industrials",
-  "materials": "Materials",
-  "real estate": "Real Estate",
-  "utilities": "Utilities",
-  "index": "Index",
-  "commodities": "Commodities",
-  "bonds": "Bonds",
-  "volatility": "Volatility",
-
-  // UW / Yahoo aliases observed in production.
-  "financial services": "Financials",
-  "financial": "Financials",
-  "healthcare": "Health Care",
-  "consumer cyclical": "Consumer Discretionary",
-  "consumer defensive": "Consumer Staples",
-  "basic materials": "Materials",
-  "communication services": "Communication",
-};
+// Resolution logic moved to lib/sector-overrides.ts (resolveTickerSector)
+// so pollFlowAlerts can use the same code path.

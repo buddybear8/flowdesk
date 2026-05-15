@@ -19,6 +19,7 @@ type FilterState = {
   premMin: string;
   premMax: string;
   dte: string;
+  sector: string; // "ALL" or a Sector union value
   date: string; // YYYY-MM-DD in ET; controls the dataset (server-side filter)
 };
 
@@ -30,8 +31,27 @@ const todayET = () => ET_DATE_FMT.format(new Date());
 const INITIAL_FILTER: Omit<FilterState, "date"> = {
   type: "ALL", side: "ALL", sent: "ALL", exec: "ALL", prem: "ALL", conf: "ALL",
   rule: "ALL", ticker: "", sweepOnly: false, otmOnly: false, sizeOverOi: false,
-  premMin: "", premMax: "", dte: "ALL",
+  premMin: "", premMax: "", dte: "ALL", sector: "ALL",
 };
+
+export const SECTOR_OPTIONS = [
+  "ALL",
+  "Technology",
+  "Communication",
+  "Consumer Discretionary",
+  "Consumer Staples",
+  "Energy",
+  "Financials",
+  "Health Care",
+  "Industrials",
+  "Materials",
+  "Real Estate",
+  "Utilities",
+  "Index",
+  "Commodities",
+  "Bonds",
+  "Volatility",
+] as const;
 
 type SortKey = "time" | "prem" | "size";
 
@@ -70,6 +90,7 @@ export function FlowView() {
     const premMax = Number(filter.premMax);
     if (filter.premMax && Number.isFinite(premMax)) r = r.filter(x => x.premium <= premMax);
     if (filter.rule !== "ALL") r = r.filter(x => x.rule.startsWith(filter.rule));
+    if (filter.sector !== "ALL") r = r.filter(x => x.sector === filter.sector);
     if (filter.ticker) r = r.filter(x => x.ticker.startsWith(filter.ticker));
     if (sortKey === "prem") r.sort((a, b) => b.premium - a.premium);
     else if (sortKey === "size") r.sort((a, b) => b.size - a.size);
@@ -347,12 +368,13 @@ function FilterPanel({ filter, setFilter }: { filter: FilterState; setFilter: Re
         </div>
         <div className="mb-[12px]">
           <FpLabel>Sector</FpLabel>
-          <FpSelect>
-            <option>All sectors</option>
-            <option>Technology</option>
-            <option>Financials</option>
-            <option>Energy</option>
-            <option>Healthcare</option>
+          <FpSelect
+            value={filter.sector}
+            onChange={(e) => setFilter((f) => ({ ...f, sector: e.target.value }))}
+          >
+            {SECTOR_OPTIONS.map((s) => (
+              <option key={s} value={s}>{s === "ALL" ? "All sectors" : s}</option>
+            ))}
           </FpSelect>
         </div>
       </div>

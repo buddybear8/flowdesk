@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { clsx } from "clsx";
 
 type NavEntry = {
@@ -29,6 +30,11 @@ const COMMUNITY_PERFORMANCE: NavEntry[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const matches = (label: string) => !q || label.toLowerCase().includes(q);
+  const modulesFiltered = MODULES.filter((e) => matches(e.label));
+  const communityFiltered = COMMUNITY_PERFORMANCE.filter((e) => matches(e.label));
 
   return (
     <aside
@@ -53,20 +59,33 @@ export function Sidebar() {
         <input
           type="text"
           placeholder="Search nav..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
           className="w-full rounded-md bg-bg-secondary py-[5px] px-[9px] text-[11px] text-text-primary outline-none"
           style={{ border: "0.5px solid var(--color-border-secondary)" }}
         />
       </div>
 
       <nav className="flex-1 overflow-y-auto px-[6px] py-[8px]">
-        <SectionLabel>Modules</SectionLabel>
-        {MODULES.map(item => (
-          <NavRow key={item.href} entry={item} active={pathname.startsWith(item.href)} />
-        ))}
-        <SectionLabel>Community performance</SectionLabel>
-        {COMMUNITY_PERFORMANCE.map(item => (
-          <NavRow key={item.href} entry={item} active={pathname.startsWith(item.href)} />
-        ))}
+        {modulesFiltered.length > 0 && (
+          <>
+            <SectionLabel>Modules</SectionLabel>
+            {modulesFiltered.map((item) => (
+              <NavRow key={item.href} entry={item} active={pathname.startsWith(item.href)} />
+            ))}
+          </>
+        )}
+        {communityFiltered.length > 0 && (
+          <>
+            <SectionLabel>Community performance</SectionLabel>
+            {communityFiltered.map((item) => (
+              <NavRow key={item.href} entry={item} active={pathname.startsWith(item.href)} />
+            ))}
+          </>
+        )}
+        {modulesFiltered.length === 0 && communityFiltered.length === 0 && (
+          <div className="px-2 py-3 text-[10px] text-text-tertiary">No matches</div>
+        )}
       </nav>
 
       <div className="px-[6px] py-[7px]" style={{ borderTop: "0.5px solid var(--color-border-tertiary)" }}>

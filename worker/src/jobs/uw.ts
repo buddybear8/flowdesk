@@ -19,6 +19,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { rerankDarkPool } from "../lib/rerank-darkpool.js";
 import { WATCHED_TICKERS } from "../lib/watched-tickers.js";
+import { resolveTickerSector } from "../lib/sector-overrides.js";
 
 export { disconnectPrisma } from "../lib/prisma.js";
 
@@ -301,7 +302,7 @@ function mapFlowAlert(raw: any): Prisma.FlowAlertCreateManyInput | null {
     spot: Number(raw.underlying_price ?? raw.spot ?? 0),
     rule: String(raw.alert_rule ?? raw.rule ?? "Unusual activity"),
     confidence,
-    sector: String(raw.sector ?? "Technology"), // TODO Phase 2 step 4: enrich from ticker_metadata
+    sector: resolveTickerSector(String(raw.ticker), raw.sector).sector,
 
     // v1.3 — capture raw UW fields so /api/flow/{lottos,opening-sweepers} can
     // filter on them server-side without a second UW request per page load.
