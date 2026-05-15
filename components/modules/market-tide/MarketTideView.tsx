@@ -60,42 +60,20 @@ export function MarketTideView() {
 
   const noTide = data.tide.series.length === 0;
   const headerDate = HEADER_DATE_FMT.format(new Date(data.tide.asOf));
-  // "Live" only when the latest bucket is fresh (worker writes every 5 min
-  // during RTH, so 10 min covers a missed poll). Otherwise we're showing
-  // a prior session's data — pill should read "Closed" with that date.
-  const lastBucketAgeMs = noTide ? Infinity : Date.now() - new Date(data.tide.asOf).getTime();
-  const isLive = lastBucketAgeMs < 10 * 60 * 1000;
 
   return (
     <div
       className="flex-1 overflow-y-auto"
       style={{ padding: 16, background: "var(--color-background-tertiary)" }}
     >
-      {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-[8px]" style={{ marginBottom: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 17, fontWeight: 500, color: "var(--color-text-primary)" }}>
-            Market Pulse
-          </h1>
-          <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
-            {headerDate} · {data.tide.asOfLabel} · SPY price vs net call/put premium flow, updated every 5 minutes
-          </p>
-        </div>
-        <div className="flex items-center gap-[8px]">
-          <span
-            className="rounded-full"
-            style={{
-              fontSize: 11,
-              fontWeight: 500,
-              padding: "3px 11px",
-              background: isLive ? "rgba(201, 165, 90, 0.18)" : "#F0EFEC",
-              color: isLive ? "#C9A55A" : "#A8A496",
-              border: `0.5px solid ${isLive ? "#C9A55A" : "#6B6960"}`,
-            }}
-          >
-            {isLive ? "● Live" : "● Closed"}
-          </span>
-        </div>
+      {/* Header — market status pill removed; the Topbar's Market open/closed badge is the canonical indicator. */}
+      <div style={{ marginBottom: 12 }}>
+        <h1 style={{ fontSize: 17, fontWeight: 500, color: "var(--color-text-primary)" }}>
+          Market Pulse
+        </h1>
+        <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
+          {headerDate} · {data.tide.asOfLabel} · SPY price vs net call/put premium flow, updated every 5 minutes
+        </p>
       </div>
 
       {/* Stats strip */}

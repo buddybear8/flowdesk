@@ -36,7 +36,7 @@ export function Sidebar() {
       style={{ borderRight: "0.5px solid var(--color-border-tertiary)" }}
     >
       <div className="px-3 pt-3 pb-[10px]" style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
-        <div className="mb-[9px] flex items-center gap-2">
+        <Link href="/" className="mb-[9px] flex items-center gap-2 cursor-pointer">
           <Image
             src="/logo.png"
             alt="Champagne Sessions"
@@ -49,7 +49,7 @@ export function Sidebar() {
             <div className="text-[12px] font-semibold" style={{ color: "#E2BF73", letterSpacing: "0.02em" }}>Champagne Sessions</div>
             <div className="text-[9px] text-text-tertiary" style={{ marginTop: 1 }}>Trading intelligence</div>
           </div>
-        </div>
+        </Link>
         <input
           type="text"
           placeholder="Search nav..."

@@ -143,7 +143,9 @@ export function GexView() {
         </div>
         <div className="flex flex-wrap items-center gap-[7px]">
           <Select value={ticker} options={TICKERS.map(t => ({ id: t, label: t }))} onChange={setTicker} />
-          <Select value="all" options={[{ id: "all", label: "All expirations" }, { id: "0dte", label: "0DTE only" }, { id: "weekly", label: "Weekly" }, { id: "monthly", label: "Monthly" }]} onChange={() => {}} />
+          {/* Expirations filter removed — the overview is aggregated across all expirations
+              (the gex_snapshots schema has no per-expiry breakdown). Use the Heatmap tab
+              for the per-(strike × expiry) cross-section. */}
         </div>
       </div>
 
