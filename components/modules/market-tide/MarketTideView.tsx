@@ -44,7 +44,6 @@ function fmtVol(v: number): string {
 
 export function MarketTideView() {
   const [data, setData] = useState<Payload | null>(null);
-  const [period, setPeriod] = useState<"1D" | "4H" | "1H">("1D");
 
   useEffect(() => {
     fetch("/api/market-tide").then(r => r.json()).then(setData);
@@ -97,7 +96,6 @@ export function MarketTideView() {
               Green = net call premium · Red = net put premium
             </div>
           </div>
-          <PeriodPills period={period} onChange={setPeriod} />
         </div>
         <div style={{ height: 320 }}>
           {noTide ? (
@@ -326,39 +324,3 @@ function Mc({
   );
 }
 
-function PeriodPills({
-  period,
-  onChange,
-}: {
-  period: "1D" | "4H" | "1H";
-  onChange: (p: "1D" | "4H" | "1H") => void;
-}) {
-  return (
-    <div
-      className="inline-flex rounded-md bg-bg-secondary"
-      style={{ padding: 2, gap: 1 }}
-    >
-      {(["1H", "4H", "1D"] as const).map(p => {
-        const active = period === p;
-        return (
-          <button
-            key={p}
-            onClick={() => onChange(p)}
-            style={{
-              fontSize: 11,
-              padding: "4px 12px",
-              borderRadius: 5,
-              background: active ? "var(--color-background-primary)" : "transparent",
-              color: active ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-              border: active ? "0.5px solid var(--color-border-tertiary)" : "none",
-              cursor: "pointer",
-              fontWeight: active ? 500 : 400,
-            }}
-          >
-            {p}
-          </button>
-        );
-      })}
-    </div>
-  );
-}

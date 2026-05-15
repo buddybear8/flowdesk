@@ -16,6 +16,7 @@
 
 import { Prisma } from "@prisma/client";
 import thresholdsJson from "./ticker-thresholds.json" with { type: "json" };
+import { SECTOR_OVERRIDES } from "./sector-overrides.js";
 
 export const THRESHOLDS: Record<string, number> = thresholdsJson as Record<string, number>;
 export const TICKER_SET: Set<string> = new Set(Object.keys(THRESHOLDS));
@@ -131,7 +132,7 @@ function mapToRecord(t: RawPolygonTrade): Prisma.DarkPoolPrintCreateManyInput | 
     volume: null,
     exchangeId: t.exchange,
     trfId: t.trfId,
-    isEtf: false,
+    isEtf: SECTOR_OVERRIDES[t.ticker]?.isEtf ?? false,
     isExtended: !isIntradayET(executedAt),
     isIntraday: isIntradayET(executedAt),
     rank: null,         // rerankDarkPool fills these after insert
