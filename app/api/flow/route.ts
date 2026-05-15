@@ -8,8 +8,13 @@ const ALLOWED_SIDES = ["ALL", "BUY", "SELL"] as const;
 const ALLOWED_EXECS = ["ALL", "SWEEP", "FLOOR", "BLOCK", "SINGLE"] as const;
 const ALLOWED_CONFS = ["ALL", "HIGH", "MED", "LOW"] as const;
 
-// Cap response size — module renders top N most recent alerts per filter set.
-const MAX_ROWS = 200;
+// No row cap by design — we want the Live feed to surface every flow alert
+// the DB has for the user's filter set (the 60-day retention sweep is the
+// only ceiling). With ticker + date filters applied, typical results are
+// tens to low hundreds of rows; an unfiltered day query may return ~12K
+// rows on a busy session. The frontend table is non-virtualized, so very
+// large unfiltered loads take ~1-2s to render — acceptable today, virtualize
+// if it becomes painful.
 
 const TIME_LABEL_FMT = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/New_York",
@@ -98,7 +103,6 @@ export async function GET(req: NextRequest) {
   const rows = await prisma.flowAlert.findMany({
     where,
     orderBy: { time: "desc" },
-    take: MAX_ROWS,
   });
 
   const alerts: FlowAlert[] = rows.map((r) => ({
