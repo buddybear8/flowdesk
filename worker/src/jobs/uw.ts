@@ -237,14 +237,33 @@ function mapFlowAlert(raw: any): Prisma.FlowAlertCreateManyInput | null {
   // directly — they're derived below.
 
   const time = new Date(raw.created_at ?? raw.executed_at ?? raw.time ?? Date.now());
-  const expiry = new Date(raw.expiry ?? raw.expiration ?? time);
   const strike = Number(raw.strike ?? 0);
 
-  // Type: parse from the OCC-encoded option_chain symbol.
+  // Type AND expiration parsed from the OCC-encoded option_chain symbol —
+  // ground truth straight from the option ticker. UW's `raw.expiry` is
+  // missing for many tickers (e.g. TSLA), which previously caused the
+  // contract label to fall through to the trade timestamp and produce
+  // dates like "$442.5P May 14" on a day TSLA has no expiration.
   // Format: TICKER + YYMMDD + C/P + 8-digit-strike (e.g. SPXW260506P07225000).
   const chain = String(raw.option_chain ?? "");
   const occ = chain.match(/(\d{6})([CP])(\d{8})$/);
   const type: "CALL" | "PUT" = occ?.[2] === "P" ? "PUT" : "CALL";
+
+  // Construct expiry at 5pm UTC (1pm EDT / noon EST) so ET-formatted
+  // month/day always lands on the right date regardless of DST.
+  let expiry: Date;
+  if (occ) {
+    const yy = Number(occ[1]!.slice(0, 2));
+    const mo = Number(occ[1]!.slice(2, 4));
+    const dd = Number(occ[1]!.slice(4, 6));
+    expiry = new Date(Date.UTC(2000 + yy, mo - 1, dd, 17, 0, 0));
+  } else if (raw.expiry) {
+    expiry = new Date(raw.expiry);
+  } else if (raw.expiration) {
+    expiry = new Date(raw.expiration);
+  } else {
+    expiry = time;
+  }
 
   // Side: aggressive direction from premium balance.
   //   ask-side total > bid-side total → BUY (initiator hit the ask)
