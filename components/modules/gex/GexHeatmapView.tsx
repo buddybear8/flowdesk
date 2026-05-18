@@ -30,15 +30,13 @@ function cellBg(v: number, maxAbs: number): string {
     : `rgba(231, 106, 106, ${a.toFixed(3)})`;
 }
 
-// Auto-suffix formatter. Values are in raw dollars; we abbreviate so a $2.15B
-// cell doesn't render as "$2,154,135K" (technically thousands-of-thousands).
+// Values are in raw dollars; we render everything in millions so a column of
+// mixed M / B / K units stays visually comparable. Billions display as
+// "$X,XXX.XXM" with a comma separator rather than switching to a B suffix.
 function fmtGex(v: number): string {
   const sign = v < 0 ? "−" : "";
-  const abs = Math.abs(v);
-  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
-  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(2)}M`;
-  if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(1)}K`;
-  return `${sign}$${abs.toFixed(0)}`;
+  const m = Math.abs(v) / 1e6;
+  return `${sign}$${m.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}M`;
 }
 
 function cellKey(strike: number, exp: string): string {
@@ -135,17 +133,27 @@ export function GexHeatmapView() {
     return m;
   }, [data]);
 
-  const { maxAbs, maxAbsKey } = useMemo(() => {
+  // maxAbs is used to flag the single largest cell with the orange standout.
+  // scaleMax (the SECOND-largest absolute value) is what the gradient ramp
+  // normalizes against — otherwise a single outlier cell (often the 0DTE
+  // gamma magnet) compresses every other cell into near-neutral. With the
+  // outlier excluded from the scale, "next biggest" cells reach full
+  // saturation and the eye can actually compare cells.
+  const { maxAbs, maxAbsKey, scaleMax } = useMemo(() => {
     let maxAbs = 0;
+    let secondMax = 0;
     let maxAbsKey = "";
     for (const [key, v] of cellMap) {
       const abs = Math.abs(v);
       if (abs > maxAbs) {
+        secondMax = maxAbs;
         maxAbs = abs;
         maxAbsKey = key;
+      } else if (abs > secondMax) {
+        secondMax = abs;
       }
     }
-    return { maxAbs, maxAbsKey };
+    return { maxAbs, maxAbsKey, scaleMax: secondMax > 0 ? secondMax : maxAbs };
   }, [cellMap]);
 
   const spotRowIdx = useMemo(() => {
@@ -380,7 +388,7 @@ export function GexHeatmapView() {
                       const isMaxAbs = hasValue && key === maxAbsKey;
                       const pos = val >= 0;
 
-                      const bg = isMaxAbs ? COLOR_MAX_ABS_BG : hasValue ? cellBg(val, maxAbs) : "rgba(255,255,255,0.015)";
+                      const bg = isMaxAbs ? COLOR_MAX_ABS_BG : hasValue ? cellBg(val, scaleMax) : "rgba(255,255,255,0.015)";
                       const textColor = !hasValue
                         ? "var(--color-text-tertiary)"
                         : isMaxAbs
