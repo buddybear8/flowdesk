@@ -1,7 +1,7 @@
 # Champagne Sessions — Build Progress
 
-Last updated: 2026-05-14
-Current `main` head: **`fd141b9`** (Vercel + Railway auto-deploy on push)
+Last updated: 2026-05-18
+Current `main` head: **`428b325`** (Vercel + Railway auto-deploy on push)
 
 > Product was rebranded from "FlowDesk" → "Champagne Sessions" (commit `bbecffb`, late April). Repo path is still `flowdesk/`, GitHub remote is still `github.com/buddybear8/flowdesk`. Every user-facing string says Champagne Sessions; backend names and file paths were intentionally not churned.
 
@@ -38,9 +38,9 @@ Current `main` head: **`fd141b9`** (Vercel + Railway auto-deploy on push)
 - ✅ Market Tide line chart — SPY price + net call/put premium, 5-min buckets
 - ✅ Top Net Impact horizontal bar chart — 20 tickers ranked by net options premium
 - ✅ Stats strip
-- ✅ Period toggle UI (1H / 4H / 1D)
 - ✅ **Live data** via worker `pollMarketTide` + `computeNetImpact` jobs
-- ⬜ Period toggle wired to API param (currently UI-only)
+- ✅ **1H/4H/1D period toggle removed** (`888c27a`, 2026-05-18) — it was UI-only (API has no period param, worker writes a single 1D series). Removed rather than wired.
+- ✅ **Duplicate "Live/Closed" status pill removed** (`181e244`) — the Topbar Market open/closed badge is canonical.
 - ⬜ `market_tide_bars.spyPrice` is stored as `0` ([worker/src/jobs/uw.ts:609](worker/src/jobs/uw.ts#L609) TODO)
 
 ### 4. Options GEX (`/gex`) — PRD §4
@@ -50,22 +50,30 @@ Current `main` head: **`fd141b9`** (Vercel + Railway auto-deploy on push)
 - ✅ Gamma regime indicator
 - ✅ **Live data** via worker `pollGex` (60s market hours, 5m off-hours per ticker)
 - ✅ **Centered strikes**, **split-fetch for lopsided UW chains**, **spot price line on chart**, **real OI + DV in Details panel** (all shipped pre-2026-05-11)
-- ✅ **Heatmap sub-tab** (2026-05-14) — strike × expiration matrix, 5 nearest expirations × full strike chain. Sqrt-scaled green/red bg ramp + orange max-abs standout. 60s polling client-side, tab-visibility pause, freshness pill. New `gex_heatmap_snapshots` table + `/api/gex/heatmap` route. Replaces the originally-scoped "By expiry" sub-tab.
-  - **Data source: UW `/api/stock/{t}/spot-exposures/expiry-strike?expirations[]=…`** (the one endpoint that actually filters per-expiry; the `/spot-exposures/strike?expiry=…` form silently ignores its filter and returns the aggregated chain — shipped that by mistake in `fd141b9`, fixed in the follow-up commit).
-  - Dynamic expiration discovery via `/api/stock/{t}/greek-exposure/expiry` (returns every active expiration with `dte`). Worker takes the 5 lowest-DTE entries per ticker per minute. The static M/W/F/FRIDAY/DAILY calendar in `worker/src/lib/option-expirations.ts` is **retained but no longer consumed** — UW is the source of truth.
-  - Param encoding gotcha: `expirations[]=` repeated. `expirations=…&expirations=…` (no brackets) keeps only the last value (UW quirk).
-  - Cell values auto-suffix as K/M/B in the view (previous `K`-only formatter rendered `$2.15B` as `$2,154,135K`).
-- ✅ **Sub-tabs trimmed** (2026-05-14) — removed `By strike`, `By expiry`, `Vanna & charm`, `Key levels` placeholder tabs that shipped in `fd141b9`. Module now has just `GEX overview` + `Heatmap`.
+- ✅ **Heatmap sub-tab** — strike × expiration matrix, up to 5 nearest expirations × ~50 strikes centered on spot. New `gex_heatmap_snapshots` table + `/api/gex/heatmap` route. 60s polling client-side, tab-visibility pause, freshness pill. Replaces the originally-scoped "By expiry" sub-tab.
+  - **Data source: UW `/api/stock/{t}/spot-exposures/expiry-strike?expirations[]=…`** — the one endpoint that actually filters per-expiry. The `/spot-exposures/strike?expiry=…` form **silently ignores its filter** and returns the aggregated chain (shipped that bug in `fd141b9`, fixed in `bb6ee82`).
+  - Expiration discovery: `/api/stock/{t}/greek-exposure/expiry` lists every active expiration with `dte`. Worker over-requests **10** candidates; the API drops any expiration with <5 near-spot cells and keeps the best 5 (`5e91204` — UW returns far-OTM-only chains for some expiries). The static calendar in `worker/src/lib/option-expirations.ts` is retained but **no longer consumed**.
+  - Param encoding gotcha: `expirations[]=` repeated. `expirations=…&expirations=…` (no brackets) keeps only the last value.
+  - Colour ramp normalizes against the **2nd-largest** abs value, not the max (`53850ca`) — a single 0DTE outlier otherwise flattened the gradient. Orange flags the single max-abs cell. Cells render uniformly in millions (`$1,010.00M` for a $1.01B value).
+- ✅ **Sub-tabs trimmed** — removed `By strike` / `By expiry` / `Vanna & charm` / `Key levels` placeholder tabs (`181e244`). Module is now `GEX overview` + `Heatmap` only.
+- ✅ **Ticker selection persists** across refreshes via `localStorage` (`428b325`, `lib/use-gex-ticker.ts`) — shared `gex:ticker` key across both GEX tabs.
 - ⚠️ Greek switcher (Vanna/Charm) **removed from V1** (UW Basic tier doesn't expose those endpoints)
 - ⬜ AI explanation modal — pre-computed daily by `ai-summarizer-gex` cron at 07:00 ET; wiring to a modal UI pending
 - ⚠️ **OI/DV magnitudes are ~1.6× UW's reported values** — tracked, not blocking
+- ⚠️ **AMZN heatmap intermittently returns 0 rows** from UW even during market hours — watch; may need a fallback. Other 10 tickers populate cleanly.
 
 ### 5. Flow Alerts (`/flow`) — PRD §5
 - ✅ Live feed table — time, ticker, type, side, exec, contract, strike, expiry, size, OI, premium, spot, confidence
 - ✅ Filter panel, stats bar
-- ✅ **Live data** via worker `pollFlowAlerts` (30s market hours, 5m off-hours)
+- ✅ **Live data** via worker `pollFlowAlerts` (30s market hours, 5m off-hours) — UW's `/option-trades/flow-alerts?limit=100`, unfiltered (UW decides what's "unusual")
 - ✅ **Lottos** preset tab (`pollLottoAlerts`)
 - ✅ **Opening Sweeps** preset tab (`pollSweeperAlerts`)
+- ✅ **Contract expiry parsed from the OCC option symbol** (`a5c588e`) — UW omits `expiry` for many tickers; the old fallback to the trade timestamp produced wrong dates like "$442.5P May 14". Historical rows can't be backfilled (we don't store `option_chain`); they age out in 60 days.
+- ✅ **`ticker` + `sector` filters are server-side** (`6878507`) — `/api/flow` WHERE clause. Previously the route returned the top-200 most-recent across ALL tickers then filtered client-side, which starved low-frequency tickers (AAPL showed 1 of 64 rows).
+- ✅ **200-row response cap removed** (`f6c40ff`) — `/api/flow` returns every matching row; 60-day retention is the only ceiling. Unfiltered busy-day query ≈ 12K rows; table is not virtualized (~1-2s render) — virtualize if it becomes painful.
+- ✅ **Sector filter wired** (`bab44aa`) — 16-value Sector union; resolved via `SECTOR_OVERRIDES` (see Infra).
+- ✅ **Expiry (DTE) filter wired** (`e20b48d`) — 0DTE / ≤7d / ≤30d, computed as `expiry − trading-day`.
+- ✅ Confidence rule: `volume_oi_ratio ≥ 5 → HIGH`, `≥ 1 → MED`, else `LOW` ([worker/src/jobs/uw.ts](worker/src/jobs/uw.ts) `mapFlowAlert`).
 
 ### 6. Dark Pools (`/darkpool`) — PRD §3.5 — **REPLATFORMED 2026-05-12..05-13**
 
@@ -76,6 +84,7 @@ The UW dark-pool ingest is **retired**. Polygon is now the sole source of truth 
 - ✅ Sort by time / rank / premium
 - ✅ Stats bar — Prints / Total premium (B-suffix) / Top rank
 - ✅ **`lib/tracked-tickers.ts`** — 229 ticker constant, generated from `worker/src/lib/ticker-thresholds.json`. Single source of truth for the dropdown.
+- ✅ **"Hide ETFs" toggle now works** (`888c27a`, 2026-05-18) — `is_etf` was hardcoded `false` in the Polygon ingest. `polygon-trade-filter.ts` now reads `isEtf` from `SECTOR_OVERRIDES`; `script-backfill-dp-is-etf.ts` flagged 4,498 of 38,805 stored rows.
 
 **Polygon historical corpus (2023-01-01 → 2026-05-04) — re-pulled 2026-05-12:**
 - Pull script: `~/polygon-pull-project/pull.py` + `filter_top200.py` + `build_thresholds.py` + `ticker_thresholds.json`
@@ -128,7 +137,8 @@ The UW dark-pool ingest is **retired**. Polygon is now the sole source of truth 
 | **Polygon dark-pool ingest** | ✅ **LIVE — daily + hourly** | `polygon-daily-flatfile` + `polygon-hourly-intraday` (replaces UW dark-pool poll and the old `s3-darkpool-import` stub) |
 | **Dark-pool rerank** | ✅ Live | Per-ticker top-200 by notional. Called per ticker after each insert pass. |
 | Retention sweeps | ✅ Live | 60-day flow / **perpetual-ranked + 30d-unranked** DP / 30-day GEX heatmap at 03:00 ET Mon–Fri. (`gex_snapshots` itself still has no sweep — pre-existing gap.) |
-| `refresh-ticker-metadata` daily job | ✅ Live | 05:30 ET |
+| `refresh-ticker-metadata` daily job | ✅ Live | 05:30 ET. Resolves sector/isEtf via the shared `resolveTickerSector()` in `worker/src/lib/sector-overrides.ts`. |
+| **`SECTOR_OVERRIDES`** ticker classification | ✅ 257 entries | `worker/src/lib/sector-overrides.ts` — 205 individual equities classified 2026-05-18 (`bab44aa`) on top of the existing ETF/index entries. Single source of truth for sector + `isEtf`; consumed by `pollFlowAlerts`, `refreshTickerMetadata`, and the Polygon dark-pool ingest. |
 | `hit-list-compute` daily job | ⚠️ Live but no upstream | Cron runs at 07:30 ET; waits on the ML model |
 
 **`dark_pool_prints` state at time of writing (2026-05-13 ~23:00 ET):**
@@ -152,7 +162,13 @@ The UW dark-pool ingest is **retired**. Polygon is now the sole source of truth 
 | `proxy.ts` | ✅ Live | Edge-safe gate; `/api/*` → 401 JSON; pages → `/login?from=` |
 | AccessDenied page | ✅ Branded + CTA (`92bcf55`) | Includes "Join free product" CTA for users without the pass |
 | **Whop iframe pivot** | ❌ Reverted (`e94a682`) | Phase 2/3 scaffolded iframe SDK + auth gate (`859e07d`, `7e59e71`); reverted because PrismaAdapter conflicted with the cookie-less iframe session. Reverted to JWT/cookie-only baseline. |
-| Sign-out UI button | ⬜ TODO | Phase F polish — not blocking |
+| Sign-out UI button | ✅ Done (`bab44aa`) | Lives on the new `/settings` page (form action → `signOut()`) |
+
+---
+
+## 7. Settings (`/settings`) — NEW 2026-05-18
+
+- Stub page at `app/(modules)/settings/page.tsx` (`bab44aa`) — was a 404 (sidebar linked to a non-existent route). Shows the signed-in user's name + email and a **Sign out** button. Planned additions: notification prefs, watchlist defaults, theme, API keys.
 
 ---
 
@@ -166,7 +182,9 @@ The UW dark-pool ingest is **retired**. Polygon is now the sole source of truth 
 
 | Item | Status | Notes |
 |---|---|---|
-| Sidebar logo (`public/logo.png`) | ✅ Live | Champagne bottle + chart on navy |
+| Sidebar logo (`public/logo.png`) | ✅ Live, links to `/` (`181e244`) | Champagne bottle + chart on navy |
+| Favicon | ✅ `app/icon.png` (`a5c588e`) | Next App Router auto-serves it |
+| Sidebar "Search nav…" input | ✅ Wired (`bab44aa`) | Case-insensitive filter over the nav lists |
 | Topbar "Market open/closed" badge | ✅ Real | ET wallclock; Mon–Fri 09:30–16:00 ET; re-checks every 60s |
 | US market holiday calendar | ⬜ TODO | Punch-list item |
 | Dark Pools time format | ✅ 12-hour with year | `MM/DD/YYYY h:MM:SS AM/PM`; still UTC — local-zone conversion is a separate change if needed |
@@ -180,19 +198,20 @@ The UW dark-pool ingest is **retired**. Polygon is now the sole source of truth 
 ## Next priorities (in order)
 
 1. **Fix `uwId` cross-day collision for backfill completeness** — change scheme to `polygon:<ticker>:<YYYY-MM-DD>:<id>` and re-run filter_top200 + reload to recapture rows that were over-dedup'd by the current `polygon:<ticker>:<id>` form. Small TS change + a manual rerun. After this lands the corpus is genuinely complete back to 2023-01-01.
-2. **Verify first market-hours GEX heatmap polls (2026-05-14 09:30 ET onwards)** — confirm all 11 tickers populate the new `gex_heatmap_snapshots` table cleanly; spot-check that AMD's 5 Friday-only expirations all return data and the M/W/F tickers don't return empty rows on Tue/Thu (the wrong-cadence fallback was assumed safe, but unverified in live conditions).
+2. **Investigate AMZN heatmap 0-row returns** — AMZN intermittently returns 0 rows from `/spot-exposures/expiry-strike` even during market hours (other 10 tickers fine). Could be a UW data quirk or need a fallback path.
 3. **Tighten Polygon intraday cadence if needed** — currently hourly during 10-17 ET = ~75 min worst-case delay. Bumping to every-15-min gives ~30 min max. One-line cron change (`0 */15 10-17 * * 1-5`). Same code; same Polygon entitlement.
 4. **(Stretch) WebSocket trades subscription** — Polygon $79 tier includes it. Gives sub-second push within the 15-min delay floor. Adds a long-running stateful service (more code, more failure modes) but cleanest UX. Defer unless 15-min cadence falls short in practice.
 5. **TradingView embedded charts** — separate workstream. Use Polygon WebSocket Aggregates (`A.<ticker>` minute bars) — NOT Trades — to feed bars to TradingView's realtime callback. Currently no chart embed in the app; this is net-new feature work.
 6. **Daily Watches data pipeline** — wait on the ML model to produce rows for `hit_list_daily`. Swap `app/(modules)/watches/page.tsx` body back to `<WatchesView />` when ready.
 7. **GEX AI explanation modal** — frontend wiring of cached summaries.
 8. **GEX Heatmap follow-ups** — (a) add a netOI/netDV toggle to the view (payload already carries both); (b) US holiday calendar so the per-expiry calls don't 404 on closed days; (c) `gex_snapshots` retention sweep (pre-existing gap, surfaced when adding heatmap retention).
-9. **Remaining secondary tab views** — Watches Criteria config, GEX By strike / Key levels, Dark Pools DP levels.
-10. **Phase F polish** — sign-out button + Sidebar user menu; periodic access-pass re-check cron.
-11. **US holiday calendar** for the Market open/closed badge.
-12. **GEX OI/DV magnitude reconciliation** — standard-contract filter so totals align with UW's reported aggregates.
-13. **Same-day hit-list rebuild** on `POST /api/admin/criteria`.
-14. **UW 429 throttling on flow polls** — port the GEX 200ms inter-call sleep pattern.
+9. **Flow Live-feed table virtualization** — the 200-row cap is gone, so an unfiltered busy-day query renders ~12K rows (~1-2s). Drop in `react-window` if it gets painful.
+10. **Remaining secondary tab views** — Watches Criteria config, Dark Pools DP levels.
+11. **Periodic access-pass re-check cron** + Sidebar user menu (Phase F remainder; sign-out itself is done).
+12. **US holiday calendar** for the Market open/closed badge + the GEX per-expiry calls.
+13. **GEX OI/DV magnitude reconciliation** — standard-contract filter so totals align with UW's reported aggregates.
+14. **Same-day hit-list rebuild** on `POST /api/admin/criteria`.
+15. **UW 429 throttling on flow polls** — port the GEX 200ms inter-call sleep pattern.
 
 ---
 
@@ -262,13 +281,20 @@ The UW dark-pool ingest is **retired**. Polygon is now the sole source of truth 
 ### Ops scripts (worker/src/*)
 
 - `smoke-uw.ts` — fires every UW poll once
-- `smoke-gex.ts` — fires `pollGex` once + verifies each ticker has a fresh `gex_heatmap_snapshots` row (NEW 2026-05-14)
-- `smoke-uw-heatmap-probe.ts` — one-shot diagnostic that picked the per-expiry endpoint (`/spot-exposures/strike?expiry=`); kept as a reference for future UW endpoint surveys (NEW 2026-05-14)
+- `smoke-gex.ts` — fires `pollGex` once + verifies each ticker has a fresh `gex_heatmap_snapshots` row
+- `smoke-uw-heatmap-probe.ts` — one-shot UW endpoint survey; kept as reference
 - `smoke-darkpool-import.ts` — fires the legacy `importDarkpoolHistory` (top200.parquet load); useful only if reloading the historical corpus from S3
 - `script-smoke-flatfile.ts <YYYY-MM-DD>` — dry-run smoke for `polygon-daily-flatfile`
 - `script-backfill-polygon.ts <start> <end>` — runs the daily job for a date range
+- `script-backfill-flow-sectors.ts` — re-resolves `flow_alerts.sector` via `SECTOR_OVERRIDES` (ran 2026-05-18: 50,868 of 97,891 rows corrected)
+- `script-backfill-dp-is-etf.ts` — sets `dark_pool_prints.is_etf` from `SECTOR_OVERRIDES` (ran 2026-05-18: 4,498 rows flagged)
 - `script-delete-uw-history.ts` — destructive UW cleanup
 - `rerank-all.ts` — sequential rerank across every ticker (recovery tool)
+
+Local-script gotcha: the Railway public Postgres has a small connection
+ceiling. Running several `tsx` scripts back-to-back (or alongside a long
+dev server) trips `FATAL: too many clients` — space them out or wait
+~60-90s for idle connections to drain.
 
 All runnable via `railway run` or directly with `DATABASE_URL=$PUBLIC_DB npx tsx src/<script>.ts` after sourcing `.env`.
 
@@ -288,7 +314,7 @@ All runnable via `railway run` or directly with `DATABASE_URL=$PUBLIC_DB npx tsx
 ```
 I was building software with you in another context window and hit
 the limit. Read progress.md first — it's the canonical state snapshot
-(dated 2026-05-14, on commit fd141b9). Use docs/FlowDesk_PRD.md and
+(dated 2026-05-18, on commit 428b325). Use docs/FlowDesk_PRD.md and
 docs/ARCHITECTURE.md as the spec when you need to verify anything.
 
 Don't trust progress.md blindly for any code references — verify
@@ -301,37 +327,34 @@ says Champagne Sessions.
 
 Live deploy: Vercel auto-deploys frontend on push to main; Railway
 worker auto-deploys too. Railway is on the Pro plan; Postgres volume
-is 5 GB.
+is 5 GB. Local scripts hit the public Postgres URL — space them out,
+its connection ceiling is low.
 
 Recent major work:
 
-(2026-05-12..05-13) Dark pool was replatformed from UW polling to
+(2026-05-12..05-13) Dark pool replatformed from UW polling to
 Polygon-only. Historical corpus re-pulled without the FINRA TRF
-filter (lit-exchange blocks included), deduped, loaded into Postgres.
-Two new worker jobs ingest going forward:
-  - polygon-daily-flatfile (06:00 ET)
-  - polygon-hourly-intraday (hourly 10-17 ET)
-UW dark-pool retired (cron unregistered, 856K UW rows deleted).
+filter, deduped, loaded into Postgres. polygon-daily-flatfile
+(06:00 ET) + polygon-hourly-intraday (10-17 ET) ingest going forward.
 229 tickers in `dark_pool_prints`, all uw_id LIKE 'polygon:%'.
-Backfill of 2026-05-05..05-12 completed 2026-05-14 ~01:03 ET.
 
-(2026-05-14) GEX Heatmap shipped. New `gex_heatmap_snapshots` table
-+ `/api/gex/heatmap` route + Heatmap sub-tab on /gex. Ticker list
-expanded from 5 to 11: SPY, SPX, QQQ, TSLA, NVDA, AMD, META, AMZN,
-GOOGL, NFLX, MSFT. Strike bands: 10% indices, 15% megacaps, 20% AMD,
-25% high-beta. Client polls every 60s with tab-visibility pause.
+(2026-05-14..18) GEX Heatmap shipped — strike × expiration matrix on
+a new /gex Heatmap tab. `gex_heatmap_snapshots` table + /api/gex/
+heatmap route, `pollGex` writes per-(strike×expiry) rows. Ticker
+list expanded 5→11. Data source went through a correction: the
+/spot-exposures/strike?expiry= form silently ignores its filter —
+switched to /spot-exposures/expiry-strike?expirations[]= (bracket
+form mandatory). Expirations discovered live from /greek-exposure/
+expiry. See the Module 4 section for the full detail.
 
-Endpoint correction (same day): `fd141b9` shipped with
-/spot-exposures/strike?expiry=<date> which silently ignores its
-filter — every expiration column was identical. Fixed by switching
-to /spot-exposures/expiry-strike?expirations[]=<dates> (the bracket
-form is mandatory; bare `expirations=` keeps only the last value).
-Worker also dropped the static M/W/F/FRIDAY/DAILY calendar in
-favor of UW's /greek-exposure/expiry which lists all active expiries
-per ticker — take the 5 lowest-DTE.
-
-Placeholder tabs (By strike / By expiry / Vanna & charm / Key levels)
-that shipped in fd141b9 were removed in the same follow-up commit.
+(2026-05-18) Bug-fix batch — 8 reported UI bugs + flow-alerts fixes:
+removed period toggle / duplicate badges / dead tabs; new /settings
+stub with sign-out; sidebar nav search; favicon; logo→Home link;
+Flow sector + DTE filters wired; flow ticker/sector filters moved
+server-side; /api/flow 200-row cap removed; flow contract dates
+parsed from the OCC symbol; dark-pool is_etf populated; GEX ticker
+selection persists via localStorage. SECTOR_OVERRIDES grew to 257
+tickers (sector + isEtf classification).
 
 Known follow-up (priority #1): Polygon trade IDs collide across days,
 so the current uwId scheme `polygon:<ticker>:<id>` over-dedups. Fix
