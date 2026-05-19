@@ -63,6 +63,16 @@ function fmtP(v: number): string {
   return s + "$" + a;
 }
 
+// Days-to-expiration relative to the trading day the feed is showing.
+// Both args are ISO YYYY-MM-DD; parsed as UTC midnight so the subtraction
+// is a clean integer day count regardless of local timezone.
+function dteOf(expiryIso: string, tradingDayIso: string): number {
+  const exp = Date.parse(`${expiryIso}T00:00:00Z`);
+  const day = Date.parse(`${tradingDayIso}T00:00:00Z`);
+  if (Number.isNaN(exp) || Number.isNaN(day)) return NaN;
+  return Math.round((exp - day) / 86_400_000);
+}
+
 export function FlowView() {
   const [alerts, setAlerts] = useState<FlowAlert[]>([]);
   const [filter, setFilter] = useState<FilterState>(() => ({ ...INITIAL_FILTER, date: todayET() }));
@@ -96,6 +106,14 @@ export function FlowView() {
     const premMax = Number(filter.premMax);
     if (filter.premMax && Number.isFinite(premMax)) r = r.filter(x => x.premium <= premMax);
     if (filter.rule !== "ALL") r = r.filter(x => x.rule.startsWith(filter.rule));
+    if (filter.dte !== "ALL") {
+      const maxDte = Number(filter.dte);
+      r = r.filter(x => {
+        const d = dteOf(x.expiry, filter.date);
+        if (Number.isNaN(d)) return false;
+        return filter.dte === "0" ? d === 0 : d >= 0 && d <= maxDte;
+      });
+    }
     // ticker + sector are applied server-side now (URL params on the /api/flow
     // fetch). Without that, the route's MAX_ROWS=200 global cap would starve
     // any single ticker that doesn't dominate the most-recent window.
