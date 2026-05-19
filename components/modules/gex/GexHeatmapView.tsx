@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { HeatmapPayload } from "@/lib/types";
+import { useGexTicker } from "@/lib/use-gex-ticker";
 
 const TICKERS = ["SPY", "SPX", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT"];
 
@@ -56,7 +57,7 @@ type HeatmapState = {
   loading: boolean;
 };
 
-function useHeatmapData(ticker: string): HeatmapState {
+function useHeatmapData(ticker: string, enabled: boolean): HeatmapState {
   const [state, setState] = useState<HeatmapState>({
     data: null,
     error: null,
@@ -65,6 +66,7 @@ function useHeatmapData(ticker: string): HeatmapState {
   });
 
   useEffect(() => {
+    if (!enabled) return; // wait until the persisted ticker is applied
     let cancelled = false;
     setState((s) => ({ ...s, loading: true, error: null, notFound: false }));
 
@@ -97,7 +99,7 @@ function useHeatmapData(ticker: string): HeatmapState {
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [ticker]);
+  }, [ticker, enabled]);
 
   return state;
 }
@@ -122,8 +124,8 @@ function freshness(ageMs: number): { label: string; color: string } {
 }
 
 export function GexHeatmapView() {
-  const [ticker, setTicker] = useState<string>("SPY");
-  const { data, error, notFound, loading } = useHeatmapData(ticker);
+  const { ticker, setTicker, restored } = useGexTicker(TICKERS, "SPY");
+  const { data, error, notFound, loading } = useHeatmapData(ticker, restored);
   const now = useNow();
 
   const cellMap = useMemo(() => {

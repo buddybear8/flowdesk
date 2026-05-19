@@ -16,6 +16,7 @@ import { Bar } from "react-chartjs-2";
 import { clsx } from "clsx";
 import type { GEXPayload } from "@/lib/types";
 import { formatUsd, pickStrikesCentered } from "@/lib/utils";
+import { useGexTicker } from "@/lib/use-gex-ticker";
 
 // Dollar gamma per 1% move is related to "gamma in shares" by:
 //   dollarGamma = gammaShares × spot² × 0.01
@@ -102,17 +103,18 @@ function atmStrike(data: GEXPayload): number {
 }
 
 export function GexView() {
-  const [ticker, setTicker] = useState<string>("SPY");
+  const { ticker, setTicker, restored } = useGexTicker(TICKERS, "SPY");
   const [showDV, setShowDV] = useState(true);
   const [showOI, setShowOI] = useState(true);
   const [strikeCount, setStrikeCount] = useState<StrikeCount>("25");
   const [data, setData] = useState<GEXPayload | null>(null);
 
   useEffect(() => {
+    if (!restored) return; // wait until the persisted ticker is applied
     fetch(`/api/gex?ticker=${ticker}`)
       .then(r => r.json())
       .then(setData);
-  }, [ticker]);
+  }, [ticker, restored]);
 
   if (!data) {
     return <div className="flex flex-1 items-center justify-center text-text-tertiary text-[12px]">Loading GEX…</div>;
