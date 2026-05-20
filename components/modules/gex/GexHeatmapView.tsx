@@ -1,131 +1,36 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import type { HeatmapPayload } from "@/lib/types";
+import { useMemo } from "react";
 import { useGexTicker } from "@/lib/use-gex-ticker";
+import { useGexHeatmapMode, INDICES_TICKERS } from "@/lib/use-gex-heatmap-mode";
+import {
+  useHeatmapData,
+  useNow,
+  freshness,
+  cellBg,
+  fmtGex,
+  cellKey,
+  COLOR_POS_TEXT,
+  COLOR_NEG_TEXT,
+  COLOR_MAX_ABS_BG,
+  COLOR_MAX_ABS_TEXT,
+  COLOR_SPOT,
+} from "./heatmap-shared";
+import { HeatmapModeToggle, CustomTickerPicker } from "./HeatmapModeControls";
+import { MultiHeatmapView } from "./MultiHeatmapView";
 
 const TICKERS = ["SPY", "SPX", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT"];
 
-const COLOR_POS_TEXT = "#A6E07A";
-const COLOR_NEG_TEXT = "#F08585";
-const COLOR_MAX_ABS_BG = "#F2A23B";
-const COLOR_MAX_ABS_TEXT = "#1A1410";
-const COLOR_SPOT = "#22D3EE";
-
-// Power-curve scaling. Exp > 1 biases toward neutral — small-magnitude cells
-// stay near-transparent so the larger cells visually stand out.
-const MAX_BG_ALPHA = 0.6;
-const RAMP_EXP = 1.6;
-
-function rampAlpha(v: number, maxAbs: number): number {
-  if (!maxAbs) return 0;
-  const t = Math.min(1, Math.abs(v) / maxAbs);
-  return Math.pow(t, RAMP_EXP) * MAX_BG_ALPHA;
-}
-
-function cellBg(v: number, maxAbs: number): string {
-  const a = rampAlpha(v, maxAbs);
-  if (v === 0) return "rgba(255,255,255,0.02)";
-  return v > 0
-    ? `rgba(127, 191, 82, ${a.toFixed(3)})`
-    : `rgba(231, 106, 106, ${a.toFixed(3)})`;
-}
-
-// Values are in raw dollars; we render everything in millions so a column of
-// mixed M / B / K units stays visually comparable. Billions display as
-// "$X,XXX.XXM" with a comma separator rather than switching to a B suffix.
-function fmtGex(v: number): string {
-  const sign = v < 0 ? "−" : "";
-  const m = Math.abs(v) / 1e6;
-  return `${sign}$${m.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 })}M`;
-}
-
-function cellKey(strike: number, exp: string): string {
-  return `${strike}|${exp}`;
-}
-
-// ─── Data hook: poll /api/gex/heatmap once per minute ─────────────────────
-// - Fires immediately on mount and on ticker change
-// - Refetches every 60s while the tab is visible
-// - Refetches immediately when the tab regains focus
-// - Keeps last-good data on transient errors (don't blow away a rendered
-//   heatmap because of a single failed poll)
-type HeatmapState = {
-  data: HeatmapPayload | null;
-  error: string | null;
-  notFound: boolean;
-  loading: boolean;
-};
-
-function useHeatmapData(ticker: string, enabled: boolean): HeatmapState {
-  const [state, setState] = useState<HeatmapState>({
-    data: null,
-    error: null,
-    notFound: false,
-    loading: true,
-  });
-
-  useEffect(() => {
-    if (!enabled) return; // wait until the persisted ticker is applied
-    let cancelled = false;
-    setState((s) => ({ ...s, loading: true, error: null, notFound: false }));
-
-    const fetchOnce = async () => {
-      try {
-        const r = await fetch(`/api/gex/heatmap?ticker=${ticker}`, { cache: "no-store" });
-        if (r.status === 404) {
-          if (!cancelled) setState({ data: null, error: null, notFound: true, loading: false });
-          return;
-        }
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const json = (await r.json()) as HeatmapPayload;
-        if (!cancelled) setState({ data: json, error: null, notFound: false, loading: false });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (!cancelled) setState((s) => ({ ...s, error: msg, loading: false }));
-      }
-    };
-
-    fetchOnce();
-    const id = setInterval(() => {
-      if (!document.hidden) void fetchOnce();
-    }, 60_000);
-    const onVis = () => {
-      if (!document.hidden) void fetchOnce();
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-      document.removeEventListener("visibilitychange", onVis);
-    };
-  }, [ticker, enabled]);
-
-  return state;
-}
-
-// Ticks every second; used by the freshness pill so the "X sec ago" label
-// updates without depending on the polling cadence.
-function useNow(): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  return now;
-}
-
-function freshness(ageMs: number): { label: string; color: string } {
-  const sec = Math.floor(ageMs / 1000);
-  if (sec < 90) return { label: `Updated ${sec}s ago`, color: "#7FBF52" };
-  if (sec < 300) return { label: `Updated ${Math.floor(sec / 60)}m ago`, color: "#C9A55A" };
-  const min = Math.floor(sec / 60);
-  return { label: `Stale — ${min}m old`, color: "#E76A6A" };
-}
-
 export function GexHeatmapView() {
-  const { ticker, setTicker, restored } = useGexTicker(TICKERS, "SPY");
-  const { data, error, notFound, loading } = useHeatmapData(ticker, restored);
+  const { ticker, setTicker, restored: tickerRestored } = useGexTicker(TICKERS, "SPY");
+  const { mode, setMode, customTickers, setCustomTickers, restored: modeRestored } = useGexHeatmapMode(TICKERS);
+
+  // Standard mode owns its own data fetch (the existing single-ticker table
+  // below). Multi modes delegate to <MultiHeatmapView/>, which fetches per-
+  // strip. Disabling the fetch when not in Standard mode avoids a wasted
+  // request for a hidden view.
+  const standardEnabled = tickerRestored && modeRestored && mode === "standard";
+  const { data, error, notFound, loading } = useHeatmapData(ticker, standardEnabled);
   const now = useNow();
 
   const cellMap = useMemo(() => {
@@ -135,13 +40,11 @@ export function GexHeatmapView() {
     return m;
   }, [data]);
 
-  // maxAbs is used to flag the single largest cell with the orange standout.
-  // scaleMax (the SECOND-largest absolute value) is what the gradient ramp
-  // normalizes against — otherwise a single outlier cell (often the 0DTE
-  // gamma magnet) compresses every other cell into near-neutral. With the
-  // outlier excluded from the scale, "next biggest" cells reach full
-  // saturation and the eye can actually compare cells.
-  const { maxAbs, maxAbsKey, scaleMax } = useMemo(() => {
+  // maxAbs flags the single largest cell with the orange standout; scaleMax
+  // (the SECOND-largest absolute value) normalizes the gradient so a single
+  // outlier cell (often the 0DTE gamma magnet) doesn't compress every other
+  // cell into near-neutral.
+  const { maxAbsKey, scaleMax } = useMemo(() => {
     let maxAbs = 0;
     let secondMax = 0;
     let maxAbsKey = "";
@@ -155,7 +58,7 @@ export function GexHeatmapView() {
         secondMax = abs;
       }
     }
-    return { maxAbs, maxAbsKey, scaleMax: secondMax > 0 ? secondMax : maxAbs };
+    return { maxAbsKey, scaleMax: secondMax > 0 ? secondMax : maxAbs };
   }, [cellMap]);
 
   const spotRowIdx = useMemo(() => {
@@ -172,7 +75,23 @@ export function GexHeatmapView() {
     return best;
   }, [data]);
 
-  const fresh = data ? freshness(now - new Date(data.capturedAt).getTime()) : null;
+  const fresh = data && mode === "standard"
+    ? freshness(now - new Date(data.capturedAt).getTime())
+    : null;
+
+  // Title label per mode.
+  const titleSuffix =
+    mode === "standard"
+      ? ticker
+      : mode === "indices"
+        ? "Indices"
+        : customTickers.length > 0
+          ? `Custom (${customTickers.length} selected)`
+          : "Custom";
+
+  // Tickers fed to MultiHeatmapView when not in Standard mode.
+  const multiTickers =
+    mode === "indices" ? [...INDICES_TICKERS] : mode === "custom" ? customTickers : [];
 
   return (
     <div
@@ -189,9 +108,9 @@ export function GexHeatmapView() {
             style={{ fontSize: 15, fontWeight: 500, color: "var(--color-text-primary)" }}
             title="Net dealer GEX (OI) by strike × expiration. Background saturation = magnitude. Orange = single largest absolute cell. Green text = positive, red = negative."
           >
-            Net GEX heatmap — {ticker}
+            Net GEX heatmap — {titleSuffix}
           </span>
-          {data && (
+          {mode === "standard" && data && (
             <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
               Spot ${data.spot.toFixed(2)} · {data.strikes.length} strikes · {data.expirations.length} expirations
             </span>
@@ -205,7 +124,7 @@ export function GexHeatmapView() {
               padding: "1px 6px",
               cursor: "help",
             }}
-            title="Background saturation maps to |GEX| / global max (sqrt-scaled). Orange = single largest absolute GEX. Green text = positive (dealer long gamma here). Red text = negative (dealer short gamma)."
+            title="Background saturation maps to |GEX| / per-view max (sqrt-scaled). Orange = single largest absolute GEX. Green text = positive (dealer long gamma here). Red text = negative (dealer short gamma). In multi-ticker views, each strip is normalized independently."
           >
             ?
           </span>
@@ -239,7 +158,7 @@ export function GexHeatmapView() {
         </div>
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-          {/* Freshness pill */}
+          {/* Freshness pill — Standard mode only; multi-mode shows per strip */}
           {fresh && (
             <span
               className="inline-flex items-center gap-[5px]"
@@ -250,30 +169,45 @@ export function GexHeatmapView() {
               {fresh.label}
             </span>
           )}
-          {error && data && (
+          {mode === "standard" && error && data && (
             <span style={{ fontSize: 10, color: COLOR_NEG_TEXT }} title={error}>
               ⚠ refresh failed
             </span>
           )}
-          <select
-            value={ticker}
-            onChange={e => setTicker(e.target.value)}
-            className="rounded-md outline-none cursor-pointer bg-bg-primary"
-            style={{
-              fontSize: 11,
-              padding: "3px 8px",
-              border: "0.5px solid var(--color-border-secondary)",
-              color: "var(--color-text-secondary)",
-            }}
-          >
-            {TICKERS.map(t => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
+
+          {/* Mode toggle — always visible */}
+          <HeatmapModeToggle mode={mode} onChange={setMode} />
+
+          {/* Mode-specific control */}
+          {mode === "standard" && (
+            <select
+              value={ticker}
+              onChange={e => setTicker(e.target.value)}
+              className="rounded-md outline-none cursor-pointer bg-bg-primary"
+              style={{
+                fontSize: 11,
+                padding: "3px 8px",
+                border: "0.5px solid var(--color-border-secondary)",
+                color: "var(--color-text-secondary)",
+              }}
+            >
+              {TICKERS.map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          )}
+          {mode === "custom" && (
+            <CustomTickerPicker
+              allTickers={TICKERS}
+              selected={customTickers}
+              onChange={setCustomTickers}
+            />
+          )}
         </div>
       </div>
 
-      {/* Heatmap card — fills remaining height */}
+      {/* Body — Standard mode keeps the existing single-ticker table; multi
+          modes render the side-by-side strips. */}
       <div
         className="bg-bg-primary"
         style={{
@@ -287,7 +221,9 @@ export function GexHeatmapView() {
           minHeight: 0,
         }}
       >
-        {loading && !data ? (
+        {mode !== "standard" ? (
+          <MultiHeatmapView tickers={multiTickers} />
+        ) : loading && !data ? (
           <div className="flex flex-1 items-center justify-center text-text-tertiary text-[12px]">
             Loading heatmap…
           </div>
