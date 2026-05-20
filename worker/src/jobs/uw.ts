@@ -20,6 +20,7 @@ import { prisma } from "../lib/prisma.js";
 import { rerankDarkPool } from "../lib/rerank-darkpool.js";
 import { WATCHED_TICKERS } from "../lib/watched-tickers.js";
 import { resolveTickerSector } from "../lib/sector-overrides.js";
+import { strikeBandFor } from "../lib/strike-bands.js";
 
 export { disconnectPrisma } from "../lib/prisma.js";
 
@@ -617,15 +618,17 @@ export async function pollGex(): Promise<void> {
         `gex-heatmap:${ticker}:expiries`,
       );
       const expiryRows = expiryListJson ? asArray((expiryListJson as any).data ?? []) : [];
-      // Over-request 10 candidates from /greek-exposure/expiry. The API
-      // filter drops any expiry whose near-spot cell count is zero (UW
-      // sometimes returns a far-OTM-only chain for a given expiry while
-      // populating others fully), and keeps the 5 best.
+      // Over-request a small margin past the 5 the API route ends up keeping
+      // (MAX_EXPIRATIONS=5 in /api/gex/heatmap). The route drops expirations
+      // whose near-spot cell count is too low (UW sometimes returns a far-OTM-
+      // only chain for a given expiry); the margin lets the route still find
+      // 5 good ones in that case. Was 10 — cut to 7 to halve heatmap call
+      // volume after the 2026-05-19 daily-quota incident.
       const nearest = expiryRows
         .map((r: any) => ({ date: String(r.expiry), dte: Number(r.dte) }))
         .filter((e: { date: string; dte: number }) => Number.isFinite(e.dte) && e.dte >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(e.date))
         .sort((a: { dte: number }, b: { dte: number }) => a.dte - b.dte)
-        .slice(0, 10);
+        .slice(0, 7);
 
       if (nearest.length === 0) {
         console.warn(`[uw:gex-heatmap:${ticker}] no expirations from /greek-exposure/expiry`);
@@ -633,13 +636,28 @@ export async function pollGex(): Promise<void> {
       }
       const expiryDates: string[] = nearest.map((e: { date: string }) => e.date);
       const expParam = expiryDates.map((d) => `expirations[]=${d}`).join("&");
+
+      // Pre-bound the strike range to the same per-ticker band the API route
+      // ends up filtering to (lib/strike-bands.ts → strikeBandFor). +2% margin
+      // so the route's filter never has to clip at the boundary. This drops
+      // the row count UW returns dramatically — SPX previously returned ~2000
+      // rows / 5 pages from a full chain spanning $5–$7700; bounded to ±12%
+      // around spot it returns the near-money strikes only, usually 1 page.
+      // If UW's expiry-strike endpoint ignores min/max_strike (it accepts
+      // them on the sibling /spot-exposures/strike), this is a harmless no-op
+      // and the .slice(0,7) cut above still applies.
+      const bandFraction = strikeBandFor(ticker) + 0.02;
+      const minStrike = Math.floor(spot * (1 - bandFraction));
+      const maxStrike = Math.ceil(spot * (1 + bandFraction));
+      const strikeParam = `&min_strike=${minStrike}&max_strike=${maxStrike}`;
+
       const PAGE_LIMIT = 500;
       const MAX_PAGES = 5;
       const allRows: any[] = [];
       for (let page = 1; page <= MAX_PAGES; page++) {
         if (page > 1) await sleep(TICKER_DELAY_MS);
         const expJson = await uwFetch(
-          `/api/stock/${ticker}/spot-exposures/expiry-strike?${expParam}&limit=${PAGE_LIMIT}&page=${page}`,
+          `/api/stock/${ticker}/spot-exposures/expiry-strike?${expParam}${strikeParam}&limit=${PAGE_LIMIT}&page=${page}`,
           `gex-heatmap:${ticker}:p${page}`,
         );
         if (!expJson) break;
