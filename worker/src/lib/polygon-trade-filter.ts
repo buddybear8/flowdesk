@@ -122,8 +122,15 @@ function mapToRecord(t: RawPolygonTrade): Prisma.DarkPoolPrintCreateManyInput | 
 
   const notional = t.price * t.size;
 
+  // uwId is date-namespaced: Polygon's trade `id` is only unique within a
+  // trading day (IDs recycle), so `polygon:<ticker>:<id>` collided across
+  // days and `createMany skipDuplicates` silently dropped legitimate trades.
+  // The UTC date slice is a pure function of sipTimestampNs, so the daily
+  // and hourly jobs produce identical keys for the same trade.
+  const uwDate = executedAt.toISOString().slice(0, 10);
+
   return {
-    uwId: `polygon:${t.ticker}:${t.id}`,
+    uwId: `polygon:${t.ticker}:${uwDate}:${t.id}`,
     executedAt,
     ticker: t.ticker,
     price: new Prisma.Decimal(t.price),

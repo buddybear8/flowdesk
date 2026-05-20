@@ -12,8 +12,8 @@
 //     Exchange holidays where Polygon publishes nothing are handled
 //     gracefully — the stream is empty and the job logs "0 rows" + returns.
 //   • Stream-filters in O(1) memory; the survivor batch is small (~10s-1000s).
-//   • Idempotent via uwId unique constraint (polygon:<ticker>:<id>) +
-//     skipDuplicates.
+//   • Idempotent via uwId unique constraint
+//     (polygon:<ticker>:<YYYY-MM-DD>:<id>) + skipDuplicates.
 //   • Per-ticker rerank only fires when the ticker actually gained new rows.
 
 import { prisma } from "../lib/prisma.js";
