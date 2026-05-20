@@ -44,7 +44,13 @@ cron.schedule("*/30 * 9-15 * * 1-5", safe("uw-poll-mkt", async () => {
 cron.schedule("0 */5 0-8,16-23 * * 1-5", safe("uw-poll-off", async () => {
   await Promise.all([pollFlowAlerts(), pollLottoAlerts(), pollSweeperAlerts()]);
 }));
-cron.schedule("*/60 * 9-15 * * 1-5", safe("gex-poll", pollGex));
+// GEX-poll cadence reduced from every 60s to every 2 min on 2026-05-20 after
+// a second consecutive day of UW daily-quota exhaustion (the row-count cut in
+// bc87b02 wasn't sufficient on its own). Dealer positioning barely changes
+// minute-to-minute; 2 min is perceptually fine and halves the dominant UW
+// consumer. Stacked with the per-cycle row-count cut, the worker should now
+// stay comfortably under UW's daily quota.
+cron.schedule("0 */2 9-15 * * 1-5", safe("gex-poll", pollGex));
 cron.schedule("0 */5 9-15 * * 1-5", safe("market-tide", pollMarketTide));
 cron.schedule("30 */5 9-15 * * 1-5", safe("net-impact", computeNetImpact));
 
