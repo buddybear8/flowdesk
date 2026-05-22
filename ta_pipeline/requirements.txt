@@ -1,0 +1,22 @@
+# ta_pipeline — TA feature + label layer dependencies
+
+# Core numerics
+pandas>=2.0,<3.0
+numpy>=1.23
+scipy>=1.10
+
+# Data source
+polygon-api-client>=1.13
+pyarrow>=14.0            # parquet cache for daily bars
+
+# Tests (leakage / alignment unit tests, brief §7)
+pytest>=7.4
+
+# Model layer — LightGBM baseline + calibration / PR metrics
+lightgbm>=4.0
+scikit-learn>=1.3
+
+# Note: the §3 indicators are implemented directly in pandas/numpy
+# (see indicators.py) rather than via pandas-ta. This gives exact Wilder
+# smoothing control and drops the numpy<2.0 pin pandas-ta would force.
+# The thin one-function-per-indicator wrapper keeps the library swappable.

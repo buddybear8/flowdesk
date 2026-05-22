@@ -1,7 +1,7 @@
 # Champagne Sessions — Build Progress
 
-Last updated: 2026-05-18
-Current `main` head: **`428b325`** (Vercel + Railway auto-deploy on push)
+Last updated: 2026-05-21
+Current `main` head: **`428b325`** (Vercel + Railway auto-deploy on push) — note: the `ta_pipeline/` sub-project (below) is **uncommitted / untracked**, separate from the deployed app.
 
 > Product was rebranded from "FlowDesk" → "Champagne Sessions" (commit `bbecffb`, late April). Repo path is still `flowdesk/`, GitHub remote is still `github.com/buddybear8/flowdesk`. Every user-facing string says Champagne Sessions; backend names and file paths were intentionally not churned.
 
@@ -146,6 +146,33 @@ The UW dark-pool ingest is **retired**. Polygon is now the sole source of truth 
 - **229 distinct tickers** (the corpus universe; UW's long-tail 5K+ tickers are gone)
 - ~38K rows baseline + backfill additions (still trickling in)
 - Coverage: 2023-01-01 → 2026-05-05 ✓, 2026-05-06..05-12 in progress, 2026-05-13+ flows via hourly + daily Polygon jobs going forward
+
+---
+
+## TA / ML Pipeline (`ta_pipeline/`) — NEW 2026-05-21
+
+The upstream ML workstream that Daily Watches (§1) and the `hit-list-compute` cron are waiting on. A self-contained Python sub-project — **uncommitted / untracked** (all new files under `ta_pipeline/`), separate from the deployed Next.js app and the TS worker. Own venv at `ta_pipeline/.venv` (Python 3.9). Full detail in `ta_pipeline/README.md`.
+
+Purpose: test the project hypothesis — aggressive, abnormally-large directional options flow predicts a forward move, and technical/regime context says when it is reliable. Built so far: candle ingestion, a leakage-controlled TA feature + label pipeline, and a TA-only baseline model.
+
+### Candle ingestion — `ta_pipeline/ingestion/`
+- ✅ Polygon.io daily-bar backfill — **228-ticker universe** (`ta_pipeline/tickers.txt`), full 10-year split-adjusted history, one REST call/ticker, ≤10 workers. Local per-ticker parquet store `ta_pipeline/data/candles/` + CSV manifest. Run 2026-05-21.
+- ✅ Incremental `update.py`, per-ticker quality flags (manifest `qc_flags`), and `repair.py` (trim reused-symbol seams / stitch renamed predecessors / deprecate tickers).
+- Universe seeded from `worker/src/lib/ticker-thresholds.json` (229) minus **GOLD** (deprecated — it was a tail-seam; GLD is the gold proxy). Data repairs applied: trimmed SE/SNOW/IBIT/META, stitched META←FB & XYZ←SQ — re-apply after any full re-backfill (see README).
+- ⚠️ This is a **separate** Polygon use from the worker's dark-pool ingest — different store, different code. `POLYGON_API_KEY` is not stored locally; runs that fetch use `railway run` (the key is in the Railway `flowdesk` service vars).
+
+### Feature + label pipeline
+- ✅ §3 indicators (Wilder RSI/ATR, Bollinger, SMAs), swing detection, 7 §4 feature blocks → ~56 model features. Hand-rolled in pandas/numpy (no pandas-ta). Strict no-lookahead — warmup masking + a leakage / alignment / ATR-consistency test suite.
+- ✅ Label layer: mirrored long/short **ATR-scaled triple-barrier** (`label_long` / `label_short`, +1.5 / −1.0 ATR, 10-day horizon). `build_dataset` is the master builder → feature matrix ≈ 413k rows × 81 cols.
+
+### TA-only baseline model — `ta_pipeline/model/`
+- ✅ Walk-forward CV (expanding folds + a reserved 12-month OOS, 10-day embargo), LightGBM per side, isotonic-calibrated, PR-AUC / precision-recall evaluation, and a spot-checkable predictions table. Run: `python -m ta_pipeline.model.run`. Artifacts in `ta_pipeline/data/models/` (gitignored).
+- ⚠️ **Result: TA-only ≈ chance** — OOS ROC-AUC ~0.51, PR-AUC ≈ base rate. Expected (TA is regime context, not a standalone predictor); this is the **benchmark bar** the combined TA+flow model must beat.
+- ✅ 48 tests pass (`cd ta_pipeline && pytest`).
+
+### Next (this sub-project)
+- ⬜ **Unusual Whales flow join** — the next large module: join flow features (`flow_alerts`) + dark-pool features (`dark_pool_prints`) on `ticker` + `date`, then build flow-only and combined models vs the ~0.51 TA-only bar. Flow history is only ~3 months, so the combined model trains on that recent overlap window while the TA-only baseline keeps the full 10 years.
+- ⬜ `m/N/K/c` feature sweep (low-value until flow is in). ⬜ Multi-timeframe (hourly / weekly) candles — deferred.
 
 ---
 

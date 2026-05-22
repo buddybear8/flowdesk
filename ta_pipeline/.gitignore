@@ -1,0 +1,11 @@
+# Polygon candle store + manifest (re-fetchable, never commit)
+data/
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
