@@ -20,6 +20,7 @@ const MODULES: NavEntry[] = [
   // { href: "/sentiment",   label: "Sentiment tracker", icon: "👑" },
   { href: "/market-tide", label: "Market Pulse",       icon: "🌀" },
   { href: "/gex",         label: "Options GEX",       icon: "⚡" },
+  { href: "/charts",      label: "Charts",            icon: "📊" },
   { href: "/flow",        label: "Flow alerts",       icon: "📈",   badge: { text: "18", variant: "red" } },
   { href: "/darkpool",    label: "Dark pools",        icon: "🌊" },
 ];

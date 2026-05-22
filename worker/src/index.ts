@@ -20,6 +20,7 @@ import { runAiSummarizerGex } from "./jobs/ai-summarizer-gex.js";
 import { computeHitList } from "./jobs/hit-list-compute.js";
 import { importPolygonDailyFlatFile } from "./jobs/polygon-daily-flatfile.js";
 import { pollPolygonIntraday } from "./jobs/polygon-hourly-intraday.js";
+import { pollCandles } from "./jobs/candles.js";
 import { disconnectPrisma } from "./lib/prisma.js";
 
 const ts = () => new Date().toISOString();
@@ -61,6 +62,11 @@ cron.schedule("30 */5 9-15 * * 1-5", safe("net-impact", computeNetImpact));
 cron.schedule("0 0 6 * * 1-5", safe("polygon-daily-flatfile", importPolygonDailyFlatFile));
 cron.schedule("0 0 10-17 * * 1-5", safe("polygon-hourly-intraday", pollPolygonIntraday));
 
+// Price-chart candles (jobs/candles.ts) — every minute 08:00–20:59 ET Mon–Fri
+// (pre-market through after-hours; bars are frozen outside that window). Sole
+// Polygon caller for chart data; the /api/candles route reads candle_bars.
+cron.schedule("0 * 8-20 * * 1-5", safe("candles-poll", pollCandles));
+
 // ─── Daily batches (jobs/*) ──────────────────────────────────────────────────
 cron.schedule("0 30 5 * * 1-5", safe("refresh-ticker-metadata", refreshTickerMetadata));
 cron.schedule("0 0 7 * * 1-5", safe("ai-summarizer-gex", runAiSummarizerGex));
@@ -83,4 +89,4 @@ const shutdown = async (signal: string) => {
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
-console.log(`[${ts()}] [worker] started — 11 schedules registered (Polygon dark-pool ingest live; UW dark-pool retired)`);
+console.log(`[${ts()}] [worker] started — 12 schedules registered (Polygon dark-pool ingest live; UW dark-pool retired)`);

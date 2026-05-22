@@ -28,6 +28,7 @@ const MODULES: Record<string, { label: string; tabs: string[] }> = {
   sentiment:    { label: "Sentiment tracker", tabs: ["Overview", "Analyst intelligence"] },
   "market-tide":{ label: "Market Pulse",       tabs: [] },
   gex:          { label: "Options GEX",       tabs: ["GEX overview", "Heatmap"] },
+  charts:     { label: "Charts",            tabs: [] },
   flow:       { label: "Flow alerts",       tabs: ["Live feed", "Lottos", "Opening Sweeps"] },
   darkpool:   { label: "Dark pools",        tabs: ["Ranked feed", "DP levels"] },
   settings:   { label: "Settings",          tabs: [] },
@@ -66,6 +67,18 @@ export function Topbar() {
         )}
       </div>
       <div className="ml-auto flex items-center gap-[7px]">
+        {key === "charts" && (
+          <span
+            className="text-[10px] font-medium rounded-full"
+            style={{
+              padding: "2px 8px",
+              border: "0.5px solid rgba(201, 165, 90, 0.32)",
+              color: "#C9A55A",
+            }}
+          >
+            15-min delayed data
+          </span>
+        )}
         {marketOpen !== null && (
           <span
             className="text-[10px] font-medium rounded-full"
