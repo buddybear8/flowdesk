@@ -13,14 +13,16 @@ const POLYGON_BASE = "https://api.polygon.io";
 const FETCH_TIMEOUT_MS = 15_000;
 
 // Polygon aggregate params per timeframe. `backfillDays` = history depth
-// pulled on the first run for a (ticker, tf); `intervalMs` = one bar's span,
-// used to anchor the per-minute tail refresh just before the latest bar.
+// requested on the first run for a (ticker, tf) — generously sized; Polygon
+// returns only as far back as the account's plan entitles (~10 years on the
+// current tier). `intervalMs` = one bar's span, used to anchor the per-minute
+// tail refresh just before the latest bar.
 export const TF_CONFIG: Record<
   Timeframe,
   { multiplier: number; timespan: string; backfillDays: number; intervalMs: number }
 > = {
-  "1W": { multiplier: 1, timespan: "week", backfillDays: 365 * 3, intervalMs: 7 * 86_400_000 },
-  "1D": { multiplier: 1, timespan: "day", backfillDays: 365 * 2, intervalMs: 86_400_000 },
+  "1W": { multiplier: 1, timespan: "week", backfillDays: 365 * 20, intervalMs: 7 * 86_400_000 },
+  "1D": { multiplier: 1, timespan: "day", backfillDays: 365 * 12, intervalMs: 86_400_000 },
   "1H": { multiplier: 1, timespan: "hour", backfillDays: 60, intervalMs: 3_600_000 },
 };
 
