@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import {
-  CHART_TICKERS, TIMEFRAMES,
+  TIMEFRAMES,
   type Timeframe, type CandlesResult, type RankedTradesResult,
 } from "@/lib/candles";
+import { TRACKED_TICKERS } from "@/lib/tracked-tickers";
+import { TickerSearch } from "@/components/modules/charts/TickerSearch";
 
 // Chart wraps the imperative Lightweight Charts lib — client-only, no SSR.
 const TickerPriceChart = dynamic(
@@ -58,7 +60,7 @@ function usePolled<T>(url: string): { data: T | null; error: string | null; last
 }
 
 export default function ChartsPage() {
-  const [ticker, setTicker] = useState<string>(CHART_TICKERS[0]);
+  const [ticker, setTicker] = useState<string>("SPY");
   const [tf, setTf] = useState<Timeframe>("1D");
 
   // ranked-trade overlay state
@@ -137,11 +139,7 @@ export default function ChartsPage() {
               </button>
             ))}
           </div>
-          <select value={ticker} onChange={(e) => setTicker(e.target.value)}
-            className="rounded-md outline-none cursor-pointer bg-bg-primary"
-            style={{ fontSize: 12, padding: "4px 9px", border: "0.5px solid var(--color-border-secondary)", color: "var(--color-text-primary)" }}>
-            {CHART_TICKERS.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+          <TickerSearch value={ticker} tickers={TRACKED_TICKERS} onChange={setTicker} />
         </div>
       </div>
 

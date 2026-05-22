@@ -11,13 +11,6 @@ export function isTimeframe(v: string): v is Timeframe {
   return (TIMEFRAMES as readonly string[]).includes(v);
 }
 
-// Chartable tickers — stocks/ETFs the worker polls. Mirrors the worker's
-// CHART_TICKERS (worker/src/jobs/candles.ts). SPX is excluded — it's an
-// index, not on Polygon's Stocks tier.
-export const CHART_TICKERS = [
-  "SPY", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT",
-] as const;
-
 // One OHLCV bar. `time` is UNIX seconds — the Lightweight Charts UTCTimestamp
 // shape — so the chart component can feed it straight to a series.
 export interface Candle {

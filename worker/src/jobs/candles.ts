@@ -20,15 +20,16 @@
 import { prisma } from "../lib/prisma.js";
 import { fetchAggs, TF_CONFIG, TIMEFRAMES } from "../lib/polygon-aggs.js";
 import type { Timeframe } from "../lib/polygon-aggs.js";
+import { TICKER_SET } from "../lib/polygon-trade-filter.js";
 
 const ts = () => new Date().toISOString();
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-// Chartable tickers — stocks/ETFs only. SPX is excluded: it's an index
-// (Polygon `I:SPX`), which the Stocks tier doesn't cover. Expand here.
-export const CHART_TICKERS = [
-  "SPY", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT",
-] as const;
+// Chartable tickers — the full tracked-ticker corpus (~229; the same universe
+// dark_pool_prints covers). Sourced from TICKER_SET so it stays in sync with
+// the dark-pool threshold list. It's equities/ETFs only — every entry is a
+// valid Polygon Stocks-tier ticker.
+export const CHART_TICKERS: string[] = [...TICKER_SET].sort();
 
 const INTER_CALL_MS = 150; // polite spacing between Polygon calls
 
