@@ -23,7 +23,7 @@ export const TF_CONFIG: Record<
 > = {
   "1W": { multiplier: 1, timespan: "week", backfillDays: 365 * 20, intervalMs: 7 * 86_400_000 },
   "1D": { multiplier: 1, timespan: "day", backfillDays: 365 * 12, intervalMs: 86_400_000 },
-  "1H": { multiplier: 1, timespan: "hour", backfillDays: 60, intervalMs: 3_600_000 },
+  "1H": { multiplier: 1, timespan: "hour", backfillDays: 365 * 3, intervalMs: 3_600_000 },
 };
 
 export interface AggBar {
