@@ -20,7 +20,6 @@ import { prisma } from "../lib/prisma.js";
 import { rerankDarkPool } from "../lib/rerank-darkpool.js";
 import { WATCHED_TICKERS } from "../lib/watched-tickers.js";
 import { resolveTickerSector } from "../lib/sector-overrides.js";
-import { strikeBandFor } from "../lib/strike-bands.js";
 
 export { disconnectPrisma } from "../lib/prisma.js";
 
@@ -637,27 +636,23 @@ export async function pollGex(): Promise<void> {
       const expiryDates: string[] = nearest.map((e: { date: string }) => e.date);
       const expParam = expiryDates.map((d) => `expirations[]=${d}`).join("&");
 
-      // Pre-bound the strike range to the same per-ticker band the API route
-      // ends up filtering to (lib/strike-bands.ts → strikeBandFor). +2% margin
-      // so the route's filter never has to clip at the boundary. This drops
-      // the row count UW returns dramatically — SPX previously returned ~2000
-      // rows / 5 pages from a full chain spanning $5–$7700; bounded to ±12%
-      // around spot it returns the near-money strikes only, usually 1 page.
-      // If UW's expiry-strike endpoint ignores min/max_strike (it accepts
-      // them on the sibling /spot-exposures/strike), this is a harmless no-op
-      // and the .slice(0,7) cut above still applies.
-      const bandFraction = strikeBandFor(ticker) + 0.02;
-      const minStrike = Math.floor(spot * (1 - bandFraction));
-      const maxStrike = Math.ceil(spot * (1 + bandFraction));
-      const strikeParam = `&min_strike=${minStrike}&max_strike=${maxStrike}`;
-
+      // Strike-range bounds were added in bc87b02 (post-quota incident) to
+      // cap UW's row count. They worked for SPY/SPX/QQQ but as of 2026-05-26
+      // UW's expiry-strike endpoint returns empty `data` when BOTH
+      // `expirations[]=` AND `min_strike`/`max_strike` are combined for
+      // single-stock tickers (TSLA, NVDA, META, AMZN, GOOGL, NFLX, MSFT, AMD).
+      // Either filter alone returns data; the combination breaks. Probe
+      // results in worker/src/script-uw-heatmap-debug.ts. Dropping the strike
+      // bounds: heatmap volume rises back toward pre-bc87b02 levels for
+      // stocks, but with the 2-min cron cadence (118fb8f) the daily UW total
+      // stays well within quota — current usage is far below the cap.
       const PAGE_LIMIT = 500;
       const MAX_PAGES = 5;
       const allRows: any[] = [];
       for (let page = 1; page <= MAX_PAGES; page++) {
         if (page > 1) await sleep(TICKER_DELAY_MS);
         const expJson = await uwFetch(
-          `/api/stock/${ticker}/spot-exposures/expiry-strike?${expParam}${strikeParam}&limit=${PAGE_LIMIT}&page=${page}`,
+          `/api/stock/${ticker}/spot-exposures/expiry-strike?${expParam}&limit=${PAGE_LIMIT}&page=${page}`,
           `gex-heatmap:${ticker}:p${page}`,
         );
         if (!expJson) break;
