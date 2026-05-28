@@ -40,26 +40,33 @@ export function GexHeatmapView() {
     return m;
   }, [data]);
 
-  // maxAbs flags the single largest cell with the orange standout; scaleMax
-  // (the SECOND-largest absolute value) normalizes the gradient so a single
-  // outlier cell (often the 0DTE gamma magnet) doesn't compress every other
-  // cell into near-neutral.
-  const { maxAbsKey, scaleMax } = useMemo(() => {
+  // maxAbsKeys flags the largest cell PER expiration column with the orange
+  // standout — so every column shows its own gamma magnet, not just the
+  // 0DTE one. scaleMax (the SECOND-largest absolute value across the whole
+  // grid) normalizes the gradient so a single outlier cell doesn't compress
+  // every other cell into near-neutral.
+  const { maxAbsKeys, scaleMax } = useMemo(() => {
+    const perExp = new Map<string, { key: string; abs: number }>();
     let maxAbs = 0;
     let secondMax = 0;
-    let maxAbsKey = "";
-    for (const [key, v] of cellMap) {
-      const abs = Math.abs(v);
-      if (abs > maxAbs) {
-        secondMax = maxAbs;
-        maxAbs = abs;
-        maxAbsKey = key;
-      } else if (abs > secondMax) {
-        secondMax = abs;
+    if (data) {
+      for (const c of data.cells) {
+        const abs = Math.abs(c.netOI);
+        const key = cellKey(c.strike, c.exp);
+        const cur = perExp.get(c.exp);
+        if (!cur || abs > cur.abs) perExp.set(c.exp, { key, abs });
+        if (abs > maxAbs) {
+          secondMax = maxAbs;
+          maxAbs = abs;
+        } else if (abs > secondMax) {
+          secondMax = abs;
+        }
       }
     }
-    return { maxAbsKey, scaleMax: secondMax > 0 ? secondMax : maxAbs };
-  }, [cellMap]);
+    const maxAbsKeys = new Set<string>();
+    for (const { key } of perExp.values()) maxAbsKeys.add(key);
+    return { maxAbsKeys, scaleMax: secondMax > 0 ? secondMax : maxAbs };
+  }, [data]);
 
   const spotRowIdx = useMemo(() => {
     if (!data) return -1;
@@ -106,7 +113,7 @@ export function GexHeatmapView() {
         <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
           <span
             style={{ fontSize: 15, fontWeight: 500, color: "var(--color-text-primary)" }}
-            title="Net dealer GEX (OI) by strike × expiration. Background saturation = magnitude. Orange = single largest absolute cell. Green text = positive, red = negative."
+            title="Net dealer GEX (OI) by strike × expiration. Background saturation = magnitude. Orange = largest absolute cell in each expiration column. Green text = positive, red = negative."
           >
             Net GEX heatmap — {titleSuffix}
           </span>
@@ -124,7 +131,7 @@ export function GexHeatmapView() {
               padding: "1px 6px",
               cursor: "help",
             }}
-            title="Background saturation maps to |GEX| / per-view max (sqrt-scaled). Orange = single largest absolute GEX. Green text = positive (dealer long gamma here). Red text = negative (dealer short gamma). In multi-ticker views, each strip is normalized independently."
+            title="Background saturation maps to |GEX| / per-view max (sqrt-scaled). Orange = largest absolute GEX in each expiration column. Green text = positive (dealer long gamma here). Red text = negative (dealer short gamma). In multi-ticker views, each strip is normalized independently."
           >
             ?
           </span>
@@ -323,7 +330,7 @@ export function GexHeatmapView() {
                       const v = cellMap.get(key);
                       const hasValue = v !== undefined;
                       const val = v ?? 0;
-                      const isMaxAbs = hasValue && key === maxAbsKey;
+                      const isMaxAbs = hasValue && maxAbsKeys.has(key);
                       const pos = val >= 0;
 
                       const bg = isMaxAbs ? COLOR_MAX_ABS_BG : hasValue ? cellBg(val, scaleMax) : "rgba(255,255,255,0.015)";
