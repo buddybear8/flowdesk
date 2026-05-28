@@ -57,14 +57,18 @@ export async function GET(req: NextRequest) {
   // top-down by descending price, so reverse here.
   const orderedStrikes = [...picked].sort((a, b) => b.strike - a.strike);
 
-  // Drop expirations that have zero cells in the visible strike range — UW
-  // sometimes returns a far-OTM-only chain for a given expiry while having
-  // full coverage for others, which would otherwise render an empty column
-  // (see git history for the diagnosis). Sort the survivors by DTE and keep
-  // up to 5 — matches the original "5 nearest expirations" spec.
-  const MIN_CELLS_PER_EXP = 5;
+  // Pick expirations for the heatmap, aiming for MAX_EXPIRATIONS columns:
+  //   • Drop any expiration with zero cells in the visible strike range
+  //     (UW occasionally returns far-OTM-only chains for an expiry; an
+  //     entirely empty column adds nothing).
+  //   • Prefer DENSE expirations (≥ MIN_CELLS_DENSE populated cells) — these
+  //     render as a meaningful gradient across the band.
+  //   • If we don't have MAX_EXPIRATIONS dense ones, top up with the closest-
+  //     DTE sparse expirations (≥1 cell) so we still display the full set of
+  //     5 columns instead of leaving the user with only 2–3.
+  const MIN_CELLS_DENSE = 5;
   const MAX_EXPIRATIONS = 5;
-  const expirations: HeatmapExpiration[] = cells.expirations
+  const scored = cells.expirations
     .map((e) => {
       const populated = orderedStrikes.reduce(
         (n, s) => n + (s.byExp[e.date] ? 1 : 0),
@@ -72,9 +76,13 @@ export async function GET(req: NextRequest) {
       );
       return { e, populated };
     })
-    .filter((x) => x.populated >= MIN_CELLS_PER_EXP)
-    .sort((a, b) => a.e.dte - b.e.dte)
+    .filter((x) => x.populated >= 1)
+    .sort((a, b) => a.e.dte - b.e.dte);
+  const dense = scored.filter((x) => x.populated >= MIN_CELLS_DENSE);
+  const sparse = scored.filter((x) => x.populated < MIN_CELLS_DENSE);
+  const expirations: HeatmapExpiration[] = [...dense, ...sparse]
     .slice(0, MAX_EXPIRATIONS)
+    .sort((a, b) => a.e.dte - b.e.dte)
     .map((x) => ({
       date: x.e.date,
       label: fmtExpirationLabel(x.e.date, x.e.dte),
