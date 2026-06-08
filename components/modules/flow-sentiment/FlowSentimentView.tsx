@@ -14,10 +14,16 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import type { FlowSentimentPayload, SentimentMinute, SentimentStrike, SentimentLabel } from "@/lib/types";
+import { TRACKED_TICKERS } from "@/lib/tracked-tickers";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
-const TICKERS = ["SPY", "SPX", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT"];
+// Focus names refresh every 5 min; the rest of the tracked corpus is polled
+// hourly by the worker (see worker/src/lib/sentiment-tickers.ts). Both are
+// selectable; the optgroups make the cadence difference explicit.
+const HOT_TICKERS = ["SPY", "SPX", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT"];
+const HOT_SET = new Set(HOT_TICKERS);
+const TAIL_TICKERS = TRACKED_TICKERS.filter((t) => !HOT_SET.has(t));
 
 const BUY_COLOR = "#3FB950";   // bought at ask  (green)
 const SELL_COLOR = "#E5534B";  // sold at bid    (red)
@@ -268,7 +274,7 @@ export function FlowSentimentView() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-[7px]">
-          <Select value={ticker} options={TICKERS.map((t) => ({ id: t, label: t }))} onChange={setTicker} />
+          <TickerSelect value={ticker} onChange={setTicker} />
         </div>
       </div>
 
@@ -503,17 +509,20 @@ function StrikeCountToggle({ value, onChange }: { value: StrikeCount; onChange: 
   );
 }
 
-function Select({ value, options, onChange }: { value: string; options: { id: string; label: string }[]; onChange: (id: string) => void }) {
+function TickerSelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className="rounded-md outline-none cursor-pointer bg-bg-primary"
-      style={{ fontSize: 11, padding: "4px 8px", border: "0.5px solid var(--color-border-secondary)", color: "var(--color-text-secondary)" }}
+      style={{ fontSize: 11, padding: "4px 8px", border: "0.5px solid var(--color-border-secondary)", color: "var(--color-text-secondary)", maxWidth: 160 }}
     >
-      {options.map((o) => (
-        <option key={o.id} value={o.id}>{o.label}</option>
-      ))}
+      <optgroup label="Focus · 5-min">
+        {HOT_TICKERS.map((t) => <option key={t} value={t}>{t}</option>)}
+      </optgroup>
+      <optgroup label="Tracked · hourly">
+        {TAIL_TICKERS.map((t) => <option key={t} value={t}>{t}</option>)}
+      </optgroup>
     </select>
   );
 }
