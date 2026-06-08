@@ -24,6 +24,9 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 const HOT_TICKERS = ["SPY", "SPX", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT"];
 const HOT_SET = new Set(HOT_TICKERS);
 const TAIL_TICKERS = TRACKED_TICKERS.filter((t) => !HOT_SET.has(t));
+const ALL_TICKERS = [...HOT_TICKERS, ...TAIL_TICKERS];
+const ALL_SET = new Set(ALL_TICKERS);
+const TICKER_RE = /^[A-Z]{1,5}$/;
 
 const BUY_COLOR = "#3FB950";   // bought at ask  (green)
 const SELL_COLOR = "#E5534B";  // sold at bid    (red)
@@ -274,7 +277,7 @@ export function FlowSentimentView() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-[7px]">
-          <TickerSelect value={ticker} onChange={setTicker} />
+          <TickerInput value={ticker} onChange={setTicker} />
         </div>
       </div>
 
@@ -509,21 +512,49 @@ function StrikeCountToggle({ value, onChange }: { value: StrikeCount; onChange: 
   );
 }
 
-function TickerSelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+// Type-to-search ticker box. Any valid symbol (1–5 letters) works; the tracked
+// universe shows as native autocomplete suggestions. Commits on exact match
+// (incl. picking a suggestion) and on Enter/blur.
+function TickerInput({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const [text, setText] = useState(value);
+  useEffect(() => { setText(value); }, [value]);
+
+  const commit = (raw: string) => {
+    const v = raw.trim().toUpperCase();
+    if (TICKER_RE.test(v) && v !== value) onChange(v);
+  };
+
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="rounded-md outline-none cursor-pointer bg-bg-primary"
-      style={{ fontSize: 11, padding: "4px 8px", border: "0.5px solid var(--color-border-secondary)", color: "var(--color-text-secondary)", maxWidth: 160 }}
-    >
-      <optgroup label="Focus · 5-min">
-        {HOT_TICKERS.map((t) => <option key={t} value={t}>{t}</option>)}
-      </optgroup>
-      <optgroup label="Tracked · hourly">
-        {TAIL_TICKERS.map((t) => <option key={t} value={t}>{t}</option>)}
-      </optgroup>
-    </select>
+    <>
+      <input
+        list="fs-ticker-list"
+        value={text}
+        onChange={(e) => {
+          const up = e.target.value.toUpperCase();
+          setText(up);
+          if (ALL_SET.has(up)) commit(up); // instant on a suggestion pick / known symbol
+        }}
+        onKeyDown={(e) => { if (e.key === "Enter") commit(text); }}
+        onBlur={() => commit(text)}
+        placeholder="Ticker…"
+        spellCheck={false}
+        autoComplete="off"
+        className="rounded-md outline-none bg-bg-primary"
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          letterSpacing: ".02em",
+          padding: "5px 9px",
+          width: 96,
+          textTransform: "uppercase",
+          border: "0.5px solid var(--color-border-secondary)",
+          color: "var(--color-text-primary)",
+        }}
+      />
+      <datalist id="fs-ticker-list">
+        {ALL_TICKERS.map((t) => <option key={t} value={t} />)}
+      </datalist>
+    </>
   );
 }
 
