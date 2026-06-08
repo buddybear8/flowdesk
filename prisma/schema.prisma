@@ -127,6 +127,32 @@ model GexHeatmapSnapshot {
   @@map("gex_heatmap_snapshots")
 }
 
+// Per-ticker, per-day Options Sentiment series feeding the /flow-sentiment
+// module (per-strike call/put buy-vs-sell bars + intraday replay slider).
+// One row per (ticker, tradingDate). Each worker poll of UW
+// /api/stock/{ticker}/flow-per-strike (whole-day cumulative full chain) appends
+// one snapshot to `minutes`; the replay slider scrubs those snapshots, so its
+// time resolution equals the poll cadence (hot tickers 5m, tail hourly — see
+// worker/src/index.ts). Retention: 30 days (flow-sentiment-retention sweep).
+//
+// `minutes` JSON shape — SentimentMinute[] (see lib/types/index.ts):
+//   { t: "13:35", callVol, putVol, cpRatio, sentiment: "BEARISH",
+//     strikes: [{ k: 700, cA, cB, pA, pB, cP, pP }] }
+// where cA/cB = call volume bought-at-ask / sold-at-bid (Buy / Sell), pA/pB the
+// put equivalents, and cP/pP the net call / put premium for the strike.
+model FlowSentimentDay {
+  id          BigInt   @id @default(autoincrement())
+  ticker      String   @db.VarChar(10)
+  tradingDate DateTime @map("trading_date") @db.Date
+  capturedAt  DateTime @map("captured_at")
+  spot        Decimal  @db.Decimal(12, 4) // latest reference price (GEX spot or vol-weighted strike)
+  minutes     Json
+
+  @@unique([ticker, tradingDate])
+  @@index([ticker, tradingDate(sort: Desc)])
+  @@map("flow_sentiment_days")
+}
+
 // OHLCV price bars for the /charts price-chart feature. Populated by the
 // worker's pollCandles job from Polygon /v2/aggs (15-min-delayed tier).
 // One row per (ticker, timeframe, bar start). The job keeps the recent tail

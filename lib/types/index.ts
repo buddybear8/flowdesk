@@ -120,6 +120,41 @@ export interface GEXPayload {
   gammaRegime: GammaRegime;
 }
 
+// ---------- 3c. Options Sentiment (Module: per-strike buy/sell) ----------
+//
+// Per-strike call/put aggressor-side volume from UW /flow-per-strike, snapshotted
+// each poll. `cA`/`cB` = call volume bought-at-ask (Buy) / sold-at-bid (Sell);
+// `pA`/`pB` the put equivalents; `cP`/`pP` net call / put premium for the strike.
+export interface SentimentStrike {
+  k: number;   // strike
+  cA: number;  // call volume, ask side (bought)  → green
+  cB: number;  // call volume, bid side (sold)    → red
+  pA: number;  // put volume, ask side (bought)
+  pB: number;  // put volume, bid side (sold)
+  cP: number;  // net call premium ($)
+  pP: number;  // net put premium ($)
+}
+
+export type SentimentLabel = "BULLISH" | "BEARISH" | "NEUTRAL";
+
+// One cumulative snapshot of the whole chain at a moment in the session.
+export interface SentimentMinute {
+  t: string;                   // "HH:MM" ET
+  callVol: number;             // Σ call volume across strikes
+  putVol: number;              // Σ put volume across strikes
+  cpRatio: number;             // callVol / putVol
+  sentiment: SentimentLabel;
+  strikes: SentimentStrike[];
+}
+
+export interface FlowSentimentPayload {
+  ticker: string;
+  tradingDate: string;         // YYYY-MM-DD (ET session)
+  capturedAt: string;          // ISO — last poll
+  spot: number;                // reference price for the spot line
+  minutes: SentimentMinute[];  // chronological; last = latest
+}
+
 // ---------- 3b. Heatmap payload (Module 3 → Heatmap tab) ----------
 
 export interface HeatmapExpiration {

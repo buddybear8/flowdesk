@@ -84,4 +84,24 @@ export async function runGexHeatmapRetentionSweep(): Promise<void> {
   }
 }
 
+// ─── Flow sentiment days: 30-day rolling delete ─────────────────────────────
+//
+// flow_sentiment_days holds one row per (ticker, trading day) feeding the
+// Options Sentiment replay slider. ~230 tickers × 1 row/day → tiny row count,
+// but the `minutes` JSON grows through each session, so age out old days.
+
+export async function runFlowSentimentRetentionSweep(): Promise<void> {
+  try {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const result = await prisma.flowSentimentDay.deleteMany({
+      where: { tradingDate: { lt: cutoff } },
+    });
+    console.log(
+      `[retention:flow-sentiment] ${ts()} deleted ${result.count} day-rows older than ${cutoff.toISOString()}`
+    );
+  } catch (err) {
+    console.error("[retention:flow-sentiment] failed:", err instanceof Error ? err.message : err);
+  }
+}
+
 // Shutdown handled centrally via ../lib/prisma.js; no per-file disconnect needed.

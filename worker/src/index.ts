@@ -14,7 +14,9 @@ import {
   pollMarketTide,
   computeNetImpact,
 } from "./jobs/uw.js";
-import { runFlowRetentionSweep, runDpRetentionSweep, runGexHeatmapRetentionSweep } from "./jobs/retention.js";
+import { runFlowRetentionSweep, runDpRetentionSweep, runGexHeatmapRetentionSweep, runFlowSentimentRetentionSweep } from "./jobs/retention.js";
+import { pollFlowSentiment } from "./jobs/flow-sentiment.js";
+import { HOT_TICKERS, TAIL_TICKERS } from "./lib/sentiment-tickers.js";
 import { refreshTickerMetadata } from "./jobs/refresh-ticker-metadata.js";
 import { runAiSummarizerGex } from "./jobs/ai-summarizer-gex.js";
 import { computeHitList } from "./jobs/hit-list-compute.js";
@@ -55,6 +57,15 @@ cron.schedule("0 */2 9-15 * * 1-5", safe("gex-poll", pollGex));
 cron.schedule("0 */5 9-15 * * 1-5", safe("market-tide", pollMarketTide));
 cron.schedule("30 */5 9-15 * * 1-5", safe("net-impact", computeNetImpact));
 
+// ─── Options Sentiment (jobs/flow-sentiment.ts) — tiered cadence ──────────────
+// Per-strike call/put buy-vs-sell snapshots feeding the /flow-sentiment replay
+// slider. HOT (11 watched names) every 5 min for a live feel; TAIL (~218 names)
+// hourly. One UW /flow-per-strike call per ticker per sweep; the job watches the
+// UW quota headers and bails before tripping a limit. Combined ≈ 2.1K calls/day.
+// Offset 45s into the minute so it doesn't collide with the net-impact (:30) tick.
+cron.schedule("45 */5 9-15 * * 1-5", safe("flow-sentiment-hot", () => pollFlowSentiment(HOT_TICKERS)));
+cron.schedule("45 0 10-15 * * 1-5", safe("flow-sentiment-tail", () => pollFlowSentiment(TAIL_TICKERS)));
+
 // ─── Polygon dark-pool ingest (replaces UW dark-pool + s3-darkpool-import) ───
 // Polygon publishes the previous trading day's flat file around 3-5 AM ET;
 // 06:00 leaves a safe buffer. Hourly intraday picks up the rest of the day
@@ -73,7 +84,7 @@ cron.schedule("0 30 5 * * 1-5", safe("refresh-ticker-metadata", refreshTickerMet
 cron.schedule("0 0 7 * * 1-5", safe("ai-summarizer-gex", runAiSummarizerGex));
 cron.schedule("0 30 7 * * 1-5", safe("hit-list-compute", computeHitList));
 cron.schedule("0 0 3 * * 1-5", safe("retention-sweeps", async () => {
-  await Promise.all([runFlowRetentionSweep(), runDpRetentionSweep(), runGexHeatmapRetentionSweep()]);
+  await Promise.all([runFlowRetentionSweep(), runDpRetentionSweep(), runGexHeatmapRetentionSweep(), runFlowSentimentRetentionSweep()]);
 }));
 
 // ─── 🗄 Archived in v1.4 (do NOT re-add in V1) ────────────────────────────────
@@ -90,4 +101,4 @@ const shutdown = async (signal: string) => {
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
-console.log(`[${ts()}] [worker] started — 12 schedules registered (Polygon dark-pool ingest live; UW dark-pool retired)`);
+console.log(`[${ts()}] [worker] started — 14 schedules registered (Polygon dark-pool ingest live; UW dark-pool retired; Options Sentiment hot+tail live)`);
