@@ -64,6 +64,11 @@ class FlowConfig:
         return self.flow_dir / "dark_pool_prints.parquet"
 
     @property
+    def sentiment_path(self) -> Path:
+        """Cached per-(ticker, date, strike) chain-flow sentiment snapshots."""
+        return self.flow_dir / "flow_sentiment.parquet"
+
+    @property
     def joined_matrix_path(self) -> Path:
         """Cached TA + flow + dark-pool joined feature matrix."""
         return self.flow_dir / "joined_matrix.parquet"
