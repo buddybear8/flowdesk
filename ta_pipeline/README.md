@@ -342,9 +342,23 @@ cd ta_pipeline && pytest           # 20 tests, ~0.5s, all synthetic data
 | 6 ✅ | ATR-scaled triple-barrier labeler + warmup masking |
 | 7 ✅ | Leakage unit tests + full README |
 
-### Deferred / downstream (separate modules)
+### Downstream — the flow / dark-pool join (`flow/`)
 
-- Multi-timeframe (hourly / weekly) candles — the pipeline is daily-only for now.
-- The join with flow / dark-pool features (on `ticker` + `date`).
-- The TA-only baseline classifier is built (`model/`); the flow-only and
-  combined ablations, and the `lambdarank` ranking variant, remain.
+The Unusual Whales flow + Polygon dark-pool feature join is **built** — see
+[flow/README.md](flow/README.md). It extracts both tables from the Railway
+Postgres, engineers per-(ticker, date) features under a close-aligned join
+(Rule A), joins them onto this matrix, and runs the model ablations.
+
+- **Dark-pool ablation — measured.** TA vs dark-pool vs combined on the 2023+
+  window: the dark-pool features add a marginal, consistent ~+0.01 OOS
+  ROC-AUC — still ≈ chance. A block print is direction-agnostic, so it was
+  always a weak directional predictor.
+- **Flow ablation — guard-gated.** UW serves only a rolling ~30-trading-day
+  window, so the flow corpus is far too short to model honestly. The runner
+  refuses until it matures; `run_ablation.py --flow` is then a one-command
+  rerun. The flow README's roadmap covers the event-grain / ranking rebuild.
+
+### Still deferred
+
+- Multi-timeframe (hourly / weekly) candles — the pipeline is daily-only.
+- The `lambdarank` ranking variant — folded into the flow-model roadmap.

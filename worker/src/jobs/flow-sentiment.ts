@@ -283,6 +283,39 @@ async function appendSnapshot(
   });
 }
 
+// ── Historical backfill (script-backfill-sentiment.ts) ──────────────────────
+//
+// UW serves /flow-per-strike for past dates back to ~the prior month. For a
+// historical day we get one whole-day cumulative chain, stored as a single
+// t="16:00" snapshot — fine for the ML corpus (ticker-day grain), and the UI
+// renders it as a 1-snapshot day. Existing rows are never clobbered (live-
+// collected days keep their intraday series).
+export async function backfillFlowSentimentDay(
+  ticker: string,
+  etDate: string,
+): Promise<{ status: "stored" | "exists" | "empty" | "error"; dailyRemaining: number | null }> {
+  const tradingDate = tradingDateValue(etDate);
+  const existing = await prisma.flowSentimentDay.findUnique({
+    where: { ticker_tradingDate: { ticker, tradingDate } },
+    select: { id: true },
+  });
+  if (existing) return { status: "exists", dailyRemaining: null };
+
+  const result = await fetchChain(ticker, etDate);
+  if (!result) return { status: "error", dailyRemaining: null };
+  const { rows, quota } = result;
+  if (rows.length === 0) return { status: "empty", dailyRemaining: quota.dailyRemaining };
+
+  const allStrikes = mapStrikes(rows);
+  const ref = await referencePrice(ticker, allStrikes);
+  const strikes = trimToBand(allStrikes, ref);
+  const minute = buildMinute("16:00", strikes);
+  await prisma.flowSentimentDay.create({
+    data: { ticker, tradingDate, capturedAt: new Date(), spot: ref, minutes: [minute] as unknown as object },
+  });
+  return { status: "stored", dailyRemaining: quota.dailyRemaining };
+}
+
 // ── Entry point ──────────────────────────────────────────────────────────────
 
 export async function pollFlowSentiment(tickers: readonly string[]): Promise<void> {

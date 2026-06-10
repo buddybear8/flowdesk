@@ -45,6 +45,22 @@ def feature_columns(matrix: pd.DataFrame) -> list:
     return cols
 
 
+def feature_groups(matrix: pd.DataFrame) -> dict:
+    """Partition the model-facing feature columns by source.
+
+    Returns ``{"ta": [...], "dp": [...], "flow": [...]}`` -- the TA feature
+    blocks, the dark-pool join columns (``dp_*`` + ``has_dp``) and the
+    options-flow join columns (``flow_*`` + ``has_flow``). The ablation runner
+    composes feature sets (TA-only, dark-pool, combined) from these groups.
+    A matrix without the flow / dark-pool join simply yields empty groups.
+    """
+    cols = feature_columns(matrix)
+    dp = [c for c in cols if c.startswith("dp_") or c == "has_dp"]
+    flow = [c for c in cols if c.startswith("flow_") or c == "has_flow"]
+    ta = [c for c in cols if c not in dp and c not in flow]
+    return {"ta": ta, "dp": dp, "flow": flow}
+
+
 def materialize_matrix(
     model_cfg: ModelConfig = None,
     pipeline_cfg: PipelineConfig = None,

@@ -1,0 +1,245 @@
+{
+  "family": "sr_flip",
+  "generated_at": "2026-06-10T10:05:29",
+  "protocol": {
+    "labels": "ATR triple-barrier, +1.5/-1.0 ATR, 10d horizon (label_long / label_short from the cached matrix)",
+    "folds": "5 expanding-window CV folds from model.walkforward.make_folds; statistics on the union of the CV test windows only",
+    "oos_excluded_from": "2025-05-20",
+    "htf": "weekly W-FRI close vs SMA10/SMA20 stack, prior completed week only; aligned = long in weekly uptrend / short in weekly downtrend",
+    "min_fold_events": 10,
+    "preregistration": "the three parameterizations were fixed (and density-calibrated on random walks / raw candles) before any label was inspected"
+  },
+  "cv_rows": 310449,
+  "cv_window": [
+    "2018-10-05",
+    "2025-05-19"
+  ],
+  "n_tickers": 226,
+  "results": [
+    {
+      "params": {
+        "name": "base",
+        "swing_m": 3,
+        "atr_period": 14,
+        "cluster_tol_atr": 0.25,
+        "min_touches": 2,
+        "break_margin_atr": 0.25,
+        "zone_atr": 0.25,
+        "max_pierce_atr": 0.5,
+        "hold_margin_atr": 0.0,
+        "retest_min_bars": 2,
+        "retest_max_bars": 40,
+        "min_break_side_bars": 10,
+        "level_max_age": 250
+      },
+      "sides": [
+        {
+          "side": "long",
+          "n_cv_rows": 310449,
+          "base_rate": 0.4402,
+          "unconditional": {
+            "n_events": 10350,
+            "hit_rate": 0.4471,
+            "lift": 1.0157,
+            "median_outcome_return": -0.00855
+          },
+          "htf_aligned": {
+            "n_events": 4227,
+            "hit_rate": 0.4341,
+            "lift": 0.9861,
+            "median_outcome_return": -0.00921
+          },
+          "fold_lifts": {
+            "cv1": 1.0639,
+            "cv2": 1.0352,
+            "cv3": 1.0066,
+            "cv4": 1.0135,
+            "cv5": 0.9503
+          },
+          "fold_lift_min": 0.9503,
+          "fold_lift_max": 1.0639,
+          "events_per_1000_cv_rows": 33.34,
+          "mean_strength": 3.164
+        },
+        {
+          "side": "short",
+          "n_cv_rows": 310449,
+          "base_rate": 0.3896,
+          "unconditional": {
+            "n_events": 10352,
+            "hit_rate": 0.3849,
+            "lift": 0.9879,
+            "median_outcome_return": -0.01547
+          },
+          "htf_aligned": {
+            "n_events": 4309,
+            "hit_rate": 0.3845,
+            "lift": 0.9871,
+            "median_outcome_return": -0.0168
+          },
+          "fold_lifts": {
+            "cv1": 0.9625,
+            "cv2": 0.9005,
+            "cv3": 1.0245,
+            "cv4": 1.0277,
+            "cv5": 0.96
+          },
+          "fold_lift_min": 0.9005,
+          "fold_lift_max": 1.0277,
+          "events_per_1000_cv_rows": 33.35,
+          "mean_strength": 3.182
+        }
+      ]
+    },
+    {
+      "params": {
+        "name": "strict",
+        "swing_m": 3,
+        "atr_period": 14,
+        "cluster_tol_atr": 0.25,
+        "min_touches": 3,
+        "break_margin_atr": 0.25,
+        "zone_atr": 0.25,
+        "max_pierce_atr": 0.5,
+        "hold_margin_atr": 0.1,
+        "retest_min_bars": 2,
+        "retest_max_bars": 30,
+        "min_break_side_bars": 10,
+        "level_max_age": 250
+      },
+      "sides": [
+        {
+          "side": "long",
+          "n_cv_rows": 310449,
+          "base_rate": 0.4402,
+          "unconditional": {
+            "n_events": 5659,
+            "hit_rate": 0.4494,
+            "lift": 1.0208,
+            "median_outcome_return": -0.00803
+          },
+          "htf_aligned": {
+            "n_events": 2221,
+            "hit_rate": 0.4394,
+            "lift": 0.9982,
+            "median_outcome_return": -0.00889
+          },
+          "fold_lifts": {
+            "cv1": 1.0246,
+            "cv2": 1.0771,
+            "cv3": 0.973,
+            "cv4": 1.0232,
+            "cv5": 0.9672
+          },
+          "fold_lift_min": 0.9672,
+          "fold_lift_max": 1.0771,
+          "events_per_1000_cv_rows": 18.23,
+          "mean_strength": 4.048
+        },
+        {
+          "side": "short",
+          "n_cv_rows": 310449,
+          "base_rate": 0.3896,
+          "unconditional": {
+            "n_events": 5575,
+            "hit_rate": 0.383,
+            "lift": 0.9831,
+            "median_outcome_return": -0.01547
+          },
+          "htf_aligned": {
+            "n_events": 2333,
+            "hit_rate": 0.3759,
+            "lift": 0.965,
+            "median_outcome_return": -0.01703
+          },
+          "fold_lifts": {
+            "cv1": 0.9545,
+            "cv2": 0.8629,
+            "cv3": 1.0054,
+            "cv4": 1.0718,
+            "cv5": 0.9556
+          },
+          "fold_lift_min": 0.8629,
+          "fold_lift_max": 1.0718,
+          "events_per_1000_cv_rows": 17.96,
+          "mean_strength": 4.066
+        }
+      ]
+    },
+    {
+      "params": {
+        "name": "loose",
+        "swing_m": 3,
+        "atr_period": 14,
+        "cluster_tol_atr": 0.25,
+        "min_touches": 2,
+        "break_margin_atr": 0.1,
+        "zone_atr": 0.4,
+        "max_pierce_atr": 0.5,
+        "hold_margin_atr": 0.0,
+        "retest_min_bars": 1,
+        "retest_max_bars": 60,
+        "min_break_side_bars": 5,
+        "level_max_age": 250
+      },
+      "sides": [
+        {
+          "side": "long",
+          "n_cv_rows": 310449,
+          "base_rate": 0.4402,
+          "unconditional": {
+            "n_events": 19906,
+            "hit_rate": 0.4422,
+            "lift": 1.0044,
+            "median_outcome_return": -0.00902
+          },
+          "htf_aligned": {
+            "n_events": 6230,
+            "hit_rate": 0.4311,
+            "lift": 0.9793,
+            "median_outcome_return": -0.00949
+          },
+          "fold_lifts": {
+            "cv1": 1.0561,
+            "cv2": 1.0208,
+            "cv3": 1.029,
+            "cv4": 0.9571,
+            "cv5": 0.9766
+          },
+          "fold_lift_min": 0.9571,
+          "fold_lift_max": 1.0561,
+          "events_per_1000_cv_rows": 64.12,
+          "mean_strength": 3.201
+        },
+        {
+          "side": "short",
+          "n_cv_rows": 310449,
+          "base_rate": 0.3896,
+          "unconditional": {
+            "n_events": 19416,
+            "hit_rate": 0.4021,
+            "lift": 1.0322,
+            "median_outcome_return": -0.01394
+          },
+          "htf_aligned": {
+            "n_events": 6116,
+            "hit_rate": 0.4027,
+            "lift": 1.0338,
+            "median_outcome_return": -0.01515
+          },
+          "fold_lifts": {
+            "cv1": 1.0687,
+            "cv2": 1.0583,
+            "cv3": 1.0355,
+            "cv4": 1.0068,
+            "cv5": 0.9858
+          },
+          "fold_lift_min": 0.9858,
+          "fold_lift_max": 1.0687,
+          "events_per_1000_cv_rows": 62.54,
+          "mean_strength": 3.19
+        }
+      ]
+    }
+  ]
+}

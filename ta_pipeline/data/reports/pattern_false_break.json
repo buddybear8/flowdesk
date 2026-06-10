@@ -1,0 +1,287 @@
+{
+  "family": "false_break",
+  "generated": "2026-06-10T10:00:16",
+  "protocol": {
+    "evaluation": "event-conditioned triple-barrier outcomes; no model trained",
+    "folds": "model.walkforward.make_folds defaults; CV folds only, reserved OOS window never evaluated",
+    "dev_window": [
+      "2017-06-13",
+      "2025-05-19"
+    ],
+    "label": "ATR triple barrier, +1.5/-1.0 ATR, 10d horizon (label_long / label_short)",
+    "htf_state": "W-FRI weekly close vs weekly SMA10/SMA20 stack; each day uses the PRIOR completed week's state",
+    "preregistration": "3 variants fixed before any outcome was inspected; overshoot floor 0.25 ATR was set from event rates alone",
+    "min_fold_events": 5
+  },
+  "dev_rows": 358570,
+  "tickers": 219,
+  "detectors": {
+    "k20_1bar": {
+      "params": {
+        "range_k": 20,
+        "max_breach_closes": 0,
+        "overshoot_min_atr": 0.25,
+        "overshoot_max_atr": 1.5,
+        "atr_period": 14
+      },
+      "long": {
+        "n_events": 6651,
+        "event_rate": 0.0185,
+        "base_rate": 0.4433,
+        "hit_rate": 0.4318,
+        "lift": 0.974,
+        "median_outcome_return": -0.0118,
+        "median_strength_atr": 0.412,
+        "htf_aligned": {
+          "n_events": 1316,
+          "hit_rate": 0.4126,
+          "lift_vs_overall_base": 0.9307,
+          "htf_base_rate_all_rows": 0.4388,
+          "lift_vs_htf_base": 0.9404
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 883,
+            "lift": 0.882
+          },
+          "cv2": {
+            "n_events": 887,
+            "lift": 0.922
+          },
+          "cv3": {
+            "n_events": 1514,
+            "lift": 1.0005
+          },
+          "cv4": {
+            "n_events": 1331,
+            "lift": 1.0573
+          },
+          "cv5": {
+            "n_events": 1235,
+            "lift": 0.9326
+          }
+        },
+        "fold_lift_min": 0.882,
+        "fold_lift_max": 1.0573
+      },
+      "short": {
+        "n_events": 8657,
+        "event_rate": 0.0241,
+        "base_rate": 0.3867,
+        "hit_rate": 0.3755,
+        "lift": 0.971,
+        "median_outcome_return": -0.0128,
+        "median_strength_atr": 0.4045,
+        "htf_aligned": {
+          "n_events": 933,
+          "hit_rate": 0.3741,
+          "lift_vs_overall_base": 0.9672,
+          "htf_base_rate_all_rows": 0.3912,
+          "lift_vs_htf_base": 0.9562
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1260,
+            "lift": 1.0275
+          },
+          "cv2": {
+            "n_events": 1526,
+            "lift": 0.9371
+          },
+          "cv3": {
+            "n_events": 1237,
+            "lift": 0.9138
+          },
+          "cv4": {
+            "n_events": 1632,
+            "lift": 0.9678
+          },
+          "cv5": {
+            "n_events": 1726,
+            "lift": 1.0135
+          }
+        },
+        "fold_lift_min": 0.9138,
+        "fold_lift_max": 1.0275
+      }
+    },
+    "k20_2bar": {
+      "params": {
+        "range_k": 20,
+        "max_breach_closes": 2,
+        "overshoot_min_atr": 0.25,
+        "overshoot_max_atr": 1.5,
+        "atr_period": 14
+      },
+      "long": {
+        "n_events": 6269,
+        "event_rate": 0.0175,
+        "base_rate": 0.4433,
+        "hit_rate": 0.447,
+        "lift": 1.0082,
+        "median_outcome_return": -0.01,
+        "median_strength_atr": 0.6739,
+        "htf_aligned": {
+          "n_events": 657,
+          "hit_rate": 0.4186,
+          "lift_vs_overall_base": 0.9441,
+          "htf_base_rate_all_rows": 0.4388,
+          "lift_vs_htf_base": 0.954
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 866,
+            "lift": 1.0817
+          },
+          "cv2": {
+            "n_events": 844,
+            "lift": 0.9346
+          },
+          "cv3": {
+            "n_events": 1411,
+            "lift": 1.0507
+          },
+          "cv4": {
+            "n_events": 1323,
+            "lift": 1.0177
+          },
+          "cv5": {
+            "n_events": 1155,
+            "lift": 0.9684
+          }
+        },
+        "fold_lift_min": 0.9346,
+        "fold_lift_max": 1.0817
+      },
+      "short": {
+        "n_events": 7449,
+        "event_rate": 0.0208,
+        "base_rate": 0.3867,
+        "hit_rate": 0.3843,
+        "lift": 0.9938,
+        "median_outcome_return": -0.012,
+        "median_strength_atr": 0.6673,
+        "htf_aligned": {
+          "n_events": 544,
+          "hit_rate": 0.4044,
+          "lift_vs_overall_base": 1.0457,
+          "htf_base_rate_all_rows": 0.3912,
+          "lift_vs_htf_base": 1.0338
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1150,
+            "lift": 0.9917
+          },
+          "cv2": {
+            "n_events": 1297,
+            "lift": 1.0698
+          },
+          "cv3": {
+            "n_events": 1122,
+            "lift": 0.9919
+          },
+          "cv4": {
+            "n_events": 1415,
+            "lift": 0.9528
+          },
+          "cv5": {
+            "n_events": 1409,
+            "lift": 0.9662
+          }
+        },
+        "fold_lift_min": 0.9528,
+        "fold_lift_max": 1.0698
+      }
+    },
+    "k55_1bar": {
+      "params": {
+        "range_k": 55,
+        "max_breach_closes": 0,
+        "overshoot_min_atr": 0.25,
+        "overshoot_max_atr": 1.5,
+        "atr_period": 14
+      },
+      "long": {
+        "n_events": 3591,
+        "event_rate": 0.01,
+        "base_rate": 0.4433,
+        "hit_rate": 0.4336,
+        "lift": 0.978,
+        "median_outcome_return": -0.0124,
+        "median_strength_atr": 0.4156,
+        "htf_aligned": {
+          "n_events": 113,
+          "hit_rate": 0.4779,
+          "lift_vs_overall_base": 1.0779,
+          "htf_base_rate_all_rows": 0.4388,
+          "lift_vs_htf_base": 1.0891
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 446,
+            "lift": 0.9395
+          },
+          "cv2": {
+            "n_events": 450,
+            "lift": 0.8419
+          },
+          "cv3": {
+            "n_events": 908,
+            "lift": 1.0619
+          },
+          "cv4": {
+            "n_events": 690,
+            "lift": 1.0655
+          },
+          "cv5": {
+            "n_events": 759,
+            "lift": 0.928
+          }
+        },
+        "fold_lift_min": 0.8419,
+        "fold_lift_max": 1.0655
+      },
+      "short": {
+        "n_events": 5663,
+        "event_rate": 0.0158,
+        "base_rate": 0.3867,
+        "hit_rate": 0.3809,
+        "lift": 0.9849,
+        "median_outcome_return": -0.0115,
+        "median_strength_atr": 0.4094,
+        "htf_aligned": {
+          "n_events": 65,
+          "hit_rate": 0.4154,
+          "lift_vs_overall_base": 1.0741,
+          "htf_base_rate_all_rows": 0.3912,
+          "lift_vs_htf_base": 1.0619
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 832,
+            "lift": 1.0767
+          },
+          "cv2": {
+            "n_events": 1130,
+            "lift": 0.9071
+          },
+          "cv3": {
+            "n_events": 716,
+            "lift": 0.9381
+          },
+          "cv4": {
+            "n_events": 956,
+            "lift": 1.0144
+          },
+          "cv5": {
+            "n_events": 1124,
+            "lift": 1.0117
+          }
+        },
+        "fold_lift_min": 0.9071,
+        "fold_lift_max": 1.0767
+      }
+    }
+  }
+}

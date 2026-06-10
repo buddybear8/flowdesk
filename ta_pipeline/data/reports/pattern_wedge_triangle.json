@@ -1,0 +1,282 @@
+{
+  "family": "wedge_triangle",
+  "generated_at": "2026-06-10T10:02:53",
+  "protocol": {
+    "labels": "ATR triple-barrier (profit +1.5 ATR, stop -1.0 ATR, 10d horizon)",
+    "evaluation": "event-conditioned label stats on walk-forward CV folds only; the reserved OOS window is untouched",
+    "oos_excluded_from": "2025-05-20",
+    "cv_folds": [
+      {
+        "name": "cv1",
+        "test_start": "2018-10-05",
+        "test_end": "2020-02-03"
+      },
+      {
+        "name": "cv2",
+        "test_start": "2020-02-04",
+        "test_end": "2021-05-27"
+      },
+      {
+        "name": "cv3",
+        "test_start": "2021-05-28",
+        "test_end": "2022-09-22"
+      },
+      {
+        "name": "cv4",
+        "test_start": "2022-09-23",
+        "test_end": "2024-01-19"
+      },
+      {
+        "name": "cv5",
+        "test_start": "2024-01-22",
+        "test_end": "2025-05-19"
+      }
+    ],
+    "htf_conditioning": "weekly W-FRI close > SMA10 > SMA20 stack (+1) / inverse (-1), prior completed week only",
+    "min_fold_events_for_lift": 5,
+    "preregistered_params": [
+      {
+        "name": "p1_base",
+        "swing_m": 3,
+        "lookback": 60,
+        "min_touches_per_line": 2,
+        "max_touches_per_line": 4,
+        "flat_eps_atr": 0.03,
+        "conv_min_atr": 0.02,
+        "fit_tol_atr": 0.4,
+        "min_contraction": 0.25,
+        "break_margin_atr": 0.05,
+        "max_pattern_age": 15,
+        "atr_period": 14
+      },
+      {
+        "name": "p2_strict",
+        "swing_m": 3,
+        "lookback": 50,
+        "min_touches_per_line": 2,
+        "max_touches_per_line": 5,
+        "flat_eps_atr": 0.025,
+        "conv_min_atr": 0.03,
+        "fit_tol_atr": 0.28,
+        "min_contraction": 0.4,
+        "break_margin_atr": 0.1,
+        "max_pattern_age": 12,
+        "atr_period": 14
+      },
+      {
+        "name": "p3_loose",
+        "swing_m": 2,
+        "lookback": 45,
+        "min_touches_per_line": 2,
+        "max_touches_per_line": 4,
+        "flat_eps_atr": 0.04,
+        "conv_min_atr": 0.015,
+        "fit_tol_atr": 0.55,
+        "min_contraction": 0.15,
+        "break_margin_atr": 0.0,
+        "max_pattern_age": 20,
+        "atr_period": 14
+      }
+    ],
+    "tickers": 226
+  },
+  "pattern_kind_mix": {
+    "p1_base": {
+      "rising_wedge": 200,
+      "falling_wedge": 138,
+      "descending_triangle": 135,
+      "ascending_triangle": 123,
+      "symmetric_triangle": 65
+    },
+    "p2_strict": {
+      "rising_wedge": 23,
+      "falling_wedge": 16,
+      "symmetric_triangle": 12,
+      "descending_triangle": 12,
+      "ascending_triangle": 8
+    },
+    "p3_loose": {
+      "rising_wedge": 853,
+      "falling_wedge": 714,
+      "descending_triangle": 582,
+      "ascending_triangle": 530,
+      "symmetric_triangle": 182
+    }
+  },
+  "results": [
+    {
+      "detector": "wedge_triangle_p1_base",
+      "side": "long",
+      "n_cv_rows": 358570,
+      "base_rate": 0.4433,
+      "unconditional": {
+        "n_events": 307,
+        "hit_rate": 0.4821,
+        "lift": 1.087,
+        "median_outcome_return": 0.0
+      },
+      "htf_aligned": {
+        "n_events": 69,
+        "hit_rate": 0.4493,
+        "lift_vs_base": 1.013,
+        "htf_conditional_base_rate": 0.4388,
+        "lift_vs_htf_base": 1.024,
+        "median_outcome_return": -0.0057
+      },
+      "per_fold_lift": {
+        "cv1": 1.118,
+        "cv2": 1.08,
+        "cv3": 1.24,
+        "cv4": 0.886,
+        "cv5": 1.031
+      },
+      "fold_lift_min": 0.886,
+      "fold_lift_max": 1.24
+    },
+    {
+      "detector": "wedge_triangle_p1_base",
+      "side": "short",
+      "n_cv_rows": 358570,
+      "base_rate": 0.3867,
+      "unconditional": {
+        "n_events": 354,
+        "hit_rate": 0.4153,
+        "lift": 1.074,
+        "median_outcome_return": -0.0075
+      },
+      "htf_aligned": {
+        "n_events": 53,
+        "hit_rate": 0.3962,
+        "lift_vs_base": 1.025,
+        "htf_conditional_base_rate": 0.3912,
+        "lift_vs_htf_base": 1.013,
+        "median_outcome_return": -0.0149
+      },
+      "per_fold_lift": {
+        "cv1": 1.303,
+        "cv2": 0.836,
+        "cv3": 1.08,
+        "cv4": 1.222,
+        "cv5": 0.851
+      },
+      "fold_lift_min": 0.836,
+      "fold_lift_max": 1.303
+    },
+    {
+      "detector": "wedge_triangle_p2_strict",
+      "side": "long",
+      "n_cv_rows": 358570,
+      "base_rate": 0.4433,
+      "unconditional": {
+        "n_events": 32,
+        "hit_rate": 0.4062,
+        "lift": 0.916,
+        "median_outcome_return": -0.0143
+      },
+      "htf_aligned": {
+        "n_events": 5,
+        "hit_rate": 0.2,
+        "lift_vs_base": 0.451,
+        "htf_conditional_base_rate": 0.4388,
+        "lift_vs_htf_base": 0.456,
+        "median_outcome_return": -0.0434
+      },
+      "per_fold_lift": {
+        "cv1": 0.877,
+        "cv2": null,
+        "cv3": null,
+        "cv4": 0.902,
+        "cv5": 0.886
+      },
+      "fold_lift_min": 0.877,
+      "fold_lift_max": 0.902
+    },
+    {
+      "detector": "wedge_triangle_p2_strict",
+      "side": "short",
+      "n_cv_rows": 358570,
+      "base_rate": 0.3867,
+      "unconditional": {
+        "n_events": 39,
+        "hit_rate": 0.5128,
+        "lift": 1.326,
+        "median_outcome_return": 0.0105
+      },
+      "htf_aligned": {
+        "n_events": 9,
+        "hit_rate": 0.5556,
+        "lift_vs_base": 1.437,
+        "htf_conditional_base_rate": 0.3912,
+        "lift_vs_htf_base": 1.42,
+        "median_outcome_return": 0.0151
+      },
+      "per_fold_lift": {
+        "cv1": 1.772,
+        "cv2": 1.062,
+        "cv3": 1.098,
+        "cv4": 1.126,
+        "cv5": 1.131
+      },
+      "fold_lift_min": 1.062,
+      "fold_lift_max": 1.772
+    },
+    {
+      "detector": "wedge_triangle_p3_loose",
+      "side": "long",
+      "n_cv_rows": 358570,
+      "base_rate": 0.4433,
+      "unconditional": {
+        "n_events": 1373,
+        "hit_rate": 0.4902,
+        "lift": 1.106,
+        "median_outcome_return": -0.0031
+      },
+      "htf_aligned": {
+        "n_events": 251,
+        "hit_rate": 0.498,
+        "lift_vs_base": 1.123,
+        "htf_conditional_base_rate": 0.4388,
+        "lift_vs_htf_base": 1.135,
+        "median_outcome_return": -0.0036
+      },
+      "per_fold_lift": {
+        "cv1": 1.159,
+        "cv2": 0.993,
+        "cv3": 1.206,
+        "cv4": 1.084,
+        "cv5": 1.137
+      },
+      "fold_lift_min": 0.993,
+      "fold_lift_max": 1.206
+    },
+    {
+      "detector": "wedge_triangle_p3_loose",
+      "side": "short",
+      "n_cv_rows": 358570,
+      "base_rate": 0.3867,
+      "unconditional": {
+        "n_events": 1488,
+        "hit_rate": 0.4274,
+        "lift": 1.105,
+        "median_outcome_return": -0.0086
+      },
+      "htf_aligned": {
+        "n_events": 224,
+        "hit_rate": 0.4643,
+        "lift_vs_base": 1.201,
+        "htf_conditional_base_rate": 0.3912,
+        "lift_vs_htf_base": 1.187,
+        "median_outcome_return": -0.0079
+      },
+      "per_fold_lift": {
+        "cv1": 1.192,
+        "cv2": 0.959,
+        "cv3": 1.163,
+        "cv4": 1.185,
+        "cv5": 1.118
+      },
+      "fold_lift_min": 0.959,
+      "fold_lift_max": 1.192
+    }
+  ]
+}

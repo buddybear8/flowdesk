@@ -1,0 +1,497 @@
+{
+  "family": "squeeze_expansion",
+  "generated": "2026-06-10T09:58:00",
+  "protocol": {
+    "evaluation_rows": "CV test segments only (cv1..cv5); reserved OOS window untouched",
+    "cv_window": [
+      "2018-10-05",
+      "2025-05-19"
+    ],
+    "oos_window_excluded": [
+      "2025-05-20",
+      "2026-05-20"
+    ],
+    "n_cv_folds": 5,
+    "label": "ATR triple-barrier, +1.5/-1.0 ATR, 10d horizon (label_long / label_short)",
+    "htf_state": "weekly W-FRI close vs SMA10 vs SMA20 stack; prior completed week only",
+    "tickers": 226,
+    "preregistered_variants": [
+      "bb_squeeze",
+      "deep_squeeze",
+      "nr7_squeeze"
+    ]
+  },
+  "variants": {
+    "bb_squeeze": {
+      "params": {
+        "squeeze_pctile": 0.15,
+        "min_squeeze_bars": 5,
+        "range_k": 20,
+        "tr_expansion_min": 1.0,
+        "require_nr7": false
+      },
+      "sides": {
+        "long": {
+          "unconditional": {
+            "n_events": 1349,
+            "hit_rate": 0.4722,
+            "lift": 1.0726,
+            "median_outcome_return": -0.0047,
+            "median_terminal_return_10": 0.0079,
+            "base_rate": 0.4402,
+            "events_per_1k_rows": 4.3453
+          },
+          "htf_aligned": {
+            "n_events": 680,
+            "hit_rate": 0.4676,
+            "lift": 1.0623,
+            "median_outcome_return": -0.0036,
+            "median_terminal_return_10": 0.0082,
+            "base_rate": 0.4402
+          },
+          "htf_opposed_disagreement": {
+            "n_events": 285,
+            "follow_expansion": {
+              "hit_rate": 0.4772,
+              "base_rate": 0.4402,
+              "lift": 1.084,
+              "median_outcome_return": -0.0035
+            },
+            "follow_htf_trend": {
+              "hit_rate": 0.3719,
+              "base_rate": 0.3896,
+              "lift": 0.9548,
+              "median_outcome_return": -0.0154
+            }
+          },
+          "per_fold": [
+            {
+              "fold": "cv1",
+              "n_events": 255,
+              "base_rate": 0.4558,
+              "hit_rate": 0.5255,
+              "lift": 1.1528
+            },
+            {
+              "fold": "cv2",
+              "n_events": 253,
+              "base_rate": 0.483,
+              "hit_rate": 0.4427,
+              "lift": 0.9165
+            },
+            {
+              "fold": "cv3",
+              "n_events": 240,
+              "base_rate": 0.3723,
+              "hit_rate": 0.475,
+              "lift": 1.2757
+            },
+            {
+              "fold": "cv4",
+              "n_events": 348,
+              "base_rate": 0.4434,
+              "hit_rate": 0.4741,
+              "lift": 1.0693
+            },
+            {
+              "fold": "cv5",
+              "n_events": 253,
+              "base_rate": 0.4515,
+              "hit_rate": 0.4427,
+              "lift": 0.9805
+            }
+          ],
+          "fold_lift_min": 0.9165,
+          "fold_lift_max": 1.2757
+        },
+        "short": {
+          "unconditional": {
+            "n_events": 1189,
+            "hit_rate": 0.418,
+            "lift": 1.073,
+            "median_outcome_return": -0.0104,
+            "median_terminal_return_10": 0.003,
+            "base_rate": 0.3896,
+            "events_per_1k_rows": 3.8299
+          },
+          "htf_aligned": {
+            "n_events": 323,
+            "hit_rate": 0.4396,
+            "lift": 1.1285,
+            "median_outcome_return": -0.0118,
+            "median_terminal_return_10": -0.0005,
+            "base_rate": 0.3896
+          },
+          "htf_opposed_disagreement": {
+            "n_events": 451,
+            "follow_expansion": {
+              "hit_rate": 0.3947,
+              "base_rate": 0.3896,
+              "lift": 1.0132,
+              "median_outcome_return": -0.0106
+            },
+            "follow_htf_trend": {
+              "hit_rate": 0.4346,
+              "base_rate": 0.4402,
+              "lift": 0.9872,
+              "median_outcome_return": -0.0071
+            }
+          },
+          "per_fold": [
+            {
+              "fold": "cv1",
+              "n_events": 224,
+              "base_rate": 0.3762,
+              "hit_rate": 0.4375,
+              "lift": 1.163
+            },
+            {
+              "fold": "cv2",
+              "n_events": 182,
+              "base_rate": 0.3532,
+              "hit_rate": 0.3462,
+              "lift": 0.9802
+            },
+            {
+              "fold": "cv3",
+              "n_events": 229,
+              "base_rate": 0.4556,
+              "hit_rate": 0.4847,
+              "lift": 1.064
+            },
+            {
+              "fold": "cv4",
+              "n_events": 325,
+              "base_rate": 0.3805,
+              "hit_rate": 0.4,
+              "lift": 1.0512
+            },
+            {
+              "fold": "cv5",
+              "n_events": 229,
+              "base_rate": 0.379,
+              "hit_rate": 0.4148,
+              "lift": 1.0945
+            }
+          ],
+          "fold_lift_min": 0.9802,
+          "fold_lift_max": 1.163
+        }
+      }
+    },
+    "deep_squeeze": {
+      "params": {
+        "squeeze_pctile": 0.1,
+        "min_squeeze_bars": 10,
+        "range_k": 20,
+        "tr_expansion_min": 1.25,
+        "require_nr7": false
+      },
+      "sides": {
+        "long": {
+          "unconditional": {
+            "n_events": 282,
+            "hit_rate": 0.4929,
+            "lift": 1.1197,
+            "median_outcome_return": -0.0019,
+            "median_terminal_return_10": 0.01,
+            "base_rate": 0.4402,
+            "events_per_1k_rows": 0.9084
+          },
+          "htf_aligned": {
+            "n_events": 142,
+            "hit_rate": 0.4859,
+            "lift": 1.1038,
+            "median_outcome_return": -0.0038,
+            "median_terminal_return_10": 0.01,
+            "base_rate": 0.4402
+          },
+          "htf_opposed_disagreement": {
+            "n_events": 56,
+            "follow_expansion": {
+              "hit_rate": 0.5,
+              "base_rate": 0.4402,
+              "lift": 1.1358,
+              "median_outcome_return": 0.0006
+            },
+            "follow_htf_trend": {
+              "hit_rate": 0.3393,
+              "base_rate": 0.3896,
+              "lift": 0.871,
+              "median_outcome_return": -0.0201
+            }
+          },
+          "per_fold": [
+            {
+              "fold": "cv1",
+              "n_events": 60,
+              "base_rate": 0.4558,
+              "hit_rate": 0.6333,
+              "lift": 1.3894
+            },
+            {
+              "fold": "cv2",
+              "n_events": 57,
+              "base_rate": 0.483,
+              "hit_rate": 0.4035,
+              "lift": 0.8354
+            },
+            {
+              "fold": "cv3",
+              "n_events": 42,
+              "base_rate": 0.3723,
+              "hit_rate": 0.4048,
+              "lift": 1.0871
+            },
+            {
+              "fold": "cv4",
+              "n_events": 69,
+              "base_rate": 0.4434,
+              "hit_rate": 0.4638,
+              "lift": 1.0459
+            },
+            {
+              "fold": "cv5",
+              "n_events": 54,
+              "base_rate": 0.4515,
+              "hit_rate": 0.537,
+              "lift": 1.1895
+            }
+          ],
+          "fold_lift_min": 0.8354,
+          "fold_lift_max": 1.3894
+        },
+        "short": {
+          "unconditional": {
+            "n_events": 249,
+            "hit_rate": 0.4257,
+            "lift": 1.0928,
+            "median_outcome_return": -0.0083,
+            "median_terminal_return_10": 0.002,
+            "base_rate": 0.3896,
+            "events_per_1k_rows": 0.8021
+          },
+          "htf_aligned": {
+            "n_events": 57,
+            "hit_rate": 0.5088,
+            "lift": 1.306,
+            "median_outcome_return": -0.0005,
+            "median_terminal_return_10": -0.0102,
+            "base_rate": 0.3896
+          },
+          "htf_opposed_disagreement": {
+            "n_events": 118,
+            "follow_expansion": {
+              "hit_rate": 0.3814,
+              "base_rate": 0.3896,
+              "lift": 0.979,
+              "median_outcome_return": -0.0098
+            },
+            "follow_htf_trend": {
+              "hit_rate": 0.4237,
+              "base_rate": 0.4402,
+              "lift": 0.9625,
+              "median_outcome_return": -0.0101
+            }
+          },
+          "per_fold": [
+            {
+              "fold": "cv1",
+              "n_events": 58,
+              "base_rate": 0.3762,
+              "hit_rate": 0.431,
+              "lift": 1.1458
+            },
+            {
+              "fold": "cv2",
+              "n_events": 43,
+              "base_rate": 0.3532,
+              "hit_rate": 0.3488,
+              "lift": 0.9878
+            },
+            {
+              "fold": "cv3",
+              "n_events": 43,
+              "base_rate": 0.4556,
+              "hit_rate": 0.4651,
+              "lift": 1.0209
+            },
+            {
+              "fold": "cv4",
+              "n_events": 63,
+              "base_rate": 0.3805,
+              "hit_rate": 0.4127,
+              "lift": 1.0846
+            },
+            {
+              "fold": "cv5",
+              "n_events": 42,
+              "base_rate": 0.379,
+              "hit_rate": 0.4762,
+              "lift": 1.2564
+            }
+          ],
+          "fold_lift_min": 0.9878,
+          "fold_lift_max": 1.2564
+        }
+      }
+    },
+    "nr7_squeeze": {
+      "params": {
+        "squeeze_pctile": 0.3,
+        "min_squeeze_bars": 1,
+        "range_k": 7,
+        "tr_expansion_min": 1.0,
+        "require_nr7": true
+      },
+      "sides": {
+        "long": {
+          "unconditional": {
+            "n_events": 880,
+            "hit_rate": 0.4795,
+            "lift": 1.0893,
+            "median_outcome_return": -0.0028,
+            "median_terminal_return_10": 0.0073,
+            "base_rate": 0.4402,
+            "events_per_1k_rows": 2.8346
+          },
+          "htf_aligned": {
+            "n_events": 386,
+            "hit_rate": 0.4611,
+            "lift": 1.0475,
+            "median_outcome_return": -0.0053,
+            "median_terminal_return_10": 0.0089,
+            "base_rate": 0.4402
+          },
+          "htf_opposed_disagreement": {
+            "n_events": 201,
+            "follow_expansion": {
+              "hit_rate": 0.4876,
+              "base_rate": 0.4402,
+              "lift": 1.1075,
+              "median_outcome_return": -0.0025
+            },
+            "follow_htf_trend": {
+              "hit_rate": 0.3682,
+              "base_rate": 0.3896,
+              "lift": 0.9451,
+              "median_outcome_return": -0.0192
+            }
+          },
+          "per_fold": [
+            {
+              "fold": "cv1",
+              "n_events": 169,
+              "base_rate": 0.4558,
+              "hit_rate": 0.5503,
+              "lift": 1.2072
+            },
+            {
+              "fold": "cv2",
+              "n_events": 167,
+              "base_rate": 0.483,
+              "hit_rate": 0.4671,
+              "lift": 0.967
+            },
+            {
+              "fold": "cv3",
+              "n_events": 148,
+              "base_rate": 0.3723,
+              "hit_rate": 0.4865,
+              "lift": 1.3066
+            },
+            {
+              "fold": "cv4",
+              "n_events": 218,
+              "base_rate": 0.4434,
+              "hit_rate": 0.4679,
+              "lift": 1.0552
+            },
+            {
+              "fold": "cv5",
+              "n_events": 178,
+              "base_rate": 0.4515,
+              "hit_rate": 0.4326,
+              "lift": 0.9581
+            }
+          ],
+          "fold_lift_min": 0.9581,
+          "fold_lift_max": 1.3066
+        },
+        "short": {
+          "unconditional": {
+            "n_events": 791,
+            "hit_rate": 0.426,
+            "lift": 1.0937,
+            "median_outcome_return": -0.0113,
+            "median_terminal_return_10": 0.0063,
+            "base_rate": 0.3896,
+            "events_per_1k_rows": 2.5479
+          },
+          "htf_aligned": {
+            "n_events": 212,
+            "hit_rate": 0.4481,
+            "lift": 1.1503,
+            "median_outcome_return": -0.0121,
+            "median_terminal_return_10": 0.0064,
+            "base_rate": 0.3896
+          },
+          "htf_opposed_disagreement": {
+            "n_events": 326,
+            "follow_expansion": {
+              "hit_rate": 0.4387,
+              "base_rate": 0.3896,
+              "lift": 1.126,
+              "median_outcome_return": -0.0084
+            },
+            "follow_htf_trend": {
+              "hit_rate": 0.3896,
+              "base_rate": 0.4402,
+              "lift": 0.8849,
+              "median_outcome_return": -0.0144
+            }
+          },
+          "per_fold": [
+            {
+              "fold": "cv1",
+              "n_events": 116,
+              "base_rate": 0.3762,
+              "hit_rate": 0.569,
+              "lift": 1.5125
+            },
+            {
+              "fold": "cv2",
+              "n_events": 125,
+              "base_rate": 0.3532,
+              "hit_rate": 0.352,
+              "lift": 0.9967
+            },
+            {
+              "fold": "cv3",
+              "n_events": 160,
+              "base_rate": 0.4556,
+              "hit_rate": 0.525,
+              "lift": 1.1524
+            },
+            {
+              "fold": "cv4",
+              "n_events": 214,
+              "base_rate": 0.3805,
+              "hit_rate": 0.3785,
+              "lift": 0.9948
+            },
+            {
+              "fold": "cv5",
+              "n_events": 176,
+              "base_rate": 0.379,
+              "hit_rate": 0.3523,
+              "lift": 0.9294
+            }
+          ],
+          "fold_lift_min": 0.9294,
+          "fold_lift_max": 1.5125
+        }
+      }
+    }
+  }
+}

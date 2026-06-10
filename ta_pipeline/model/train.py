@@ -94,30 +94,44 @@ def _train_side(X, y, fit_mask, calib_mask, features, cfg) -> CalibratedModel:
     return CalibratedModel(booster, calibrator, features)
 
 
-def _save_models(models: dict, cfg: ModelConfig) -> None:
+def _save_models(models: dict, cfg: ModelConfig, prefix: str = "ta_only") -> None:
     import joblib
 
     model_dir = Path(cfg.model_dir)
     model_dir.mkdir(parents=True, exist_ok=True)
     for side, model in models.items():
-        path = model_dir / (side.replace("label_", "ta_only_") + ".joblib")
+        path = model_dir / f"{prefix}_{side.replace('label_', '')}.joblib"
         joblib.dump(model, path)
         logger.info("saved %s model -> %s", side, path)
 
 
 def oof_predictions(
-    matrix: pd.DataFrame, cfg: ModelConfig = None, *, save_models: bool = True
+    matrix: pd.DataFrame,
+    cfg: ModelConfig = None,
+    *,
+    features=None,
+    label_cols=None,
+    model_prefix: str = "ta_only",
+    save_models: bool = True,
 ) -> pd.DataFrame:
-    """Train walk-forward and return out-of-fold predictions for both sides.
+    """Train walk-forward and return out-of-fold predictions for each label.
 
-    Expects the trimmed matrix from :func:`materialize_matrix` (both labels
+    Expects the trimmed matrix from :func:`materialize_matrix` (every label
     present on every row). Returns a frame with ``ticker``, ``date``, ``fold``,
-    ``is_oos``, the actual ``label_long`` / ``label_short`` and the calibrated
-    ``p_long`` / ``p_short``. The OOS-fold models are saved to
-    ``cfg.model_dir`` unless ``save_models=False``.
+    ``is_oos``, every requested ``label_*`` column and its calibrated ``p_*``
+    counterpart.
+
+    ``features`` selects the model's feature columns -- defaults to every
+    feature column of ``matrix`` (the TA-only baseline); ablations pass an
+    explicit subset. ``label_cols`` selects which labels to model and defaults
+    to ``LABEL_COLUMNS`` (the mirrored long/short pair); pass a single-element
+    list (e.g. ``["label_aligned"]``) to train a unified directional model.
+    The OOS-fold models are saved to ``cfg.model_dir`` as
+    ``{model_prefix}_{side}.joblib`` unless ``save_models=False``.
     """
     cfg = cfg or ModelConfig()
-    features = feature_columns(matrix)
+    features = list(features) if features is not None else feature_columns(matrix)
+    label_cols = list(label_cols) if label_cols is not None else list(LABEL_COLUMNS)
     X = matrix[features].astype("float32")
 
     blocks = []
@@ -126,25 +140,26 @@ def oof_predictions(
         train_mask, test_mask = fold_masks(matrix, fold)
         fit_mask, calib_mask = _split_fit_calibration(matrix, train_mask, cfg)
 
-        block = matrix.loc[
-            test_mask, ["ticker", "date", "label_long", "label_short"]
-        ].copy()
+        block = matrix.loc[test_mask, ["ticker", "date", *label_cols]].copy()
         block.insert(2, "fold", fold.name)
         block.insert(3, "is_oos", fold.is_oos)
 
-        for side in LABEL_COLUMNS:
-            model = _train_side(X, matrix[side], fit_mask, calib_mask, features, cfg)
-            block[side.replace("label_", "p_")] = model.predict_proba(
+        for label_col in label_cols:
+            model = _train_side(X, matrix[label_col], fit_mask, calib_mask, features, cfg)
+            block["p_" + label_col.replace("label_", "")] = model.predict_proba(
                 matrix.loc[test_mask]
             )
             if fold.is_oos:
-                oos_models[side] = model
+                oos_models[label_col] = model
         logger.info(
-            "fold %s: trained long + short, %d predictions", fold.name, len(block)
+            "fold %s: trained %s, %d predictions",
+            fold.name,
+            " + ".join(c.replace("label_", "") for c in label_cols),
+            len(block),
         )
         blocks.append(block)
 
     predictions = pd.concat(blocks, ignore_index=True)
     if save_models and oos_models:
-        _save_models(oos_models, cfg)
+        _save_models(oos_models, cfg, model_prefix)
     return predictions
