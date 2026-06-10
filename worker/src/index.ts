@@ -15,6 +15,7 @@ import {
   computeNetImpact,
 } from "./jobs/uw.js";
 import { runFlowRetentionSweep, runDpRetentionSweep, runGexHeatmapRetentionSweep, runFlowSentimentRetentionSweep } from "./jobs/retention.js";
+import { runArchiveSweep } from "./jobs/archive.js";
 import { pollFlowSentiment } from "./jobs/flow-sentiment.js";
 import { HOT_TICKERS, TAIL_TICKERS } from "./lib/sentiment-tickers.js";
 import { refreshTickerMetadata } from "./jobs/refresh-ticker-metadata.js";
@@ -83,6 +84,12 @@ cron.schedule("0 */10 8-20 * * 1-5", safe("candles-poll", pollCandles));
 cron.schedule("0 30 5 * * 1-5", safe("refresh-ticker-metadata", refreshTickerMetadata));
 cron.schedule("0 0 7 * * 1-5", safe("ai-summarizer-gex", runAiSummarizerGex));
 cron.schedule("0 30 7 * * 1-5", safe("hit-list-compute", computeHitList));
+// S3 training-data archive (jobs/archive.ts) — 02:00 ET daily, one hour BEFORE
+// the retention sweeps delete anything. Copies each complete UTC day of
+// flow_alerts / flow_sentiment_days / gex(+heatmap) / dark_pool_prints to
+// s3://$DARKPOOL_S3_BUCKET/archive/ as JSONL.gz for the ta_pipeline ML corpus.
+cron.schedule("0 0 2 * * *", safe("archive-sweep", () => runArchiveSweep()));
+
 cron.schedule("0 0 3 * * 1-5", safe("retention-sweeps", async () => {
   await Promise.all([runFlowRetentionSweep(), runDpRetentionSweep(), runGexHeatmapRetentionSweep(), runFlowSentimentRetentionSweep()]);
 }));
@@ -101,4 +108,4 @@ const shutdown = async (signal: string) => {
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
-console.log(`[${ts()}] [worker] started — 14 schedules registered (Polygon dark-pool ingest live; UW dark-pool retired; Options Sentiment hot+tail live)`);
+console.log(`[${ts()}] [worker] started — 15 schedules registered (Polygon dark-pool ingest live; Options Sentiment hot+tail live; S3 training-data archive live)`);
