@@ -636,30 +636,55 @@ export async function pollGex(): Promise<void> {
       const expiryDates: string[] = nearest.map((e: { date: string }) => e.date);
       const expParam = expiryDates.map((d) => `expirations[]=${d}`).join("&");
 
-      // Strike-range bounds were added in bc87b02 (post-quota incident) to
-      // cap UW's row count. They worked for SPY/SPX/QQQ but as of 2026-05-26
-      // UW's expiry-strike endpoint returns empty `data` when BOTH
-      // `expirations[]=` AND `min_strike`/`max_strike` are combined for
-      // single-stock tickers (TSLA, NVDA, META, AMZN, GOOGL, NFLX, MSFT, AMD).
-      // Either filter alone returns data; the combination breaks. Probe
-      // results in worker/src/script-uw-heatmap-debug.ts. Dropping the strike
-      // bounds: heatmap volume rises back toward pre-bc87b02 levels for
-      // stocks, but with the 2-min cron cadence (118fb8f) the daily UW total
-      // stays well within quota — current usage is far below the cap.
+      // UW's expiry-strike endpoint is per-ticker inconsistent and flips over
+      // time (full history in git). As of 2026-06-10 the two filter shapes are
+      // COMPLEMENTARY, not interchangeable:
+      //   • `expirations[]=` returns rich chains for the indices + AMD/META/
+      //     NVDA/TSLA, but EMPTY for MSFT/GOOGL/AAPL (and thin for NFLX).
+      //   • `min_strike`/`max_strike` (no expirations[]) returns the near-spot
+      //     chain for MSFT/GOOGL/AAPL, but empty for AMD/AMZN/NFLX.
+      //   • Combining both filters still returns empty (the old bc87b02 bug).
+      //   • AMZN currently returns empty from BOTH (greek-exposure/expiry has
+      //     data, but expiry-strike does not) — a UW-side gap; self-heals when
+      //     either shape starts returning rows again.
+      // Strategy: try expirations[] first; if thin, fall back to the strike-band
+      // form and keep whichever is richer. The fallback costs ~1 extra UW call
+      // only for the thin names, well within quota at the 2-min cadence.
       const PAGE_LIMIT = 500;
       const MAX_PAGES = 5;
-      const allRows: any[] = [];
-      for (let page = 1; page <= MAX_PAGES; page++) {
-        if (page > 1) await sleep(TICKER_DELAY_MS);
-        const expJson = await uwFetch(
-          `/api/stock/${ticker}/spot-exposures/expiry-strike?${expParam}&limit=${PAGE_LIMIT}&page=${page}`,
-          `gex-heatmap:${ticker}:p${page}`,
-        );
-        if (!expJson) break;
-        const pageRows = asArray((expJson as any).data ?? []);
-        if (!pageRows.length) break;
-        allRows.push(...pageRows);
-        if (pageRows.length < PAGE_LIMIT) break;
+      const expirySet = new Set(expiryDates);
+
+      const fetchPaged = async (suffix: string, tag: string): Promise<any[]> => {
+        const rows: any[] = [];
+        for (let page = 1; page <= MAX_PAGES; page++) {
+          if (page > 1) await sleep(TICKER_DELAY_MS);
+          const j = await uwFetch(
+            `/api/stock/${ticker}/spot-exposures/expiry-strike?${suffix}&limit=${PAGE_LIMIT}&page=${page}`,
+            `gex-heatmap:${ticker}:${tag}p${page}`,
+          );
+          if (!j) break;
+          const pr = asArray((j as any).data ?? []);
+          if (!pr.length) break;
+          rows.push(...pr);
+          if (pr.length < PAGE_LIMIT) break;
+        }
+        // Keep only the expirations we're charting (the band form can return
+        // far-dated expiries we didn't ask for).
+        return rows.filter((r) => expirySet.has(String(r.expiry)));
+      };
+      const distinctExp = (rows: any[]) => new Set(rows.map((r) => String(r.expiry))).size;
+
+      let allRows = await fetchPaged(expParam, "exp");
+      const VIABLE_ROWS = 60;
+      if (allRows.length < VIABLE_ROWS || distinctExp(allRows) < 2) {
+        await sleep(TICKER_DELAY_MS);
+        const lo = Math.floor(spot * 0.85);
+        const hi = Math.ceil(spot * 1.15);
+        const band = await fetchPaged(`min_strike=${lo}&max_strike=${hi}`, "band");
+        if (band.length > allRows.length) {
+          allRows = band;
+          console.log(`[uw:gex-heatmap:${ticker}] used min/max-strike fallback (${band.length} rows)`);
+        }
       }
 
       if (allRows.length > 0) {
