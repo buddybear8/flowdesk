@@ -1,0 +1,567 @@
+{
+  "family": "ema_cloud_mtf",
+  "generated": "2026-06-10T15:25:07",
+  "protocol": {
+    "evaluation": "event-conditioned triple-barrier outcomes; no model trained",
+    "folds": "model.walkforward.make_folds defaults; CV folds only, reserved OOS window never evaluated",
+    "dev_window": [
+      "2017-06-13",
+      "2025-05-19"
+    ],
+    "label": "ATR triple barrier, +1.5/-1.0 ATR, 10d horizon (label_long / label_short)",
+    "detector": "fast EMA cloud (band a/b) + slow EMA cloud (band c/d); reclaim = was below fast cloud, closes above it while slow cloud bullish (price above + midline curling up); curl_flip = slow-midline slope flips up while price above the slow cloud (mirror for shorts)",
+    "htf_state": "WEEKLY EMA-cloud direction: W-FRI weekly close vs weekly EMA10/EMA20 stack; each day uses the PRIOR completed week's state (the MTF filter)",
+    "preregistration": "3 EMA sets (ripster 5/12+34/50, classic 8/21+34/50, wide 9/20+50/100) x 2 modes = 6 cells, fixed before any outcome was inspected",
+    "min_fold_events": 5
+  },
+  "dev_rows": 358570,
+  "tickers": 219,
+  "detectors": {
+    "ripster_reclaim": {
+      "params": {
+        "name": "ripster",
+        "fast_a": 5,
+        "fast_b": 12,
+        "slow_c": 34,
+        "slow_d": 50,
+        "atr_period": 14
+      },
+      "mode": "reclaim",
+      "long": {
+        "n_events": 11708,
+        "event_rate": 0.0327,
+        "base_rate": 0.4433,
+        "hit_rate": 0.4675,
+        "lift": 1.0544,
+        "median_outcome_return": -0.0054,
+        "median_strength_atr": 0.293,
+        "htf_aligned": {
+          "n_events": 7476,
+          "hit_rate": 0.4728,
+          "lift_vs_overall_base": 1.0666,
+          "htf_base_rate_all_rows": 0.4431,
+          "lift_vs_htf_base": 1.0671
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1720,
+            "lift": 1.0459
+          },
+          "cv2": {
+            "n_events": 2233,
+            "lift": 1.0746
+          },
+          "cv3": {
+            "n_events": 1592,
+            "lift": 1.0493
+          },
+          "cv4": {
+            "n_events": 2158,
+            "lift": 1.0294
+          },
+          "cv5": {
+            "n_events": 2264,
+            "lift": 0.9881
+          }
+        },
+        "fold_lift_min": 0.9881,
+        "fold_lift_max": 1.0746
+      },
+      "short": {
+        "n_events": 10891,
+        "event_rate": 0.0304,
+        "base_rate": 0.3867,
+        "hit_rate": 0.413,
+        "lift": 1.0679,
+        "median_outcome_return": -0.0144,
+        "median_strength_atr": 0.2924,
+        "htf_aligned": {
+          "n_events": 6056,
+          "hit_rate": 0.4161,
+          "lift_vs_overall_base": 1.076,
+          "htf_base_rate_all_rows": 0.3942,
+          "lift_vs_htf_base": 1.0556
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1416,
+            "lift": 1.0438
+          },
+          "cv2": {
+            "n_events": 1339,
+            "lift": 1.0341
+          },
+          "cv3": {
+            "n_events": 2347,
+            "lift": 1.1232
+          },
+          "cv4": {
+            "n_events": 2118,
+            "lift": 1.0138
+          },
+          "cv5": {
+            "n_events": 2357,
+            "lift": 1.0533
+          }
+        },
+        "fold_lift_min": 1.0138,
+        "fold_lift_max": 1.1232
+      }
+    },
+    "ripster_curl_flip": {
+      "params": {
+        "name": "ripster",
+        "fast_a": 5,
+        "fast_b": 12,
+        "slow_c": 34,
+        "slow_d": 50,
+        "atr_period": 14
+      },
+      "mode": "curl_flip",
+      "long": {
+        "n_events": 11476,
+        "event_rate": 0.032,
+        "base_rate": 0.4433,
+        "hit_rate": 0.4556,
+        "lift": 1.0278,
+        "median_outcome_return": -0.0081,
+        "median_strength_atr": 0.0232,
+        "htf_aligned": {
+          "n_events": 2690,
+          "hit_rate": 0.4636,
+          "lift_vs_overall_base": 1.0456,
+          "htf_base_rate_all_rows": 0.4431,
+          "lift_vs_htf_base": 1.0461
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1641,
+            "lift": 1.0173
+          },
+          "cv2": {
+            "n_events": 1799,
+            "lift": 1.0461
+          },
+          "cv3": {
+            "n_events": 1918,
+            "lift": 1.0838
+          },
+          "cv4": {
+            "n_events": 2124,
+            "lift": 1.0438
+          },
+          "cv5": {
+            "n_events": 2372,
+            "lift": 0.9767
+          }
+        },
+        "fold_lift_min": 0.9767,
+        "fold_lift_max": 1.0838
+      },
+      "short": {
+        "n_events": 11318,
+        "event_rate": 0.0316,
+        "base_rate": 0.3867,
+        "hit_rate": 0.4236,
+        "lift": 1.0952,
+        "median_outcome_return": -0.0116,
+        "median_strength_atr": 0.0247,
+        "htf_aligned": {
+          "n_events": 2175,
+          "hit_rate": 0.4354,
+          "lift_vs_overall_base": 1.1258,
+          "htf_base_rate_all_rows": 0.3942,
+          "lift_vs_htf_base": 1.1045
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1649,
+            "lift": 1.0366
+          },
+          "cv2": {
+            "n_events": 1588,
+            "lift": 1.1038
+          },
+          "cv3": {
+            "n_events": 2140,
+            "lift": 1.1088
+          },
+          "cv4": {
+            "n_events": 2018,
+            "lift": 1.0992
+          },
+          "cv5": {
+            "n_events": 2346,
+            "lift": 1.1314
+          }
+        },
+        "fold_lift_min": 1.0366,
+        "fold_lift_max": 1.1314
+      }
+    },
+    "classic_reclaim": {
+      "params": {
+        "name": "classic",
+        "fast_a": 8,
+        "fast_b": 21,
+        "slow_c": 34,
+        "slow_d": 50,
+        "atr_period": 14
+      },
+      "mode": "reclaim",
+      "long": {
+        "n_events": 8254,
+        "event_rate": 0.023,
+        "base_rate": 0.4433,
+        "hit_rate": 0.472,
+        "lift": 1.0647,
+        "median_outcome_return": -0.0052,
+        "median_strength_atr": 0.3195,
+        "htf_aligned": {
+          "n_events": 4409,
+          "hit_rate": 0.4808,
+          "lift_vs_overall_base": 1.0846,
+          "htf_base_rate_all_rows": 0.4431,
+          "lift_vs_htf_base": 1.0851
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1183,
+            "lift": 1.0793
+          },
+          "cv2": {
+            "n_events": 1544,
+            "lift": 1.066
+          },
+          "cv3": {
+            "n_events": 1176,
+            "lift": 1.0323
+          },
+          "cv4": {
+            "n_events": 1508,
+            "lift": 1.0379
+          },
+          "cv5": {
+            "n_events": 1626,
+            "lift": 1.0203
+          }
+        },
+        "fold_lift_min": 1.0203,
+        "fold_lift_max": 1.0793
+      },
+      "short": {
+        "n_events": 8069,
+        "event_rate": 0.0225,
+        "base_rate": 0.3867,
+        "hit_rate": 0.4216,
+        "lift": 1.0902,
+        "median_outcome_return": -0.0134,
+        "median_strength_atr": 0.34,
+        "htf_aligned": {
+          "n_events": 3747,
+          "hit_rate": 0.4241,
+          "lift_vs_overall_base": 1.0965,
+          "htf_base_rate_all_rows": 0.3942,
+          "lift_vs_htf_base": 1.0758
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1110,
+            "lift": 1.0274
+          },
+          "cv2": {
+            "n_events": 964,
+            "lift": 1.0486
+          },
+          "cv3": {
+            "n_events": 1706,
+            "lift": 1.1245
+          },
+          "cv4": {
+            "n_events": 1526,
+            "lift": 1.0368
+          },
+          "cv5": {
+            "n_events": 1748,
+            "lift": 1.0943
+          }
+        },
+        "fold_lift_min": 1.0274,
+        "fold_lift_max": 1.1245
+      }
+    },
+    "classic_curl_flip": {
+      "params": {
+        "name": "classic",
+        "fast_a": 8,
+        "fast_b": 21,
+        "slow_c": 34,
+        "slow_d": 50,
+        "atr_period": 14
+      },
+      "mode": "curl_flip",
+      "long": {
+        "n_events": 11476,
+        "event_rate": 0.032,
+        "base_rate": 0.4433,
+        "hit_rate": 0.4556,
+        "lift": 1.0278,
+        "median_outcome_return": -0.0081,
+        "median_strength_atr": 0.0232,
+        "htf_aligned": {
+          "n_events": 2690,
+          "hit_rate": 0.4636,
+          "lift_vs_overall_base": 1.0456,
+          "htf_base_rate_all_rows": 0.4431,
+          "lift_vs_htf_base": 1.0461
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1641,
+            "lift": 1.0173
+          },
+          "cv2": {
+            "n_events": 1799,
+            "lift": 1.0461
+          },
+          "cv3": {
+            "n_events": 1918,
+            "lift": 1.0838
+          },
+          "cv4": {
+            "n_events": 2124,
+            "lift": 1.0438
+          },
+          "cv5": {
+            "n_events": 2372,
+            "lift": 0.9767
+          }
+        },
+        "fold_lift_min": 0.9767,
+        "fold_lift_max": 1.0838
+      },
+      "short": {
+        "n_events": 11318,
+        "event_rate": 0.0316,
+        "base_rate": 0.3867,
+        "hit_rate": 0.4236,
+        "lift": 1.0952,
+        "median_outcome_return": -0.0116,
+        "median_strength_atr": 0.0247,
+        "htf_aligned": {
+          "n_events": 2175,
+          "hit_rate": 0.4354,
+          "lift_vs_overall_base": 1.1258,
+          "htf_base_rate_all_rows": 0.3942,
+          "lift_vs_htf_base": 1.1045
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1649,
+            "lift": 1.0366
+          },
+          "cv2": {
+            "n_events": 1588,
+            "lift": 1.1038
+          },
+          "cv3": {
+            "n_events": 2140,
+            "lift": 1.1088
+          },
+          "cv4": {
+            "n_events": 2018,
+            "lift": 1.0992
+          },
+          "cv5": {
+            "n_events": 2346,
+            "lift": 1.1314
+          }
+        },
+        "fold_lift_min": 1.0366,
+        "fold_lift_max": 1.1314
+      }
+    },
+    "wide_reclaim": {
+      "params": {
+        "name": "wide",
+        "fast_a": 9,
+        "fast_b": 20,
+        "slow_c": 50,
+        "slow_d": 100,
+        "atr_period": 14
+      },
+      "mode": "reclaim",
+      "long": {
+        "n_events": 7639,
+        "event_rate": 0.0213,
+        "base_rate": 0.4433,
+        "hit_rate": 0.4728,
+        "lift": 1.0665,
+        "median_outcome_return": -0.0049,
+        "median_strength_atr": 0.3074,
+        "htf_aligned": {
+          "n_events": 4700,
+          "hit_rate": 0.477,
+          "lift_vs_overall_base": 1.076,
+          "htf_base_rate_all_rows": 0.4431,
+          "lift_vs_htf_base": 1.0765
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1089,
+            "lift": 1.0697
+          },
+          "cv2": {
+            "n_events": 1491,
+            "lift": 1.0747
+          },
+          "cv3": {
+            "n_events": 1051,
+            "lift": 1.0631
+          },
+          "cv4": {
+            "n_events": 1313,
+            "lift": 1.0186
+          },
+          "cv5": {
+            "n_events": 1486,
+            "lift": 1.0136
+          }
+        },
+        "fold_lift_min": 1.0136,
+        "fold_lift_max": 1.0747
+      },
+      "short": {
+        "n_events": 6944,
+        "event_rate": 0.0194,
+        "base_rate": 0.3867,
+        "hit_rate": 0.4247,
+        "lift": 1.0981,
+        "median_outcome_return": -0.0134,
+        "median_strength_atr": 0.3175,
+        "htf_aligned": {
+          "n_events": 3986,
+          "hit_rate": 0.423,
+          "lift_vs_overall_base": 1.0937,
+          "htf_base_rate_all_rows": 0.3942,
+          "lift_vs_htf_base": 1.073
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 933,
+            "lift": 1.0514
+          },
+          "cv2": {
+            "n_events": 750,
+            "lift": 1.042
+          },
+          "cv3": {
+            "n_events": 1565,
+            "lift": 1.1122
+          },
+          "cv4": {
+            "n_events": 1414,
+            "lift": 1.0501
+          },
+          "cv5": {
+            "n_events": 1482,
+            "lift": 1.0824
+          }
+        },
+        "fold_lift_min": 1.042,
+        "fold_lift_max": 1.1122
+      }
+    },
+    "wide_curl_flip": {
+      "params": {
+        "name": "wide",
+        "fast_a": 9,
+        "fast_b": 20,
+        "slow_c": 50,
+        "slow_d": 100,
+        "atr_period": 14
+      },
+      "mode": "curl_flip",
+      "long": {
+        "n_events": 6112,
+        "event_rate": 0.017,
+        "base_rate": 0.4433,
+        "hit_rate": 0.4596,
+        "lift": 1.0367,
+        "median_outcome_return": -0.0079,
+        "median_strength_atr": 0.0173,
+        "htf_aligned": {
+          "n_events": 943,
+          "hit_rate": 0.456,
+          "lift_vs_overall_base": 1.0285,
+          "htf_base_rate_all_rows": 0.4431,
+          "lift_vs_htf_base": 1.029
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 926,
+            "lift": 1.059
+          },
+          "cv2": {
+            "n_events": 878,
+            "lift": 1.0257
+          },
+          "cv3": {
+            "n_events": 986,
+            "lift": 1.1223
+          },
+          "cv4": {
+            "n_events": 1192,
+            "lift": 1.0236
+          },
+          "cv5": {
+            "n_events": 1266,
+            "lift": 1.0322
+          }
+        },
+        "fold_lift_min": 1.0236,
+        "fold_lift_max": 1.1223
+      },
+      "short": {
+        "n_events": 5829,
+        "event_rate": 0.0163,
+        "base_rate": 0.3867,
+        "hit_rate": 0.4248,
+        "lift": 1.0983,
+        "median_outcome_return": -0.0117,
+        "median_strength_atr": 0.019,
+        "htf_aligned": {
+          "n_events": 872,
+          "hit_rate": 0.43,
+          "lift_vs_overall_base": 1.112,
+          "htf_base_rate_all_rows": 0.3942,
+          "lift_vs_htf_base": 1.0909
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 928,
+            "lift": 1.0742
+          },
+          "cv2": {
+            "n_events": 731,
+            "lift": 1.0226
+          },
+          "cv3": {
+            "n_events": 1094,
+            "lift": 1.1015
+          },
+          "cv4": {
+            "n_events": 1123,
+            "lift": 1.1257
+          },
+          "cv5": {
+            "n_events": 1193,
+            "lift": 1.1168
+          }
+        },
+        "fold_lift_min": 1.0226,
+        "fold_lift_max": 1.1257
+      }
+    }
+  }
+}

@@ -1,0 +1,611 @@
+{
+  "family": "fib_confluence",
+  "generated": "2026-06-10T15:11:58",
+  "protocol": {
+    "evaluation": "event-conditioned triple-barrier outcomes; no model trained",
+    "folds": "model.walkforward.make_folds defaults; CV folds only, reserved OOS window never evaluated",
+    "dev_window": [
+      "2017-06-13",
+      "2025-05-19"
+    ],
+    "label": "ATR triple barrier, +1.5/-1.0 ATR, 10d horizon (label_long / label_short)",
+    "htf_state": "W-FRI weekly close vs weekly SMA10/SMA20 stack; each day uses the PRIOR completed week's state",
+    "preregistration": "3 fib param-sets fixed before any outcome was inspected; axes swept = {fib levels}, {confluence ATR band}, {min impulse ATR}",
+    "additivity_control": "each <name>_nofib uses the SAME swing structure + reclaim with require_fib=False / require_confluence=False, so gated-vs-nofib isolates whether fib confluence is additive over the bare swing-reclaim already refuted",
+    "min_fold_events": 5
+  },
+  "dev_rows": 358570,
+  "tickers": 219,
+  "detectors": {
+    "f1_base": {
+      "params": {
+        "name": "f1_base",
+        "swing_m": 3,
+        "fib_levels": [
+          0.382,
+          0.5,
+          0.618,
+          0.786
+        ],
+        "confluence_atr": 0.3,
+        "min_impulse_atr": 2.0,
+        "max_leg_age": 40,
+        "atr_period": 14,
+        "require_fib": true,
+        "require_confluence": true
+      },
+      "is_additivity_control": false,
+      "long": {
+        "n_events": 7344,
+        "event_rate": 0.0205,
+        "base_rate": 0.4433,
+        "hit_rate": 0.4703,
+        "lift": 1.0608,
+        "median_outcome_return": -0.0045,
+        "median_strength": 1.4475,
+        "htf_aligned": {
+          "n_events": 2763,
+          "hit_rate": 0.4622,
+          "lift_vs_overall_base": 1.0425,
+          "htf_base_rate_all_rows": 0.4388,
+          "lift_vs_htf_base": 1.0533
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1053,
+            "lift": 1.0937
+          },
+          "cv2": {
+            "n_events": 1215,
+            "lift": 1.0462
+          },
+          "cv3": {
+            "n_events": 1234,
+            "lift": 1.1035
+          },
+          "cv4": {
+            "n_events": 1505,
+            "lift": 1.025
+          },
+          "cv5": {
+            "n_events": 1445,
+            "lift": 1.0822
+          }
+        },
+        "fold_lift_min": 1.025,
+        "fold_lift_max": 1.1035
+      },
+      "short": {
+        "n_events": 7003,
+        "event_rate": 0.0195,
+        "base_rate": 0.3867,
+        "hit_rate": 0.4057,
+        "lift": 1.049,
+        "median_outcome_return": -0.0141,
+        "median_strength": 1.3969,
+        "htf_aligned": {
+          "n_events": 2325,
+          "hit_rate": 0.4077,
+          "lift_vs_overall_base": 1.0543,
+          "htf_base_rate_all_rows": 0.3912,
+          "lift_vs_htf_base": 1.0423
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 971,
+            "lift": 1.0869
+          },
+          "cv2": {
+            "n_events": 963,
+            "lift": 1.0791
+          },
+          "cv3": {
+            "n_events": 1442,
+            "lift": 1.0366
+          },
+          "cv4": {
+            "n_events": 1456,
+            "lift": 1.0938
+          },
+          "cv5": {
+            "n_events": 1339,
+            "lift": 0.9872
+          }
+        },
+        "fold_lift_min": 0.9872,
+        "fold_lift_max": 1.0938
+      }
+    },
+    "f2_tight": {
+      "params": {
+        "name": "f2_tight",
+        "swing_m": 3,
+        "fib_levels": [
+          0.5,
+          0.618
+        ],
+        "confluence_atr": 0.2,
+        "min_impulse_atr": 3.0,
+        "max_leg_age": 40,
+        "atr_period": 14,
+        "require_fib": true,
+        "require_confluence": true
+      },
+      "is_additivity_control": false,
+      "long": {
+        "n_events": 3615,
+        "event_rate": 0.0101,
+        "base_rate": 0.4433,
+        "hit_rate": 0.4539,
+        "lift": 1.0239,
+        "median_outcome_return": -0.0072,
+        "median_strength": 1.1763,
+        "htf_aligned": {
+          "n_events": 1574,
+          "hit_rate": 0.4447,
+          "lift_vs_overall_base": 1.0031,
+          "htf_base_rate_all_rows": 0.4388,
+          "lift_vs_htf_base": 1.0136
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 544,
+            "lift": 1.0444
+          },
+          "cv2": {
+            "n_events": 560,
+            "lift": 1.0573
+          },
+          "cv3": {
+            "n_events": 613,
+            "lift": 1.0559
+          },
+          "cv4": {
+            "n_events": 732,
+            "lift": 1.0136
+          },
+          "cv5": {
+            "n_events": 730,
+            "lift": 0.98
+          }
+        },
+        "fold_lift_min": 0.98,
+        "fold_lift_max": 1.0573
+      },
+      "short": {
+        "n_events": 3623,
+        "event_rate": 0.0101,
+        "base_rate": 0.3867,
+        "hit_rate": 0.4102,
+        "lift": 1.0605,
+        "median_outcome_return": -0.0133,
+        "median_strength": 1.1171,
+        "htf_aligned": {
+          "n_events": 1289,
+          "hit_rate": 0.4019,
+          "lift_vs_overall_base": 1.0391,
+          "htf_base_rate_all_rows": 0.3912,
+          "lift_vs_htf_base": 1.0273
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 487,
+            "lift": 1.0207
+          },
+          "cv2": {
+            "n_events": 527,
+            "lift": 1.1821
+          },
+          "cv3": {
+            "n_events": 779,
+            "lift": 0.9721
+          },
+          "cv4": {
+            "n_events": 742,
+            "lift": 1.098
+          },
+          "cv5": {
+            "n_events": 700,
+            "lift": 1.0214
+          }
+        },
+        "fold_lift_min": 0.9721,
+        "fold_lift_max": 1.1821
+      }
+    },
+    "f3_loose": {
+      "params": {
+        "name": "f3_loose",
+        "swing_m": 3,
+        "fib_levels": [
+          0.382,
+          0.5,
+          0.618,
+          0.786
+        ],
+        "confluence_atr": 0.5,
+        "min_impulse_atr": 1.5,
+        "max_leg_age": 40,
+        "atr_period": 14,
+        "require_fib": true,
+        "require_confluence": true
+      },
+      "is_additivity_control": false,
+      "long": {
+        "n_events": 8139,
+        "event_rate": 0.0227,
+        "base_rate": 0.4433,
+        "hit_rate": 0.4728,
+        "lift": 1.0664,
+        "median_outcome_return": -0.0044,
+        "median_strength": 1.9745,
+        "htf_aligned": {
+          "n_events": 2990,
+          "hit_rate": 0.4639,
+          "lift_vs_overall_base": 1.0463,
+          "htf_base_rate_all_rows": 0.4388,
+          "lift_vs_htf_base": 1.0572
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1149,
+            "lift": 1.1074
+          },
+          "cv2": {
+            "n_events": 1351,
+            "lift": 1.0482
+          },
+          "cv3": {
+            "n_events": 1364,
+            "lift": 1.1105
+          },
+          "cv4": {
+            "n_events": 1662,
+            "lift": 1.034
+          },
+          "cv5": {
+            "n_events": 1620,
+            "lift": 1.0747
+          }
+        },
+        "fold_lift_min": 1.034,
+        "fold_lift_max": 1.1105
+      },
+      "short": {
+        "n_events": 7849,
+        "event_rate": 0.0219,
+        "base_rate": 0.3867,
+        "hit_rate": 0.4058,
+        "lift": 1.0492,
+        "median_outcome_return": -0.0139,
+        "median_strength": 1.8302,
+        "htf_aligned": {
+          "n_events": 2471,
+          "hit_rate": 0.4096,
+          "lift_vs_overall_base": 1.059,
+          "htf_base_rate_all_rows": 0.3912,
+          "lift_vs_htf_base": 1.047
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1110,
+            "lift": 1.0489
+          },
+          "cv2": {
+            "n_events": 1098,
+            "lift": 1.078
+          },
+          "cv3": {
+            "n_events": 1640,
+            "lift": 1.044
+          },
+          "cv4": {
+            "n_events": 1553,
+            "lift": 1.122
+          },
+          "cv5": {
+            "n_events": 1492,
+            "lift": 0.9726
+          }
+        },
+        "fold_lift_min": 0.9726,
+        "fold_lift_max": 1.122
+      }
+    },
+    "f1_base_nofib": {
+      "params": {
+        "name": "f1_base_nofib",
+        "swing_m": 3,
+        "fib_levels": [
+          0.382,
+          0.5,
+          0.618,
+          0.786
+        ],
+        "confluence_atr": 0.3,
+        "min_impulse_atr": 2.0,
+        "max_leg_age": 40,
+        "atr_period": 14,
+        "require_fib": false,
+        "require_confluence": false
+      },
+      "is_additivity_control": true,
+      "long": {
+        "n_events": 10883,
+        "event_rate": 0.0304,
+        "base_rate": 0.4433,
+        "hit_rate": 0.4627,
+        "lift": 1.0438,
+        "median_outcome_return": -0.0054,
+        "median_strength": 1.2467,
+        "htf_aligned": {
+          "n_events": 4656,
+          "hit_rate": 0.4579,
+          "lift_vs_overall_base": 1.0329,
+          "htf_base_rate_all_rows": 0.4388,
+          "lift_vs_htf_base": 1.0436
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1631,
+            "lift": 1.0774
+          },
+          "cv2": {
+            "n_events": 1889,
+            "lift": 1.0653
+          },
+          "cv3": {
+            "n_events": 1788,
+            "lift": 1.071
+          },
+          "cv4": {
+            "n_events": 1996,
+            "lift": 1.0203
+          },
+          "cv5": {
+            "n_events": 2089,
+            "lift": 1.0126
+          }
+        },
+        "fold_lift_min": 1.0126,
+        "fold_lift_max": 1.0774
+      },
+      "short": {
+        "n_events": 9968,
+        "event_rate": 0.0278,
+        "base_rate": 0.3867,
+        "hit_rate": 0.4007,
+        "lift": 1.036,
+        "median_outcome_return": -0.0145,
+        "median_strength": 1.1794,
+        "htf_aligned": {
+          "n_events": 3460,
+          "hit_rate": 0.4012,
+          "lift_vs_overall_base": 1.0373,
+          "htf_base_rate_all_rows": 0.3912,
+          "lift_vs_htf_base": 1.0255
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1401,
+            "lift": 1.1119
+          },
+          "cv2": {
+            "n_events": 1405,
+            "lift": 1.1085
+          },
+          "cv3": {
+            "n_events": 1968,
+            "lift": 1.0339
+          },
+          "cv4": {
+            "n_events": 2051,
+            "lift": 1.0482
+          },
+          "cv5": {
+            "n_events": 1939,
+            "lift": 0.9552
+          }
+        },
+        "fold_lift_min": 0.9552,
+        "fold_lift_max": 1.1119
+      }
+    },
+    "f2_tight_nofib": {
+      "params": {
+        "name": "f2_tight_nofib",
+        "swing_m": 3,
+        "fib_levels": [
+          0.5,
+          0.618
+        ],
+        "confluence_atr": 0.2,
+        "min_impulse_atr": 3.0,
+        "max_leg_age": 40,
+        "atr_period": 14,
+        "require_fib": false,
+        "require_confluence": false
+      },
+      "is_additivity_control": true,
+      "long": {
+        "n_events": 7970,
+        "event_rate": 0.0222,
+        "base_rate": 0.4433,
+        "hit_rate": 0.4551,
+        "lift": 1.0265,
+        "median_outcome_return": -0.0064,
+        "median_strength": 0.6798,
+        "htf_aligned": {
+          "n_events": 4041,
+          "hit_rate": 0.4516,
+          "lift_vs_overall_base": 1.0187,
+          "htf_base_rate_all_rows": 0.4388,
+          "lift_vs_htf_base": 1.0293
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1196,
+            "lift": 0.9905
+          },
+          "cv2": {
+            "n_events": 1420,
+            "lift": 1.076
+          },
+          "cv3": {
+            "n_events": 1229,
+            "lift": 1.0511
+          },
+          "cv4": {
+            "n_events": 1479,
+            "lift": 1.0125
+          },
+          "cv5": {
+            "n_events": 1541,
+            "lift": 0.9745
+          }
+        },
+        "fold_lift_min": 0.9745,
+        "fold_lift_max": 1.076
+      },
+      "short": {
+        "n_events": 7118,
+        "event_rate": 0.0199,
+        "base_rate": 0.3867,
+        "hit_rate": 0.4042,
+        "lift": 1.0451,
+        "median_outcome_return": -0.0142,
+        "median_strength": 0.6653,
+        "htf_aligned": {
+          "n_events": 2848,
+          "hit_rate": 0.3978,
+          "lift_vs_overall_base": 1.0287,
+          "htf_base_rate_all_rows": 0.3912,
+          "lift_vs_htf_base": 1.017
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1000,
+            "lift": 1.1138
+          },
+          "cv2": {
+            "n_events": 1012,
+            "lift": 1.2283
+          },
+          "cv3": {
+            "n_events": 1511,
+            "lift": 1.0125
+          },
+          "cv4": {
+            "n_events": 1421,
+            "lift": 0.9987
+          },
+          "cv5": {
+            "n_events": 1386,
+            "lift": 0.9689
+          }
+        },
+        "fold_lift_min": 0.9689,
+        "fold_lift_max": 1.2283
+      }
+    },
+    "f3_loose_nofib": {
+      "params": {
+        "name": "f3_loose_nofib",
+        "swing_m": 3,
+        "fib_levels": [
+          0.382,
+          0.5,
+          0.618,
+          0.786
+        ],
+        "confluence_atr": 0.5,
+        "min_impulse_atr": 1.5,
+        "max_leg_age": 40,
+        "atr_period": 14,
+        "require_fib": false,
+        "require_confluence": false
+      },
+      "is_additivity_control": true,
+      "long": {
+        "n_events": 11383,
+        "event_rate": 0.0317,
+        "base_rate": 0.4433,
+        "hit_rate": 0.4636,
+        "lift": 1.0457,
+        "median_outcome_return": -0.0054,
+        "median_strength": 1.81,
+        "htf_aligned": {
+          "n_events": 4646,
+          "hit_rate": 0.4587,
+          "lift_vs_overall_base": 1.0346,
+          "htf_base_rate_all_rows": 0.4388,
+          "lift_vs_htf_base": 1.0454
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1672,
+            "lift": 1.1008
+          },
+          "cv2": {
+            "n_events": 1918,
+            "lift": 1.06
+          },
+          "cv3": {
+            "n_events": 1866,
+            "lift": 1.0867
+          },
+          "cv4": {
+            "n_events": 2145,
+            "lift": 1.023
+          },
+          "cv5": {
+            "n_events": 2219,
+            "lift": 1.0062
+          }
+        },
+        "fold_lift_min": 1.0062,
+        "fold_lift_max": 1.1008
+      },
+      "short": {
+        "n_events": 10775,
+        "event_rate": 0.03,
+        "base_rate": 0.3867,
+        "hit_rate": 0.3978,
+        "lift": 1.0285,
+        "median_outcome_return": -0.0143,
+        "median_strength": 1.6695,
+        "htf_aligned": {
+          "n_events": 3529,
+          "hit_rate": 0.3998,
+          "lift_vs_overall_base": 1.0338,
+          "htf_base_rate_all_rows": 0.3912,
+          "lift_vs_htf_base": 1.0221
+        },
+        "per_fold": {
+          "cv1": {
+            "n_events": 1516,
+            "lift": 1.0854
+          },
+          "cv2": {
+            "n_events": 1510,
+            "lift": 1.1101
+          },
+          "cv3": {
+            "n_events": 2126,
+            "lift": 1.0438
+          },
+          "cv4": {
+            "n_events": 2166,
+            "lift": 1.0447
+          },
+          "cv5": {
+            "n_events": 2102,
+            "lift": 0.9451
+          }
+        },
+        "fold_lift_min": 0.9451,
+        "fold_lift_max": 1.1101
+      }
+    }
+  }
+}
