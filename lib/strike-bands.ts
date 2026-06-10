@@ -22,6 +22,7 @@ const BAND: Record<string, number> = {
   AMZN: 0.15,
   GOOGL: 0.15,
   MSFT: 0.15,
+  AAPL: 0.15,
   // High-beta
   TSLA: 0.25,
   NVDA: 0.25,

@@ -6,7 +6,7 @@ import { strikeBandFor } from "@/lib/strike-bands";
 
 const VALID_TICKERS = new Set([
   "SPY", "SPX", "QQQ", "TSLA", "NVDA",
-  "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT",
+  "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT", "AAPL",
 ]);
 
 // DB cells JSON shape — written by pollGex in worker/src/jobs/uw.ts.
