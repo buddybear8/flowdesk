@@ -32,13 +32,38 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid ticker" }, { status: 400 });
   }
 
-  const snapshot = await prisma.gexHeatmapSnapshot.findFirst({
-    where: { ticker },
-    orderBy: { capturedAt: "desc" },
-  });
+  // UW's expiry-strike endpoint intermittently degrades for some tickers
+  // (NVDA/NFLX/AAPL/AMZN as of 2026-06), returning only the front expiration or
+  // nothing for minutes-to-hours at a time — which would render a broken
+  // single-column heatmap. Prefer the most recent GOOD snapshot (>=2
+  // expirations) from the last 24h; the freshness pill (capturedAt) shows its
+  // age. Fall back to the absolute latest only when no good snapshot exists.
+  const goodId = await prisma.$queryRaw<{ id: bigint }[]>`
+    SELECT id FROM gex_heatmap_snapshots
+    WHERE ticker = ${ticker}
+      AND jsonb_array_length(cells->'expirations') >= 2
+      AND captured_at > NOW() - INTERVAL '24 hours'
+    ORDER BY captured_at DESC
+    LIMIT 1`;
+  const snapshot = goodId.length
+    ? await prisma.gexHeatmapSnapshot.findUnique({ where: { id: goodId[0]!.id } })
+    : await prisma.gexHeatmapSnapshot.findFirst({ where: { ticker }, orderBy: { capturedAt: "desc" } });
   if (!snapshot) {
     return NextResponse.json(
       { error: `No heatmap data for ${ticker} — first snapshot lands within 60s of market open` },
+      { status: 404 },
+    );
+  }
+
+  // Guard against showing ancient data as a live heatmap: if even the best
+  // available snapshot is older than ~3 days (covers a long weekend), the
+  // provider has stopped serving this chain — surface a clean unavailable state
+  // (e.g. AMZN, whose only snapshot is weeks old) rather than a stale 1-strike
+  // grid.
+  const ageMs = Date.now() - snapshot.capturedAt.getTime();
+  if (ageMs > 72 * 60 * 60 * 1000) {
+    return NextResponse.json(
+      { error: `${ticker} heatmap unavailable — the data provider isn't serving this chain right now` },
       { status: 404 },
     );
   }

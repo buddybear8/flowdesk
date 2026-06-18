@@ -637,19 +637,24 @@ export async function pollGex(): Promise<void> {
       const expParam = expiryDates.map((d) => `expirations[]=${d}`).join("&");
 
       // UW's expiry-strike endpoint is per-ticker inconsistent and flips over
-      // time (full history in git). As of 2026-06-10 the two filter shapes are
-      // COMPLEMENTARY, not interchangeable:
-      //   • `expirations[]=` returns rich chains for the indices + AMD/META/
-      //     NVDA/TSLA, but EMPTY for MSFT/GOOGL/AAPL (and thin for NFLX).
-      //   • `min_strike`/`max_strike` (no expirations[]) returns the near-spot
-      //     chain for MSFT/GOOGL/AAPL, but empty for AMD/AMZN/NFLX.
-      //   • Combining both filters still returns empty (the old bc87b02 bug).
-      //   • AMZN currently returns empty from BOTH (greek-exposure/expiry has
-      //     data, but expiry-strike does not) — a UW-side gap; self-heals when
-      //     either shape starts returning rows again.
-      // Strategy: try expirations[] first; if thin, fall back to the strike-band
-      // form and keep whichever is richer. The fallback costs ~1 extra UW call
-      // only for the thin names, well within quota at the 2-min cadence.
+      // time (full history in git). Three filter shapes give different results
+      // and which one works rotates by ticker:
+      //   • batched `expirations[]=A&B&C…` — rich for indices/AMD/META/TSLA, but
+      //     intermittently returns ONLY the front expiry (NVDA/NFLX 2026-06-12)
+      //     or empty (MSFT/GOOGL in earlier weeks).
+      //   • single `expirations[]=<one>` (one call per expiry) — recovers the
+      //     back months the batched form drops (NVDA/NFLX 2026-06-12).
+      //   • `min_strike`/`max_strike` (no expirations[]) — the near-spot chain
+      //     for the MSFT/GOOGL-style names where expirations[] is empty.
+      //   • `?expiry=<one>` SILENTLY IGNORES its filter (returns the aggregated
+      //     chain) — never use it.
+      //   • AMZN returns empty from every shape — a genuine UW-side gap that
+      //     self-heals when its data returns.
+      // Because the heatmap is a strike×EXPIRY matrix, we select by EXPIRATION
+      // COVERAGE, not raw row count: batched first, then per-expiry singles,
+      // then the strike band, keeping whichever yields the most expirations.
+      // Extra calls happen only for the thin names; the front-empty bail keeps
+      // genuine gaps (AMZN) from wasting the quota.
       const PAGE_LIMIT = 500;
       const MAX_PAGES = 5;
       const expirySet = new Set(expiryDates);
@@ -673,18 +678,41 @@ export async function pollGex(): Promise<void> {
         return rows.filter((r) => expirySet.has(String(r.expiry)));
       };
       const distinctExp = (rows: any[]) => new Set(rows.map((r) => String(r.expiry))).size;
+      // Prefer more distinct expirations; tie-break on rows.
+      const richer = (a: any[], b: any[]) =>
+        distinctExp(b) > distinctExp(a) ||
+        (distinctExp(b) === distinctExp(a) && b.length > a.length)
+          ? b : a;
+      const thin = (rows: any[]) => distinctExp(rows) < 2 || rows.length < 60;
 
+      // Tier 1 — batched expirations[].
       let allRows = await fetchPaged(expParam, "exp");
-      const VIABLE_ROWS = 60;
-      if (allRows.length < VIABLE_ROWS || distinctExp(allRows) < 2) {
+      let usedFallback = "";
+
+      // Tier 2 — per-expiry single calls recover the back months the batched
+      // form drops. Front-empty ⇒ genuine gap; bail before wasting calls.
+      if (thin(allRows)) {
+        const merged: any[] = [];
+        for (let i = 0; i < expiryDates.length && i < 5; i++) {
+          await sleep(TICKER_DELAY_MS);
+          const rows = await fetchPaged(`expirations[]=${expiryDates[i]}`, `e${i}`);
+          if (i === 0 && rows.length === 0) break;
+          merged.push(...rows);
+        }
+        const next = richer(allRows, merged);
+        if (next !== allRows) { allRows = next; usedFallback = "per-expiry"; }
+      }
+
+      // Tier 3 — strike-band form (MSFT/GOOGL-style names).
+      if (thin(allRows)) {
         await sleep(TICKER_DELAY_MS);
         const lo = Math.floor(spot * 0.85);
         const hi = Math.ceil(spot * 1.15);
-        const band = await fetchPaged(`min_strike=${lo}&max_strike=${hi}`, "band");
-        if (band.length > allRows.length) {
-          allRows = band;
-          console.log(`[uw:gex-heatmap:${ticker}] used min/max-strike fallback (${band.length} rows)`);
-        }
+        const next = richer(allRows, await fetchPaged(`min_strike=${lo}&max_strike=${hi}`, "band"));
+        if (next !== allRows) { allRows = next; usedFallback = "min/max"; }
+      }
+      if (usedFallback) {
+        console.log(`[uw:gex-heatmap:${ticker}] used ${usedFallback} fallback (${allRows.length} rows, ${distinctExp(allRows)} exps)`);
       }
 
       if (allRows.length > 0) {
