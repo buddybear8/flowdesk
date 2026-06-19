@@ -29,6 +29,7 @@ const MODULES: Record<string, { label: string; tabs: string[] }> = {
   "market-tide":{ label: "Market Pulse",       tabs: [] },
   gex:          { label: "Options GEX",       tabs: ["GEX overview", "Heatmap"] },
   "flow-sentiment": { label: "Options sentiment", tabs: [] },
+  "trade-alerts": { label: "Trade alerts",      tabs: ["Options alerts", "Equities alerts"] },
   charts:     { label: "Charts",            tabs: [] },
   flow:       { label: "Flow alerts",       tabs: ["Live feed", "Lottos", "Opening Sweeps"] },
   darkpool:   { label: "Dark pools",        tabs: ["Ranked feed", "DP levels"] },

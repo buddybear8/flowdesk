@@ -155,6 +155,43 @@ export interface FlowSentimentPayload {
   minutes: SentimentMinute[];  // chronological; last = latest
 }
 
+// ---------- 3d. Trade Alerts (Discord alert tracking) ----------
+
+export interface TradeAlertRow {
+  id: string;
+  assetType: "option" | "equity";
+  ticker: string;
+  side: "CALL" | "PUT" | "LONG";
+  strike: number | null;
+  expiryLabel: string | null;
+  dte: number | null;            // days to expiry from now (options)
+  moderator: string;            // "Alerted by"
+  sizeLabel: "Small" | "Medium" | "Large" | "Lotto";
+  entryPrice: number;
+  entryAt: string;              // ISO
+  status: "OPEN" | "CLOSED";
+  remainingFrac: number;        // 0..1
+  realizedPct: number | null;   // blended return on the closed slice
+  livePct: number | null;       // live return on the open slice
+  lastMark: number | null;      // current option mid / share price
+  bookDelta: number;            // size-weighted net result (%)
+}
+
+export interface TradeAlertsPayload {
+  assetType: "option" | "equity";
+  available: boolean;           // false → channel access not yet granted
+  open: TradeAlertRow[];
+  closed: TradeAlertRow[];
+  stats: {
+    openBookPct: number;        // Σ size-weighted live book on open positions
+    rawPct: number;             // unweighted avg live P/L on open positions
+    winRate: number;            // closed positions with positive net result
+    openCount: number;
+    closedCount: number;
+  };
+  equityCurve: { t: string; cum: number }[]; // cumulative size-weighted book Δ over time
+}
+
 // ---------- 3b. Heatmap payload (Module 3 → Heatmap tab) ----------
 
 export interface HeatmapExpiration {

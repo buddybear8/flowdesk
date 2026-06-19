@@ -24,6 +24,7 @@ import { computeHitList } from "./jobs/hit-list-compute.js";
 import { importPolygonDailyFlatFile } from "./jobs/polygon-daily-flatfile.js";
 import { pollPolygonIntraday } from "./jobs/polygon-hourly-intraday.js";
 import { pollCandles } from "./jobs/candles.js";
+import { pollTradeAlerts } from "./jobs/trade-alerts.js";
 import { disconnectPrisma } from "./lib/prisma.js";
 
 const ts = () => new Date().toISOString();
@@ -67,6 +68,12 @@ cron.schedule("30 */5 9-15 * * 1-5", safe("net-impact", computeNetImpact));
 cron.schedule("45 */5 9-15 * * 1-5", safe("flow-sentiment-hot", () => pollFlowSentiment(HOT_TICKERS)));
 cron.schedule("45 0 10-15 * * 1-5", safe("flow-sentiment-tail", () => pollFlowSentiment(TAIL_TICKERS)));
 
+// ─── Trade Alerts (jobs/trade-alerts.ts) ─────────────────────────────────────
+// Ingest Discord "Trade Alert Bot" embeds + re-price open positions. Every 5
+// min during market hours, plus a post-close pass to settle expirations.
+cron.schedule("0 */5 9-16 * * 1-5", safe("trade-alerts", () => pollTradeAlerts()));
+cron.schedule("0 30 16,20 * * 1-5", safe("trade-alerts-settle", () => pollTradeAlerts()));
+
 // ─── Polygon dark-pool ingest (replaces UW dark-pool + s3-darkpool-import) ───
 // Polygon publishes the previous trading day's flat file around 3-5 AM ET;
 // 06:00 leaves a safe buffer. Hourly intraday picks up the rest of the day
@@ -108,4 +115,4 @@ const shutdown = async (signal: string) => {
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
-console.log(`[${ts()}] [worker] started — 15 schedules registered (Polygon dark-pool ingest live; Options Sentiment hot+tail live; S3 training-data archive live)`);
+console.log(`[${ts()}] [worker] started — 17 schedules registered (Polygon dark-pool ingest live; Options Sentiment hot+tail live; S3 archive live; Trade Alerts live)`);
