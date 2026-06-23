@@ -21,6 +21,7 @@ const GAIN = "#3FB950";
 const LOSS = "#E5534B";
 const pct = (v: number | null, dp = 1) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(dp)}%`);
 const col = (v: number | null) => (v == null ? "var(--color-text-tertiary)" : v >= 0 ? GAIN : LOSS);
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 function contractLabel(r: TradeAlertRow): string {
   if (r.assetType === "equity") return `${r.ticker}`;
@@ -112,7 +113,7 @@ function AlertsTable({ rows, live }: { rows: TradeAlertRow[]; live: boolean }) {
   if (!rows.length) {
     return <div style={{ fontSize: 12, color: "var(--color-text-tertiary)", padding: "16px 4px" }}>No {live ? "open" : "closed"} positions.</div>;
   }
-  const head = ["CONTRACT", "EXP", "SIZE", "REMAINING", "ENTRY", live ? "MID" : "EXIT", live ? "LIVE P/L" : "RESULT", "REALIZED", "ALERTED BY"];
+  const head = ["CONTRACT", "ALERTED", "EXP", "SIZE", "REMAINING", "ENTRY", live ? "MID" : "EXIT", live ? "LIVE P/L" : "RESULT", "REALIZED", "ALERTED BY"];
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -129,6 +130,7 @@ function AlertsTable({ rows, live }: { rows: TradeAlertRow[]; live: boolean }) {
             return (
               <tr key={r.id} style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
                 <Td left><span style={{ color: r.side === "PUT" ? LOSS : GAIN, fontWeight: 600 }}>{contractLabel(r)}</span></Td>
+                <Td>{fmtDate(r.entryAt)}</Td>
                 <Td>{r.expiryLabel ? `${r.expiryLabel}${r.dte != null ? ` · ${r.dte}d` : ""}` : "—"}</Td>
                 <Td><SizePill size={r.sizeLabel} /></Td>
                 <Td><Remaining frac={r.remainingFrac} /></Td>

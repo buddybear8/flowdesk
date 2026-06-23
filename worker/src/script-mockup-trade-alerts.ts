@@ -100,12 +100,14 @@ function render(p: any): string {
 const D=${D};const G="#3fb950",L="#e5534b";
 const f=(v,d=1)=>v==null?"—":(v>=0?"+":"")+v.toFixed(d)+"%";
 const col=v=>v==null?"var(--text3)":v>=0?G:L;
+const fd=s=>new Date(s+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"});
 document.getElementById("c_open").textContent=D.openCount;
 document.getElementById("c_closed").textContent=D.closedCount;
 document.getElementById("op_n").textContent=D.openCount;document.getElementById("cl_n").textContent=D.closedCount;
 function remBar(p){const c=p>=100?G:p>=50?"#e2bf73":L;return '<span class="rem"><span class="rembar"><span style="display:block;height:100%;width:'+p+'%;background:'+c+'"></span></span><span style="color:'+c+';min-width:30px;text-align:right">'+p+'%</span></span>';}
 function row(r,live){const res=live?r.live:(r.realized??r.live);const sz=r.size==="Lotto"?"Lo":r.size[0];
  return '<tr><td><span style="color:'+(r.isPut?L:G)+';font-weight:600">'+r.contract+'</span></td>'
+ +'<td>'+fd(r.entryAt)+'</td>'
  +'<td>'+(r.exp?r.exp+(r.dte!=null?' · '+r.dte+'d':''):'—')+'</td>'
  +'<td><span class="szp">'+sz+'</span></td>'
  +'<td>'+remBar(r.rem)+'</td>'
@@ -114,7 +116,7 @@ function row(r,live){const res=live?r.live:(r.realized??r.live);const sz=r.size=
  +'<td style="font-weight:600;color:'+col(res)+'">'+f(res)+'</td>'
  +'<td style="color:'+col(r.realized)+'">'+f(r.realized)+'</td>'
  +'<td><span style="color:var(--text2)">'+r.mod+'</span></td></tr>';}
-function table(el,rows,live){const head=["CONTRACT","EXP","SIZE","REMAINING","ENTRY",live?"MID":"EXIT",live?"LIVE P/L":"RESULT","REALIZED","ALERTED BY"];
+function table(el,rows,live){const head=["CONTRACT","ALERTED","EXP","SIZE","REMAINING","ENTRY",live?"MID":"EXIT",live?"LIVE P/L":"RESULT","REALIZED","ALERTED BY"];
  el.innerHTML='<thead><tr>'+head.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>row(r,live)).join('')+'</tbody>';}
 table(document.getElementById("t_open"),D.open,true);
 table(document.getElementById("t_closed"),D.closed,false);
