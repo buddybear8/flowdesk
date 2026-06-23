@@ -187,6 +187,7 @@ model TradeAlert {
   markedAt      DateTime? @map("marked_at")
   livePct       Decimal?  @map("live_pct") @db.Decimal(12, 4)
   bookDelta     Decimal   @map("book_delta") @db.Decimal(12, 6)
+  hidden        Boolean   @default(false) // manually excluded from the track record; not touched by ingest
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
   @@index([assetType, status, entryAt(sort: Desc)])

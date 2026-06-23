@@ -75,17 +75,11 @@ export function TradeAlertsView({ assetType }: { assetType: "option" | "equity" 
             Live by expiration · realized from posted exits · P/L is {assetType === "option" ? "option-premium" : "share"} % from entries/exits
           </div>
         </div>
-        <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
-          Open book <b style={{ color: col(s.openBookPct) }}>{pct(s.openBookPct, 1)}</b> · raw{" "}
-          <b style={{ color: col(s.rawPct) }}>{pct(s.rawPct, 1)}</b>
-        </div>
       </div>
 
       {/* Stat cards */}
-      <div className="grid gap-[8px]" style={{ gridTemplateColumns: "repeat(4, minmax(0,1fr))", marginBottom: 12 }}>
+      <div className="grid gap-[8px]" style={{ gridTemplateColumns: "repeat(2, minmax(0,1fr))", marginBottom: 12 }}>
         <Mc label="OPEN NOW" value={String(s.openCount)} />
-        <Mc label="WIN RATE (closed)" value={`${(100 * s.winRate).toFixed(0)}%`} valueColor="#E2BF73" />
-        <Mc label="OPEN BOOK" value={pct(s.openBookPct, 1)} valueColor={col(s.openBookPct)} />
         <Mc label="CLOSED" value={String(s.closedCount)} />
       </div>
 
@@ -118,7 +112,7 @@ function AlertsTable({ rows, live }: { rows: TradeAlertRow[]; live: boolean }) {
   if (!rows.length) {
     return <div style={{ fontSize: 12, color: "var(--color-text-tertiary)", padding: "16px 4px" }}>No {live ? "open" : "closed"} positions.</div>;
   }
-  const head = ["CONTRACT", "EXP", "SIZE", "REMAINING", "ENTRY", live ? "MID" : "EXIT", live ? "LIVE P/L" : "RESULT", "BOOK Δ", "REALIZED", "ALERTED BY"];
+  const head = ["CONTRACT", "EXP", "SIZE", "REMAINING", "ENTRY", live ? "MID" : "EXIT", live ? "LIVE P/L" : "RESULT", "REALIZED", "ALERTED BY"];
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -141,7 +135,6 @@ function AlertsTable({ rows, live }: { rows: TradeAlertRow[]; live: boolean }) {
                 <Td>{r.entryPrice.toFixed(2)}</Td>
                 <Td>{r.lastMark != null ? r.lastMark.toFixed(2) : "—"}</Td>
                 <Td bold color={col(result)}>{pct(result)}</Td>
-                <Td color={col(r.bookDelta)}>{pct(r.bookDelta, 2)}</Td>
                 <Td color={col(r.realizedPct)}>{pct(r.realizedPct)}</Td>
                 <Td left><span style={{ color: "var(--color-text-secondary)" }}>{r.moderator}</span></Td>
               </tr>

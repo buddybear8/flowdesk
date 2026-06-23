@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
   const assetType = new URL(req.url).searchParams.get("type") === "equity" ? "equity" : "option";
 
   const rows = await prisma.tradeAlert.findMany({
-    where: { assetType },
+    where: { assetType, hidden: false }, // manually-excluded trades dropped from the track record
     orderBy: [{ status: "asc" }, { entryAt: "desc" }],
   });
 
