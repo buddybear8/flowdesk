@@ -128,7 +128,7 @@ function AlertsTable({ rows, live }: { rows: TradeAlertRow[]; live: boolean }) {
             const result = live ? r.livePct : (r.realizedPct ?? r.livePct);
             return (
               <tr key={r.id} style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
-                <Td left><span style={{ color: GAIN, fontWeight: 600 }}>{contractLabel(r)}</span></Td>
+                <Td left><span style={{ color: r.side === "PUT" ? LOSS : GAIN, fontWeight: 600 }}>{contractLabel(r)}</span></Td>
                 <Td>{r.expiryLabel ? `${r.expiryLabel}${r.dte != null ? ` · ${r.dte}d` : ""}` : "—"}</Td>
                 <Td><SizePill size={r.sizeLabel} /></Td>
                 <Td><Remaining frac={r.remainingFrac} /></Td>

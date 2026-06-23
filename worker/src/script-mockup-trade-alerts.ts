@@ -16,6 +16,7 @@ async function main() {
     const lastClose = [...evs].reverse().find((e) => e.action === "close");
     return {
       contract: `${r.ticker} ${Number(r.strike)}${r.side === "PUT" ? "P" : "C"}`,
+      isPut: r.side === "PUT",
       exp: r.expiryLabel, dte: r.expiry ? Math.round((r.expiry.getTime() - Date.now()) / 86400000) : null,
       size: r.sizeLabel, rem: Math.round(rem * 100),
       entry: Number(r.entryPrice), mark: r.lastMark != null ? Number(r.lastMark) : null,
@@ -104,7 +105,7 @@ document.getElementById("c_closed").textContent=D.closedCount;
 document.getElementById("op_n").textContent=D.openCount;document.getElementById("cl_n").textContent=D.closedCount;
 function remBar(p){const c=p>=100?G:p>=50?"#e2bf73":L;return '<span class="rem"><span class="rembar"><span style="display:block;height:100%;width:'+p+'%;background:'+c+'"></span></span><span style="color:'+c+';min-width:30px;text-align:right">'+p+'%</span></span>';}
 function row(r,live){const res=live?r.live:(r.realized??r.live);const sz=r.size==="Lotto"?"Lo":r.size[0];
- return '<tr><td><span style="color:'+G+';font-weight:600">'+r.contract+'</span></td>'
+ return '<tr><td><span style="color:'+(r.isPut?L:G)+';font-weight:600">'+r.contract+'</span></td>'
  +'<td>'+(r.exp?r.exp+(r.dte!=null?' · '+r.dte+'d':''):'—')+'</td>'
  +'<td><span class="szp">'+sz+'</span></td>'
  +'<td>'+remBar(r.rem)+'</td>'
