@@ -155,6 +155,28 @@ export interface FlowSentimentPayload {
   minutes: SentimentMinute[];  // chronological; last = latest
 }
 
+// Market-wide sentiment dashboard — one summary row per ticker for the latest
+// session, derived from each ticker's latest cumulative snapshot.
+export interface MarketSentimentTicker {
+  ticker: string;
+  hasData: boolean;
+  callVol: number;             // Σ call volume (near-the-money chain)
+  putVol: number;              // Σ put volume
+  cpRatio: number;             // callVol / putVol (capped at RATIO_CAP)
+  callBuyRatio: number;        // call bought-at-ask / sold-at-bid
+  putBuyRatio: number;         // put bought-at-ask / sold-at-bid
+}
+
+export interface MarketSentimentPayload {
+  tradingDate: string;         // YYYY-MM-DD (ET session) the dashboard covers
+  capturedAt: string;          // ISO — most recent poll across tickers
+  minVolume: number;           // contract floor applied to the bull/bear lists
+  indices: MarketSentimentTicker[];   // SPY/SPX/QQQ/IWM/DIA, fixed order
+  megaCaps: MarketSentimentTicker[];  // mega-cap set, fixed order
+  topBullish: MarketSentimentTicker[]; // cpRatio > 1.75, desc
+  topBearish: MarketSentimentTicker[]; // cpRatio < 0.5, asc
+}
+
 // ---------- 3d. Trade Alerts (Discord alert tracking) ----------
 
 export interface TradeAlertRow {

@@ -1,9 +1,33 @@
+"use client";
+
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { TabBar } from "@/components/layout/TabBar";
 import { FlowSentimentView } from "@/components/modules/flow-sentiment/FlowSentimentView";
+import { MarketDashboardView } from "@/components/modules/flow-sentiment/MarketDashboardView";
+
+// Order must match Topbar's MODULES["flow-sentiment"].tabs.
+const TABS = [
+  { id: "ticker", label: "Ticker view" },
+  { id: "market", label: "Market dashboard" },
+];
 
 export default function FlowSentimentPage() {
   return (
+    <Suspense fallback={<div className="flex-1" />}>
+      <FlowSentimentPageInner />
+    </Suspense>
+  );
+}
+
+function FlowSentimentPageInner() {
+  const tabIdx = Number(useSearchParams().get("tab") ?? 0);
+  const active = TABS[tabIdx]?.id ?? "ticker";
+
+  return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <FlowSentimentView />
+      <TabBar tabs={TABS} activeId={active} onChange={() => {}} />
+      {active === "market" ? <MarketDashboardView /> : <FlowSentimentView />}
     </div>
   );
 }
