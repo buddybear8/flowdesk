@@ -10,7 +10,7 @@ const MEGA_CAPS = ["TSLA", "SPCX", "AMZN", "AMD", "NVDA", "GOOGL", "MU", "MSFT",
 
 // Bull/bear thresholds (per the spec) + a liquidity floor so a thin name with a
 // handful of contracts can't dominate a list on a meaningless ratio.
-const BULLISH_CP = 1.75;
+const BULLISH_CP = 2.0;
 const BEARISH_CP = 0.5;
 const MIN_VOLUME = 5_000; // Σ(call+put) near-the-money contracts
 const LIST_LIMIT = 20;

@@ -69,9 +69,9 @@ export function MarketDashboardView() {
       <div className="grid gap-[12px]" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))" }}>
         <Card>
           <SectionTitle count={data.topBullish.length} accent={BULL}>
-            Top bullish sentiment <Thin>C/P &gt; {1.75}</Thin>
+            Top bullish sentiment <Thin>C/P &gt; {2.0}</Thin>
           </SectionTitle>
-          <LeaderTable rows={data.topBullish} empty="No tickers above 1.75 C/P right now." />
+          <LeaderTable rows={data.topBullish} empty="No tickers above 2.0 C/P right now." />
         </Card>
         <Card>
           <SectionTitle count={data.topBearish.length} accent={BEAR}>
