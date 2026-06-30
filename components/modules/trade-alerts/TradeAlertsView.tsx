@@ -109,23 +109,82 @@ export function TradeAlertsView({ assetType }: { assetType: "option" | "equity" 
   );
 }
 
+// Size ordering for sorting (Large = biggest conviction → smallest).
+const SIZE_RANK: Record<string, number> = { Large: 4, Medium: 3, Small: 2, Lotto: 1 };
+
+type SortDir = "asc" | "desc";
+interface AlertCol {
+  key: string;
+  label: string;
+  numeric: boolean;
+  value: (r: TradeAlertRow) => number | string | null;
+}
+
+function buildCols(live: boolean): AlertCol[] {
+  return [
+    { key: "contract", label: "CONTRACT", numeric: false, value: (r) => contractLabel(r) },
+    { key: "alerted", label: "ALERTED", numeric: true, value: (r) => Date.parse(r.entryAt) },
+    { key: "exp", label: "EXP", numeric: true, value: (r) => r.dte },
+    { key: "size", label: "SIZE", numeric: true, value: (r) => SIZE_RANK[r.sizeLabel] ?? 0 },
+    { key: "remaining", label: "REMAINING", numeric: true, value: (r) => r.remainingFrac },
+    { key: "entry", label: "ENTRY", numeric: true, value: (r) => r.entryPrice },
+    { key: "mark", label: live ? "MID" : "EXIT", numeric: true, value: (r) => r.lastMark },
+    { key: "result", label: live ? "LIVE P/L" : "RESULT", numeric: true, value: (r) => (live ? r.livePct : (r.realizedPct ?? r.livePct)) },
+    { key: "realized", label: "REALIZED", numeric: true, value: (r) => r.realizedPct },
+    { key: "alertedBy", label: "ALERTED BY", numeric: false, value: (r) => r.moderator },
+  ];
+}
+
 function AlertsTable({ rows, live }: { rows: TradeAlertRow[]; live: boolean }) {
+  const cols = useMemo(() => buildCols(live), [live]);
+  // Own sort state per table instance — sorting Open Now never touches Track
+  // record, and vice versa. `null` keeps the server order (entry, most recent).
+  const [sort, setSort] = useState<{ key: string; dir: SortDir } | null>(null);
+  const sorted = useMemo(() => {
+    if (!sort) return rows;
+    const sc = cols.find((c) => c.key === sort.key);
+    if (!sc) return rows;
+    const m = sort.dir === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      const va = sc.value(a);
+      const vb = sc.value(b);
+      // Missing values (e.g. no expiry / mark) always sink to the bottom.
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (typeof va === "string" || typeof vb === "string") return m * String(va).localeCompare(String(vb));
+      return m * (Number(va) - Number(vb));
+    });
+  }, [rows, cols, sort]);
+  const toggle = (c: AlertCol) =>
+    setSort((p) => (p?.key === c.key ? { key: c.key, dir: p.dir === "asc" ? "desc" : "asc" } : { key: c.key, dir: c.numeric ? "desc" : "asc" }));
+
   if (!rows.length) {
     return <div style={{ fontSize: 12, color: "var(--color-text-tertiary)", padding: "16px 4px" }}>No {live ? "open" : "closed"} positions.</div>;
   }
-  const head = ["CONTRACT", "ALERTED", "EXP", "SIZE", "REMAINING", "ENTRY", live ? "MID" : "EXIT", live ? "LIVE P/L" : "RESULT", "REALIZED", "ALERTED BY"];
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
         <thead>
           <tr>
-            {head.map((h, i) => (
-              <th key={h} style={{ textAlign: i === 0 || i === head.length - 1 ? "left" : "right", padding: "6px 10px", color: "var(--color-text-tertiary)", fontSize: 10, fontWeight: 500, letterSpacing: ".04em", borderBottom: "0.5px solid var(--color-border-tertiary)", whiteSpace: "nowrap" }}>{h}</th>
-            ))}
+            {cols.map((c, i) => {
+              const active = sort?.key === c.key;
+              return (
+                <th
+                  key={c.key}
+                  onClick={() => toggle(c)}
+                  title={`Sort by ${c.label}`}
+                  style={{ textAlign: i === 0 || i === cols.length - 1 ? "left" : "right", padding: "6px 10px", color: active ? "var(--color-text-secondary)" : "var(--color-text-tertiary)", fontSize: 10, fontWeight: 500, letterSpacing: ".04em", borderBottom: "0.5px solid var(--color-border-tertiary)", whiteSpace: "nowrap", cursor: "pointer", userSelect: "none" }}
+                >
+                  {c.label}
+                  <span style={{ opacity: active ? 1 : 0.25 }}>{active ? (sort!.dir === "asc" ? " ▲" : " ▼") : " ↕"}</span>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => {
+          {sorted.map((r) => {
             const result = live ? r.livePct : (r.realizedPct ?? r.livePct);
             return (
               <tr key={r.id} style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
