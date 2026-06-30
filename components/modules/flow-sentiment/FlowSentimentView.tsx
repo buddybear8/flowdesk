@@ -35,6 +35,12 @@ const SPOT_LINE_COLOR = "#22D3EE";
 
 type StrikeCount = "10" | "15" | "20" | "25" | "40";
 
+// Per-strike buy/sell ratio shown in the chart margins (call side left, put
+// side right). NaN = no flow at that strike (label hidden).
+const bsRatio = (buy: number, sell: number): number => (sell > 0 ? buy / sell : buy > 0 ? Infinity : NaN);
+const fmtBS = (n: number): string => (Number.isNaN(n) ? "" : !Number.isFinite(n) ? "∞" : n >= 10 ? String(Math.round(n)) : n.toFixed(1));
+const bsColor = (n: number): string => (n >= 1 ? BUY_COLOR : SELL_COLOR);
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function etDateString(d: Date = new Date()): string {
@@ -180,6 +186,50 @@ const spotLinePlugin: Plugin<"bar"> = {
     ctx.font = "11px ui-sans-serif, system-ui, sans-serif";
     ctx.textBaseline = "bottom";
     ctx.fillText(`Spot $${spot.toFixed(2)}`, chartArea.left + 6, yPx - 3);
+    ctx.restore();
+  },
+};
+
+// Per-strike buy/sell ratios in the outer margins: call side on the left,
+// put side on the right, aligned to each strike row. Drawn in the reserved
+// layout padding so the bars are never crowded.
+const marginRatioPlugin: Plugin<"bar"> = {
+  id: "marginRatios",
+  afterDatasetsDraw(chart: Chart<"bar">) {
+    const opts = (chart.options.plugins as any)?.marginRatios as
+      | { ratios: { c: number; p: number }[] }
+      | undefined;
+    if (!opts?.ratios?.length) return;
+    const { ctx, chartArea } = chart;
+    ctx.save();
+
+    // Tiny column headers above the first row.
+    ctx.font = "600 9px ui-sans-serif, system-ui, sans-serif";
+    ctx.fillStyle = "#6b7c98";
+    ctx.textBaseline = "bottom";
+    ctx.textAlign = "right";
+    ctx.fillText("CALL B/S", chartArea.left - 6, chartArea.top - 3);
+    ctx.textAlign = "left";
+    ctx.fillText("PUT B/S", chartArea.right + 6, chartArea.top - 3);
+
+    // One ratio per strike row, in the left/right gutters.
+    ctx.font = "10px ui-sans-serif, system-ui, sans-serif";
+    ctx.textBaseline = "middle";
+    opts.ratios.forEach((r, i) => {
+      const y = chart.scales.y.getPixelForValue(i);
+      const cTxt = fmtBS(r.c);
+      if (cTxt) {
+        ctx.textAlign = "right";
+        ctx.fillStyle = bsColor(r.c);
+        ctx.fillText(cTxt, chartArea.left - 6, y);
+      }
+      const pTxt = fmtBS(r.p);
+      if (pTxt) {
+        ctx.textAlign = "left";
+        ctx.fillStyle = bsColor(r.p);
+        ctx.fillText(pTxt, chartArea.right + 6, y);
+      }
+    });
     ctx.restore();
   },
 };
@@ -412,11 +462,15 @@ function SentimentBarChart({ strikes, spot }: { strikes: SentimentStrike[]; spot
     ];
     const chartData: ChartData<"bar"> = { labels, datasets };
     const sortedStrikes = strikes.map((s) => s.k);
+    // Buy/sell ratio per strike, aligned to row order, for the margin labels.
+    const ratios = strikes.map((s) => ({ c: bsRatio(s.cA, s.cB), p: bsRatio(s.pA, s.pB) }));
     const options: ChartOptions<"bar"> = {
       indexAxis: "y",
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
+      // Reserve gutters for the per-strike buy/sell ratio labels + headers.
+      layout: { padding: { left: 52, right: 52, top: 18 } },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -427,6 +481,7 @@ function SentimentBarChart({ strikes, spot }: { strikes: SentimentStrike[]; spot
           },
         },
         spotLine: { spot, sortedStrikes },
+        marginRatios: { ratios },
       } as ChartOptions<"bar">["plugins"],
       scales: {
         x: {
@@ -452,7 +507,7 @@ function SentimentBarChart({ strikes, spot }: { strikes: SentimentStrike[]; spot
     return { chartData, options };
   }, [strikes, spot]);
 
-  return <Bar data={chartData} options={options} plugins={[spotLinePlugin, centerLabelPlugin]} />;
+  return <Bar data={chartData} options={options} plugins={[spotLinePlugin, centerLabelPlugin, marginRatioPlugin]} />;
 }
 
 // ── small components (match GexView styling) ─────────────────────────────────
