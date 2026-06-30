@@ -7,9 +7,10 @@ import { FlowSentimentView } from "@/components/modules/flow-sentiment/FlowSenti
 import { MarketDashboardView } from "@/components/modules/flow-sentiment/MarketDashboardView";
 
 // Order must match Topbar's MODULES["flow-sentiment"].tabs.
+// Market dashboard is the default landing tab (index 0).
 const TABS = [
-  { id: "ticker", label: "Ticker view" },
   { id: "market", label: "Market dashboard" },
+  { id: "ticker", label: "Ticker view" },
 ];
 
 export default function FlowSentimentPage() {
@@ -22,7 +23,7 @@ export default function FlowSentimentPage() {
 
 function FlowSentimentPageInner() {
   const tabIdx = Number(useSearchParams().get("tab") ?? 0);
-  const active = TABS[tabIdx]?.id ?? "ticker";
+  const active = TABS[tabIdx]?.id ?? "market";
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">

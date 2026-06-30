@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { MarketSentimentPayload, MarketSentimentTicker } from "@/lib/types";
 
 const BULL = "#3FB950";
@@ -166,7 +167,7 @@ function SummaryTable({ rows }: { rows: MarketSentimentTicker[] }) {
         <tbody>
           {sorted.map((r) => (
             <tr key={r.ticker} style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
-              <Td left><span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{r.ticker}</span></Td>
+              <TickerCell ticker={r.ticker} />
               {r.hasData ? (
                 <>
                   <Td bold color={cpColor(r.cpRatio)}>{fmtRatio(r.cpRatio)}</Td>
@@ -201,7 +202,7 @@ function LeaderTable({ rows, empty }: { rows: MarketSentimentTicker[]; empty: st
         <tbody>
           {sorted.map((r) => (
             <tr key={r.ticker} style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
-              <Td left><span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{r.ticker}</span></Td>
+              <TickerCell ticker={r.ticker} />
               <Td bold color={cpColor(r.cpRatio)}>{fmtRatio(r.cpRatio)}</Td>
               <Td color={callColor(r.callBuyRatio)}>{fmtRatio(r.callBuyRatio)}</Td>
               <Td color={putColor(r.putBuyRatio)}>{fmtRatio(r.putBuyRatio)}</Td>
@@ -210,6 +211,23 @@ function LeaderTable({ rows, empty }: { rows: MarketSentimentTicker[]; empty: st
         </tbody>
       </table>
     </div>
+  );
+}
+
+// Clickable ticker → Ticker view (tab index 1) seeded with this symbol.
+function TickerCell({ ticker }: { ticker: string }) {
+  const router = useRouter();
+  return (
+    <Td left>
+      <button
+        onClick={() => router.push(`/flow-sentiment?tab=1&ticker=${ticker}`)}
+        title={`Open ${ticker} in Ticker view`}
+        className="hover:underline"
+        style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)", background: "none", border: "none", padding: 0, margin: 0, cursor: "pointer" }}
+      >
+        {ticker}
+      </button>
+    </Td>
   );
 }
 

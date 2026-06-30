@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -189,7 +190,10 @@ export function FlowSentimentView() {
   const days = useMemo(() => recentWeekdays(6), []);
   const liveDate = days[0]!.date;
 
-  const [ticker, setTicker] = useState("SPY");
+  // Seed the ticker from ?ticker= (set when a row is clicked on the Market
+  // dashboard); fall back to SPY.
+  const urlTicker = useSearchParams().get("ticker")?.toUpperCase();
+  const [ticker, setTicker] = useState(urlTicker && TICKER_RE.test(urlTicker) ? urlTicker : "SPY");
   const [date, setDate] = useState(liveDate);
   const [strikeCount, setStrikeCount] = useState<StrikeCount>("20");
   const [data, setData] = useState<FlowSentimentPayload | null>(null);
