@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { MarketSentimentPayload, MarketSentimentTicker } from "@/lib/types";
 
 const BULL = "#3FB950";
@@ -89,16 +89,82 @@ export function MarketDashboardView() {
   );
 }
 
+// ── sorting (per-table, independent) ─────────────────────────────────────────
+
+type SortKey = "ticker" | "cpRatio" | "callVol" | "putVol" | "callBuyRatio" | "putBuyRatio";
+interface ColDef { key: SortKey; label: string; numeric: boolean }
+type SortState = { key: SortKey; dir: "asc" | "desc" } | null;
+
+// Each table owns its own sort state, so sorting one never touches the others.
+// `null` keeps the server-provided order (fixed index order / ranked leaders).
+function useSort(rows: MarketSentimentTicker[]) {
+  const [sort, setSort] = useState<SortState>(null);
+  const sorted = useMemo(() => {
+    if (!sort) return rows;
+    const { key, dir } = sort;
+    const m = dir === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      // No-data rows (e.g. an untracked symbol) always sink to the bottom.
+      if (a.hasData !== b.hasData) return a.hasData ? -1 : 1;
+      if (key === "ticker") return m * a.ticker.localeCompare(b.ticker);
+      return m * ((a[key] as number) - (b[key] as number));
+    });
+  }, [rows, sort]);
+  const toggle = (key: SortKey, numeric: boolean) =>
+    setSort((p) => (p?.key === key ? { key, dir: p.dir === "asc" ? "desc" : "asc" } : { key, dir: numeric ? "desc" : "asc" }));
+  return { sorted, sort, toggle };
+}
+
+function SortHead({ cols, sort, onToggle }: { cols: ColDef[]; sort: SortState; onToggle: (k: SortKey, numeric: boolean) => void }) {
+  return (
+    <thead>
+      <tr>
+        {cols.map((c, i) => {
+          const active = sort?.key === c.key;
+          return (
+            <th
+              key={c.key}
+              onClick={() => onToggle(c.key, c.numeric)}
+              title={`Sort by ${c.label}`}
+              style={{ textAlign: i === 0 ? "left" : "right", padding: "6px 10px", color: active ? "var(--color-text-secondary)" : "var(--color-text-tertiary)", fontSize: 10, fontWeight: 500, letterSpacing: ".04em", borderBottom: "0.5px solid var(--color-border-tertiary)", whiteSpace: "nowrap", cursor: "pointer", userSelect: "none" }}
+            >
+              {c.label}
+              <span style={{ opacity: active ? 1 : 0.25 }}>{active ? (sort!.dir === "asc" ? " ▲" : " ▼") : " ↕"}</span>
+            </th>
+          );
+        })}
+      </tr>
+    </thead>
+  );
+}
+
 // ── tables ───────────────────────────────────────────────────────────────────
+
+const SUMMARY_COLS: ColDef[] = [
+  { key: "ticker", label: "TICKER", numeric: false },
+  { key: "cpRatio", label: "C/P", numeric: true },
+  { key: "callVol", label: "CALL VOL", numeric: true },
+  { key: "putVol", label: "PUT VOL", numeric: true },
+  { key: "callBuyRatio", label: "CALL B/S", numeric: true },
+  { key: "putBuyRatio", label: "PUT B/S", numeric: true },
+];
+
+const LEADER_COLS: ColDef[] = [
+  { key: "ticker", label: "TICKER", numeric: false },
+  { key: "cpRatio", label: "C/P RATIO", numeric: true },
+  { key: "callBuyRatio", label: "CALL RATIO", numeric: true },
+  { key: "putBuyRatio", label: "PUT RATIO", numeric: true },
+];
 
 // Indices / mega caps: full per-ticker breakdown incl. volumes.
 function SummaryTable({ rows }: { rows: MarketSentimentTicker[] }) {
+  const { sorted, sort, toggle } = useSort(rows);
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-        <Head cols={["TICKER", "C/P", "CALL VOL", "PUT VOL", "CALL B/S", "PUT B/S"]} />
+        <SortHead cols={SUMMARY_COLS} sort={sort} onToggle={toggle} />
         <tbody>
-          {rows.map((r) => (
+          {sorted.map((r) => (
             <tr key={r.ticker} style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
               <Td left><span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{r.ticker}</span></Td>
               {r.hasData ? (
@@ -124,15 +190,16 @@ function SummaryTable({ rows }: { rows: MarketSentimentTicker[] }) {
 
 // Leaderboards: the three ratios the spec calls for.
 function LeaderTable({ rows, empty }: { rows: MarketSentimentTicker[]; empty: string }) {
+  const { sorted, sort, toggle } = useSort(rows);
   if (!rows.length) {
     return <div style={{ fontSize: 12, color: "var(--color-text-tertiary)", padding: "14px 4px" }}>{empty}</div>;
   }
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-        <Head cols={["TICKER", "C/P RATIO", "CALL RATIO", "PUT RATIO"]} />
+        <SortHead cols={LEADER_COLS} sort={sort} onToggle={toggle} />
         <tbody>
-          {rows.map((r) => (
+          {sorted.map((r) => (
             <tr key={r.ticker} style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
               <Td left><span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{r.ticker}</span></Td>
               <Td bold color={cpColor(r.cpRatio)}>{fmtRatio(r.cpRatio)}</Td>
@@ -143,18 +210,6 @@ function LeaderTable({ rows, empty }: { rows: MarketSentimentTicker[]; empty: st
         </tbody>
       </table>
     </div>
-  );
-}
-
-function Head({ cols }: { cols: string[] }) {
-  return (
-    <thead>
-      <tr>
-        {cols.map((h, i) => (
-          <th key={h} style={{ textAlign: i === 0 ? "left" : "right", padding: "6px 10px", color: "var(--color-text-tertiary)", fontSize: 10, fontWeight: 500, letterSpacing: ".04em", borderBottom: "0.5px solid var(--color-border-tertiary)", whiteSpace: "nowrap" }}>{h}</th>
-        ))}
-      </tr>
-    </thead>
   );
 }
 
