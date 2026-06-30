@@ -20,9 +20,8 @@ const ratio = (num: number, den: number): number =>
   den > 0 ? Math.min(num / den, RATIO_CAP) : num > 0 ? RATIO_CAP : 0;
 
 // Collapse a ticker's latest cumulative snapshot into a single summary row.
-function summarize(ticker: string, minutes: SentimentMinute[] | null): MarketSentimentTicker {
-  const last = minutes && minutes.length ? minutes[minutes.length - 1] : null;
-  if (!last) {
+function summarize(ticker: string, last: SentimentMinute | null): MarketSentimentTicker {
+  if (!last || !Array.isArray(last.strikes)) {
     return { ticker, hasData: false, callVol: 0, putVol: 0, cpRatio: 0, callBuyRatio: 0, putBuyRatio: 0 };
   }
   let cA = 0, cB = 0, pA = 0, pB = 0;
@@ -42,36 +41,50 @@ function summarize(ticker: string, minutes: SentimentMinute[] | null): MarketSen
   };
 }
 
+interface LastSnapshotRow {
+  ticker: string;
+  capturedAt: Date;
+  last: SentimentMinute | null;
+}
+
 export async function GET(req: NextRequest) {
   const rawDate = new URL(req.url).searchParams.get("date");
   const wantDate = rawDate && DATE_RE.test(rawDate) ? rawDate : null;
 
   // Default to the most recent session that has data; honor ?date= if given.
-  const tradingDate = wantDate
-    ? new Date(`${wantDate}T00:00:00.000Z`)
-    : (await prisma.flowSentimentDay.findFirst({ orderBy: { tradingDate: "desc" }, select: { tradingDate: true } }))?.tradingDate;
+  const dateStr =
+    wantDate ??
+    (await prisma.flowSentimentDay.findFirst({ orderBy: { tradingDate: "desc" }, select: { tradingDate: true } }))
+      ?.tradingDate.toISOString().slice(0, 10);
 
-  if (!tradingDate) {
+  if (!dateStr) {
     return NextResponse.json({ error: "No options sentiment data available." }, { status: 404 });
   }
 
-  const rows = await prisma.flowSentimentDay.findMany({
-    where: { tradingDate },
-    select: { ticker: true, capturedAt: true, minutes: true },
-  });
+  // Pull ONLY the final cumulative snapshot per ticker (minutes can grow to
+  // dozens of 60-strike snapshots through the session — fetching the whole
+  // array for every ticker is multi-MB and times out on serverless). Negative
+  // JSON indexing grabs the last element server-side.
+  const rows = await prisma.$queryRaw<LastSnapshotRow[]>`
+    SELECT ticker,
+           captured_at AS "capturedAt",
+           minutes -> (jsonb_array_length(minutes) - 1) AS last
+    FROM flow_sentiment_days
+    WHERE trading_date = ${dateStr}::date
+  `;
 
   if (rows.length === 0) {
     return NextResponse.json({ error: "No options sentiment data for this session." }, { status: 404 });
   }
 
-  const byTicker = new Map(rows.map((r) => [r.ticker, r]));
+  const lastByTicker = new Map(rows.map((r) => [r.ticker, r.last]));
   const capturedAt = rows.reduce<Date>((m, r) => (r.capturedAt > m ? r.capturedAt : m), rows[0]!.capturedAt);
 
   const rowFor = (ticker: string): MarketSentimentTicker =>
-    summarize(ticker, (byTicker.get(ticker)?.minutes as unknown as SentimentMinute[] | undefined) ?? null);
+    summarize(ticker, lastByTicker.get(ticker) ?? null);
 
   // Every tracked ticker, summarized — the pool the bull/bear lists draw from.
-  const all = rows.map((r) => summarize(r.ticker, r.minutes as unknown as SentimentMinute[] | null));
+  const all = rows.map((r) => summarize(r.ticker, r.last));
   const liquid = all.filter((t) => t.hasData && t.callVol + t.putVol >= MIN_VOLUME);
 
   const topBullish = liquid
@@ -84,7 +97,7 @@ export async function GET(req: NextRequest) {
     .slice(0, LIST_LIMIT);
 
   const payload: MarketSentimentPayload = {
-    tradingDate: tradingDate.toISOString().slice(0, 10),
+    tradingDate: dateStr,
     capturedAt: capturedAt.toISOString(),
     minVolume: MIN_VOLUME,
     indices: INDICES.map(rowFor),
