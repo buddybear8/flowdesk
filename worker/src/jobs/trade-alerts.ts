@@ -313,7 +313,9 @@ async function upsertPosition(p: Position): Promise<void> {
   const fracClosed = 1 - p.remaining;
   const realizedPct = fracClosed > 1e-6 ? p.realizedSum / fracClosed : 0;
   const bd = bookDelta(p);
-  const data = {
+
+  // Non-mark fields always refresh.
+  const core = {
     assetType: p.assetType, ticker: p.ticker, side: p.side,
     strike: p.strike != null ? new Prisma.Decimal(p.strike) : null,
     expiry: p.expiry, expiryLabel: p.expiryLabel,
@@ -322,15 +324,25 @@ async function upsertPosition(p: Position): Promise<void> {
     entryPrice: new Prisma.Decimal(p.entryPrice), entryAt: p.entryAt, status: p.status,
     remainingFrac: new Prisma.Decimal(p.remaining), realizedPct: new Prisma.Decimal(realizedPct),
     events: p.events as unknown as Prisma.InputJsonValue,
+  };
+
+  const markFields = {
     lastMark: p.lastMark != null ? new Prisma.Decimal(p.lastMark) : null,
     markedAt: p.lastMark != null ? new Date() : null,
     livePct: p.livePct != null ? new Prisma.Decimal(p.livePct) : null,
     bookDelta: new Prisma.Decimal(bd),
   };
+
+  // Only overwrite the live-mark columns when we actually have a fresh mark, or
+  // when the position just closed (its settled result is final). Otherwise a
+  // failed UW fetch (e.g. the daily-quota 429) would wipe the last good live
+  // P/L back to blank — instead we keep the prior value on the row.
+  const persistMarks = p.status === "CLOSED" || p.lastMark != null;
+
   await prisma.tradeAlert.upsert({
     where: { openMessageId: p.openMessageId },
-    create: { openMessageId: p.openMessageId, ...data },
-    update: data,
+    create: { openMessageId: p.openMessageId, ...core, ...markFields },
+    update: persistMarks ? { ...core, ...markFields } : core,
   });
 }
 
