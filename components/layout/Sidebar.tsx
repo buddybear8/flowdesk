@@ -31,6 +31,10 @@ const COMMUNITY_PERFORMANCE: NavEntry[] = [
   { href: "/community-gains", label: "Community Gains", icon: "🍾" },
 ];
 
+const USER_GUIDE: NavEntry[] = [
+  { href: "/user-guide", label: "Platform manual", icon: "📖" },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
   const [query, setQuery] = useState("");
@@ -38,6 +42,7 @@ export function Sidebar() {
   const matches = (label: string) => !q || label.toLowerCase().includes(q);
   const modulesFiltered = MODULES.filter((e) => matches(e.label));
   const communityFiltered = COMMUNITY_PERFORMANCE.filter((e) => matches(e.label));
+  const guideFiltered = USER_GUIDE.filter((e) => matches(e.label));
 
   return (
     <aside
@@ -86,7 +91,15 @@ export function Sidebar() {
             ))}
           </>
         )}
-        {modulesFiltered.length === 0 && communityFiltered.length === 0 && (
+        {guideFiltered.length > 0 && (
+          <>
+            <SectionLabel>User Guide</SectionLabel>
+            {guideFiltered.map((item) => (
+              <NavRow key={item.href} entry={item} active={pathname.startsWith(item.href)} />
+            ))}
+          </>
+        )}
+        {modulesFiltered.length === 0 && communityFiltered.length === 0 && guideFiltered.length === 0 && (
           <div className="px-2 py-3 text-[10px] text-text-tertiary">No matches</div>
         )}
       </nav>

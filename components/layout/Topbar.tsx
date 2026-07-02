@@ -34,6 +34,7 @@ const MODULES: Record<string, { label: string; tabs: string[] }> = {
   flow:       { label: "Flow alerts",       tabs: ["Live feed", "Lottos", "Opening Sweeps"] },
   darkpool:   { label: "Dark pools",        tabs: ["Ranked feed", "DP levels"] },
   settings:   { label: "Settings",          tabs: [] },
+  "user-guide": { label: "User Guide",       tabs: [] },
 };
 
 export function Topbar() {
