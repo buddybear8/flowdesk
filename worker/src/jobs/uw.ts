@@ -751,20 +751,36 @@ export async function pollGex(): Promise<void> {
 
         const cells = { expirations: presentExpirations, strikes: cellStrikes };
 
-        await prisma.gexHeatmapSnapshot.create({
-          data: {
-            capturedAt: new Date(),
-            ticker,
-            asOf,
-            spot,
-            cells: cells as unknown as Prisma.InputJsonValue,
-          },
-        });
-        console.log(
-          `[uw:gex-heatmap:${ticker}] ${ts()} stored heatmap · ` +
-            `${presentExpirations.length}/${expiryDates.length} expirations · ` +
-            `${sortedStrikes.length} strikes · ${allRows.length} rows`,
-        );
+        // Reject degraded chains that don't straddle spot. UW's expiry-strike
+        // endpoint intermittently serves a far-OTM-only partial for some tickers
+        // (e.g. AAPL strikes 260-275 while spot is 305, NVDA 50-160 while spot is
+        // 196). Storing those renders a broken heatmap — strikes nowhere near
+        // spot, ~0 gamma. Require real near-spot coverage on BOTH sides; else skip
+        // (like the empty case) so the API keeps the last good snapshot / a clean
+        // unavailable state until UW's chain returns.
+        const NEAR_FRAC = 0.05;
+        const hasAbove = sortedStrikes.some((k) => k >= spot && k <= spot * (1 + NEAR_FRAC));
+        const hasBelow = sortedStrikes.some((k) => k <= spot && k >= spot * (1 - NEAR_FRAC));
+        if (!hasAbove || !hasBelow) {
+          console.warn(
+            `[uw:gex-heatmap:${ticker}] degraded chain — strikes [$${sortedStrikes[sortedStrikes.length - 1]}..$${sortedStrikes[0]}] don't straddle spot $${spot} — skipping`,
+          );
+        } else {
+          await prisma.gexHeatmapSnapshot.create({
+            data: {
+              capturedAt: new Date(),
+              ticker,
+              asOf,
+              spot,
+              cells: cells as unknown as Prisma.InputJsonValue,
+            },
+          });
+          console.log(
+            `[uw:gex-heatmap:${ticker}] ${ts()} stored heatmap · ` +
+              `${presentExpirations.length}/${expiryDates.length} expirations · ` +
+              `${sortedStrikes.length} strikes · ${allRows.length} rows`,
+          );
+        }
       } else {
         console.warn(`[uw:gex-heatmap:${ticker}] no rows returned — skipping`);
       }

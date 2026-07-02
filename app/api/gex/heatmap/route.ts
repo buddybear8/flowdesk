@@ -71,6 +71,22 @@ export async function GET(req: NextRequest) {
   const cells = snapshot.cells as unknown as StoredCells;
   const spot = Number(snapshot.spot);
 
+  // Degraded-chain guard: UW's expiry-strike endpoint intermittently serves a
+  // far-OTM-only partial for some tickers (AAPL/NVDA/AMZN as of 2026-07) whose
+  // strikes don't straddle spot — rendering a broken grid of ~0 cells nowhere
+  // near spot. Require real near-spot coverage on both sides; otherwise surface
+  // the clean unavailable state (self-heals when UW's chain returns).
+  const NEAR = 0.05;
+  const straddlesSpot =
+    cells.strikes.some((s) => s.strike >= spot && s.strike <= spot * (1 + NEAR)) &&
+    cells.strikes.some((s) => s.strike <= spot && s.strike >= spot * (1 - NEAR));
+  if (!straddlesSpot) {
+    return NextResponse.json(
+      { error: `${ticker} heatmap unavailable — the data provider isn't serving this chain right now` },
+      { status: 404 },
+    );
+  }
+
   // Strikes are already a union across expirations. Filter to the per-ticker
   // band (wider for higher-beta names — see lib/strike-bands.ts) to drop
   // deep-OTM LEAPS that UW occasionally returns, then pick the 50 closest to
