@@ -59,12 +59,12 @@ export default async function LoginPage({
             }}
           >
             <p>
-              Your Whop account doesn&apos;t hold the Champagne Sessions
-              Intelligence access pass. Join the free product, then sign in
+              Your Whop account doesn&apos;t hold an active Champagne Sessions
+              subscription. Join the Champagne Sessions product, then sign in
               again.
             </p>
             <a
-              href="https://whop.com/the-champagne-room/champagne-sessions-intelligenc/"
+              href="https://whop.com/checkout/plan_73p2KojwCgvuS/?trackingLinkRoute=skoq&trackingLinkId=trk_Nu7B9bPSCxlhvh"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block w-full text-center rounded-lg px-3 py-2 font-medium transition-opacity hover:opacity-90"
@@ -73,7 +73,7 @@ export default async function LoginPage({
                 color: "#0F2040",
               }}
             >
-              Join free product on Whop →
+              Join Champagne Sessions Product on Whop →
             </a>
           </div>
         )}

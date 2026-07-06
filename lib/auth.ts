@@ -29,12 +29,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           { headers: { Authorization: `Bearer ${accessToken}` } },
         );
         if (!res.ok) {
-          console.error(`[auth] Whop access check failed: ${res.status} (user=${sub} pass=${passId})`);
+          console.error(`[auth] Whop access check failed: ${res.status}`);
           return false;
         }
         const data = (await res.json()) as { has_access?: boolean };
-        // TEMP DIAGNOSTIC — remove after debugging paid-vs-free gate.
-        console.log(`[auth][diag] whop access user=${sub} pass=${passId} status=${res.status} has_access=${data.has_access} body=${JSON.stringify(data)}`);
         if (!data.has_access) return false;
       } catch (err) {
         console.error("[auth] Whop access check threw:", err);
