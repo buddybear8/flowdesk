@@ -303,7 +303,7 @@ model WatchesCriteria {
   minPremium     Int      @default(700000) @map("min_premium")
   confFilter     String   @default("HIGH_MED") @map("conf_filter") // HIGH | HIGH_MED | ALL
   execTypes      String[] @default(["SWEEP", "FLOOR", "BLOCK", "SINGLE"]) @map("exec_types")
-  maxAlerts      Int      @default(20) @map("max_alerts")
+  maxAlerts      Int      @default(10) @map("max_alerts")
   excludeSectors String[] @default([]) @map("exclude_sectors")
   requireDp      Boolean  @default(false) @map("require_dp")
   updatedAt      DateTime @updatedAt @map("updated_at")
@@ -338,6 +338,11 @@ model HitListDaily {
   contracts          Json // HitListContract[]
   peers              Json // HitListPeer[]
   theme              Json // HitListTheme
+  // Confluence engine (v2): fired signal categories + score breakdown —
+  // { flow?, sentiment?, darkpool?, persistence?, agree?, total }
+  signals            Json?
+  // Weekly-ATR trade targets: { atrW, up05, up1, up2, dn05, dn1, dn2 }
+  atrTargets         Json?    @map("atr_targets")
 
   @@unique([date, rank])
   @@index([date(sort: Desc)])

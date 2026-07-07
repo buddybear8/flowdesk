@@ -123,7 +123,7 @@ export function WatchesView() {
                 <Th w={48}>Conf.</Th>
                 <Th w={68}>Premium</Th>
                 <Th w={96}>Contract</Th>
-                <Th w={72} center>DP confluence</Th>
+                <Th w={104} center>Signals</Th>
                 <Th>Thesis</Th>
                 <Th w={80}>Sector</Th>
               </tr>
@@ -152,22 +152,7 @@ export function WatchesView() {
                   <Td style={{ fontSize: 12, fontWeight: 500, color: h.direction === "UP" ? "#7FBF52" : "#E76A6A" }}>{fmtP(h.premium)}</Td>
                   <Td style={{ fontSize: 11, color: "var(--color-text-primary)" }}>{h.contract}</Td>
                   <Td center>
-                    {h.dpConf ? (
-                      <span
-                        className="inline-flex items-center gap-[3px] font-medium rounded-[3px]"
-                        style={{
-                          fontSize: 9,
-                          padding: "2px 6px",
-                          background: "#EEEDFE",
-                          color: "#3C3489",
-                          border: "0.5px solid #AFA9EC",
-                        }}
-                      >
-                        ● #{h.dpRank}
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>—</span>
-                    )}
+                    <SignalBadges hit={h} />
                   </Td>
                   <Td style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{h.thesis}</Td>
                   <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{h.sector}</Td>
@@ -305,6 +290,49 @@ function DetailPanel({
           </div>
           <div className="text-[12px] text-text-secondary" style={{ lineHeight: 1.6 }}>{hit.thesis}</div>
         </div>
+
+        {/* Confluence breakdown */}
+        {hit.signals && (
+          <div style={{ marginBottom: 12 }}>
+            <SectionLabel>Confluence score · {hit.signals.total} pts</SectionLabel>
+            <div className="rounded-md bg-bg-secondary" style={{ padding: "8px 11px" }}>
+              <ScoreRow label={`Flow — ${fmtP(hit.signals.flow.premium)} / ${hit.signals.flow.alerts} alerts`} pts={hit.signals.flow.pts} max={40} />
+              {hit.signals.sentiment && (
+                <ScoreRow label={`Sentiment — C/P ${hit.signals.sentiment.cpRatio.toFixed(2)} ${hit.signals.sentiment.side === "UP" ? "bullish" : "bearish"}`} pts={hit.signals.sentiment.pts} max={25} />
+              )}
+              {hit.signals.darkpool && <ScoreRow label={`Dark pool — rank #${hit.signals.darkpool.rank}`} pts={hit.signals.darkpool.pts} max={15} />}
+              {hit.signals.persistence && (
+                <ScoreRow label={`Persistence — ${hit.signals.persistence.days} of ${hit.signals.persistence.of} sessions`} pts={hit.signals.persistence.pts} max={20} />
+              )}
+              {hit.signals.agree != null && (
+                <div style={{ fontSize: 10, marginTop: 5, color: hit.signals.agree ? "#7FBF52" : "var(--color-text-tertiary)" }}>
+                  {hit.signals.agree ? "✓ Flow and sentiment agree on direction (+10%)" : "Flow and sentiment point different ways"}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Weekly-ATR targets */}
+        {hit.atrTargets && (
+          <div style={{ marginBottom: 12 }}>
+            <SectionLabel>Move targets · weekly ATR ${hit.atrTargets.atrW.toFixed(2)}</SectionLabel>
+            <div
+              className="grid overflow-hidden rounded-md"
+              style={{ gridTemplateColumns: "repeat(3, 1fr)", border: "0.5px solid var(--color-border-tertiary)" }}
+            >
+              <AtrCell label="+0.5 ATR" value={hit.atrTargets.up05} up primary={hit.direction === "UP"} />
+              <AtrCell label="+1 ATR" value={hit.atrTargets.up1} up primary={hit.direction === "UP"} />
+              <AtrCell label="+2 ATR" value={hit.atrTargets.up2} up primary={hit.direction === "UP"} isLast />
+              <AtrCell label="−0.5 ATR" value={hit.atrTargets.dn05} primary={hit.direction === "DOWN"} />
+              <AtrCell label="−1 ATR" value={hit.atrTargets.dn1} primary={hit.direction === "DOWN"} />
+              <AtrCell label="−2 ATR" value={hit.atrTargets.dn2} primary={hit.direction === "DOWN"} isLast />
+            </div>
+            <div style={{ fontSize: 9, color: "var(--color-text-tertiary)", marginTop: 4 }}>
+              From last close ${hit.price.toFixed(2)} · ATR computed on completed weekly bars
+            </div>
+          </div>
+        )}
 
         {/* Contracts table */}
         <div style={{ marginBottom: 14 }}>
@@ -446,6 +474,50 @@ function DetailPanel({
   );
 }
 
+// Compact per-row badges: which confluence categories fired.
+function SignalBadges({ hit }: { hit: HitListItem }) {
+  const s = hit.signals;
+  if (!s) {
+    // Pre-confluence rows: fall back to the old DP pill.
+    return hit.dpConf
+      ? <Badge bg="#EEEDFE" color="#3C3489" border="#AFA9EC" title={`Dark pool rank #${hit.dpRank}`}>DP</Badge>
+      : <span style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>—</span>;
+  }
+  return (
+    <span className="inline-flex items-center gap-[3px]" style={{ flexWrap: "wrap", justifyContent: "center" }}>
+      <Badge bg="rgba(90,169,230,0.14)" color="#5AA9E6" border="rgba(90,169,230,0.4)" title={`Flow: ${fmtP(s.flow.premium)} across ${s.flow.alerts} alerts (${s.flow.pts} pts)`}>F</Badge>
+      {s.sentiment && (
+        <Badge
+          bg={s.sentiment.side === "UP" ? "rgba(127,191,82,0.14)" : "rgba(231,106,106,0.14)"}
+          color={s.sentiment.side === "UP" ? "#7FBF52" : "#E76A6A"}
+          border={s.sentiment.side === "UP" ? "rgba(127,191,82,0.4)" : "rgba(231,106,106,0.4)"}
+          title={`Sentiment: C/P ${s.sentiment.cpRatio.toFixed(2)} (${s.sentiment.pts} pts)${s.agree ? " — confirms flow" : ""}`}
+        >
+          S
+        </Badge>
+      )}
+      {s.darkpool && <Badge bg="#EEEDFE" color="#3C3489" border="#AFA9EC" title={`Dark pool rank #${s.darkpool.rank} (${s.darkpool.pts} pts)`}>DP</Badge>}
+      {s.persistence && (
+        <Badge bg="rgba(201,165,90,0.16)" color="#C9A55A" border="rgba(201,165,90,0.45)" title={`Signaled ${s.persistence.days} of last ${s.persistence.of} sessions (${s.persistence.pts} pts)`}>
+          ×{s.persistence.days}
+        </Badge>
+      )}
+    </span>
+  );
+}
+
+function Badge({ children, bg, color, border, title }: { children: React.ReactNode; bg: string; color: string; border: string; title?: string }) {
+  return (
+    <span
+      title={title}
+      className="inline-flex items-center font-medium rounded-[3px]"
+      style={{ fontSize: 9, padding: "2px 5px", background: bg, color, border: `0.5px solid ${border}`, cursor: title ? "help" : undefined }}
+    >
+      {children}
+    </span>
+  );
+}
+
 function Th({ children, w, center }: { children: React.ReactNode; w?: number; center?: boolean }) {
   return (
     <th
@@ -546,6 +618,36 @@ function DetailMc({
         {label}
       </div>
       <div style={{ fontSize: 15, fontWeight: 500, color: valueColor ?? "var(--color-text-primary)" }}>{value}</div>
+    </div>
+  );
+}
+
+function ScoreRow({ label, pts, max }: { label: string; pts: number; max: number }) {
+  return (
+    <div className="flex items-center gap-[8px]" style={{ marginBottom: 4 }}>
+      <span style={{ fontSize: 11, color: "var(--color-text-secondary)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+      <div style={{ width: 70, height: 4, borderRadius: 2, background: "var(--color-background-primary)", overflow: "hidden", flexShrink: 0 }}>
+        <div style={{ width: `${Math.min(100, (pts / max) * 100)}%`, height: "100%", background: "#C9A55A" }} />
+      </div>
+      <span style={{ fontSize: 10, fontWeight: 500, color: "var(--color-text-primary)", width: 42, textAlign: "right", flexShrink: 0 }}>{pts} pts</span>
+    </div>
+  );
+}
+
+function AtrCell({ label, value, up, primary, isLast }: { label: string; value: number; up?: boolean; primary?: boolean; isLast?: boolean }) {
+  const color = up ? "#7FBF52" : "#E76A6A";
+  return (
+    <div
+      style={{
+        padding: "7px 8px",
+        textAlign: "center",
+        borderRight: isLast ? undefined : "0.5px solid var(--color-border-tertiary)",
+        borderBottom: up ? "0.5px solid var(--color-border-tertiary)" : undefined,
+        background: primary ? (up ? "rgba(127,191,82,0.07)" : "rgba(231,106,106,0.07)") : undefined,
+      }}
+    >
+      <div style={{ fontSize: 9, fontWeight: 500, color, letterSpacing: ".03em", marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>${value.toFixed(2)}</div>
     </div>
   );
 }

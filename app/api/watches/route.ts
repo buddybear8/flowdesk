@@ -6,6 +6,8 @@ import type {
   HitListContract,
   HitListPeer,
   HitListTheme,
+  HitListSignals,
+  HitListAtrTargets,
   SectorFlow,
   Confidence,
   Direction,
@@ -85,6 +87,8 @@ export async function GET() {
     contracts: r.contracts as unknown as HitListContract[],
     peers: r.peers as unknown as HitListPeer[],
     theme: r.theme as unknown as HitListTheme,
+    ...(r.signals ? { signals: r.signals as unknown as HitListSignals } : {}),
+    ...(r.atrTargets ? { atrTargets: r.atrTargets as unknown as HitListAtrTargets } : {}),
   }));
 
   // 3. sectorFlow + callPutLabel: aggregate flow_alerts on the prior trading

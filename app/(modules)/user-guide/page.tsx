@@ -72,8 +72,22 @@ export default function UserGuidePage() {
         {/* Modules */}
         <H2>The modules</H2>
 
-        <Mod icon="📋" title="Daily watches" route="/watches">
-          <P style={{ margin: 0, color: T3 }}>Coming soon.</P>
+        <Mod icon="📋" title="Daily watches" route="/watches" one="A ranked top-10 of tickers showing a confluence of signals, computed every morning.">
+          <H4>What it does</H4>
+          <P>Every morning premarket, scores the prior session across four independent signals — <B>flow</B> (premium and
+            conviction of notable options orders), <B>sentiment</B> (extreme call/put ratios), <B>dark pool</B> (ranked
+            off-exchange prints), and <B>persistence</B> (kept signaling across recent sessions) — and ranks the top 10
+            by confluence. Names firing several signals at once outrank one-signal wonders.</P>
+          <H4>How to use it</H4>
+          <Ul>
+            <li>The <B>Signals</B> column shows which categories fired: <B>F</B> flow, <B>S</B> sentiment (green/red by
+              side), <B>DP</B> dark pool, <B>×N</B> signaled N of the last 5 sessions.</li>
+            <li>Click a row for the detail panel: the <B>confluence score breakdown</B>, a suggested <B>contract to
+              watch</B> (expiry within 3 months, matching the signal direction), and <B>move targets</B> at ±0.5 / 1 / 2
+              weekly ATR from the last close.</li>
+            <li>This is a screening list, not trade advice — validate each name yourself; the targets frame the size of
+              move that would be normal vs outsized.</li>
+          </Ul>
         </Mod>
 
         <Mod icon="🌊" title="Market Pulse" route="/market-tide" one="Is the whole market leaning bullish or bearish right now?">

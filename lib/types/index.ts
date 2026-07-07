@@ -262,6 +262,23 @@ export interface HitListPeer {
   highlighted?: boolean;
 }
 
+// Confluence engine (v2) — which signal categories fired + score breakdown.
+export interface HitListSignals {
+  flow: { pts: number; premium: number; alerts: number };
+  sentiment?: { pts: number; cpRatio: number; side: "UP" | "DOWN" };
+  darkpool?: { pts: number; rank: number };
+  persistence?: { pts: number; days: number; of: number };
+  agree?: boolean;
+  total: number;
+}
+
+// Weekly-ATR target ladder: spot ± 0.5 / 1 / 2 × ATR(weekly).
+export interface HitListAtrTargets {
+  atrW: number;
+  up05: number; up1: number; up2: number;
+  dn05: number; dn1: number; dn2: number;
+}
+
 export interface HitListItem {
   rank: number;
   ticker: string;
@@ -279,6 +296,8 @@ export interface HitListItem {
   contracts: HitListContract[];
   peers: HitListPeer[];
   theme: HitListTheme;
+  signals?: HitListSignals;
+  atrTargets?: HitListAtrTargets;
 }
 
 export interface SectorFlow {

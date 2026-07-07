@@ -32,7 +32,7 @@ const DEFAULT_CRITERIA = {
   minPremium: 700_000,
   confFilter: "HIGH_MED" as ConfFilter,
   execTypes: ["SWEEP", "FLOOR", "BLOCK", "SINGLE"] as readonly string[],
-  maxAlerts: 20,
+  maxAlerts: 10,
   excludeSectors: [] as readonly string[],
   requireDp: false,
 };
@@ -42,6 +42,20 @@ type Confidence = "HIGH" | "MED" | "LOW";
 type Direction = "UP" | "DOWN";
 
 const DP_CONFLUENCE_HOURS = 48;
+
+// ─── Confluence engine (v2) constants ────────────────────────────────────────
+// Score = flow (0-40, premium percentile × confidence) + sentiment (0-25, C/P
+// extremity) + dark pool (10 or 15) + persistence (5/day, max 20), with a +10%
+// bonus when flow direction and sentiment side agree. Signals JSON stores the
+// full breakdown so the UI can explain each pick.
+const SENT_BULL_CP = 2.0;   // same thresholds as the sentiment dashboard
+const SENT_BEAR_CP = 0.5;
+const SENT_MIN_VOL = 5_000;
+const PERSIST_LOOKBACK_DAYS = 5;   // trading days
+const PERSIST_PTS_PER_DAY = 5;
+const PERSIST_MAX_PTS = 20;
+const CONTRACT_MAX_DTE = 92;       // "no more than 3 months out"
+const ATR_WEEKS = 14;              // Wilder ATR period on weekly bars
 
 // Per-ticker aggregate built up before scoring + writing.
 interface TickerAgg {
@@ -149,18 +163,35 @@ export async function computeHitList(): Promise<void> {
       return;
     }
 
-    // ─── 5. Score + rank + truncate ────────────────────────────────────────
+    // ─── 5. Confluence signals: sentiment + persistence ────────────────────
+    const sentByTicker = await latestSentimentByTicker();
+    const persistByTicker = await persistenceByTicker(priorDayET, criteria.minPremium);
+
+    // ─── 6. Score + rank + truncate (confluence v2) ────────────────────────
     interface Scored extends TickerAgg {
       actionability: number;
       dp?: DpInfo;
+      signals: SignalsJson;
     }
-    const scored: Scored[] = candidates.map((agg) => ({
-      ...agg,
-      dp: dpByTicker.get(agg.ticker),
-      actionability: computeActionability(agg, dpByTicker.get(agg.ticker)),
-    }));
+    // Premium percentile within today's qualifying set drives the flow points.
+    const premiums = candidates.map((c) => c.totalPremium).sort((a, b) => a - b);
+    const pctl = (v: number) => (premiums.length <= 1 ? 1 : premiums.filter((p) => p <= v).length / premiums.length);
+
+    const scored: Scored[] = candidates.map((agg) => {
+      const dp = dpByTicker.get(agg.ticker);
+      const sent = sentByTicker.get(agg.ticker);
+      const persistDays = persistByTicker.get(agg.ticker) ?? 0;
+      const { total, signals } = computeConfluence(agg, pctl(agg.totalPremium), dp, sent, persistDays);
+      return { ...agg, dp, signals, actionability: total };
+    });
     scored.sort((a, b) => b.actionability - a.actionability);
     const top = scored.slice(0, criteria.maxAlerts);
+
+    // ─── 7. Weekly-ATR targets + contract pick for the winners only ────────
+    const atrByTicker = new Map<string, AtrTargets | null>();
+    for (const t of top) {
+      atrByTicker.set(t.ticker, await weeklyAtrTargets(t.ticker, Number(t.topAlert!.spot)));
+    }
 
     // ─── 6. Build peers + theme map (per-sector, computed across all ──────
     // qualifying tickers — peers can include candidates that didn't make
@@ -176,9 +207,9 @@ export async function computeHitList(): Promise<void> {
       allBySector.set(sector, list);
     }
 
-    // ─── 7. Atomic replace today's rows ────────────────────────────────────
+    // ─── 8. Atomic replace today's rows ────────────────────────────────────
     const newRows: Prisma.HitListDailyCreateManyInput[] = top.map((entry, i) =>
-      buildHitListRow(entry, i + 1, todayDate, allBySector, entry.dp)
+      buildHitListRow(entry, i + 1, todayDate, allBySector, entry.dp, entry.signals, atrByTicker.get(entry.ticker) ?? null)
     );
 
     await prisma.$transaction([
@@ -281,24 +312,228 @@ function rankConfidence(c: Confidence): number {
   return c === "HIGH" ? 3 : c === "MED" ? 2 : 1;
 }
 
-// ─── Actionability score ─────────────────────────────────────────────────────
+// ─── Confluence score (v2) ───────────────────────────────────────────────────
 //
-// PRD §6 doesn't lock a formula. V1 keeps premium as the dominant signal
-// (matches the table's default sort) with multiplicative boosts:
-//   - confidence: +50% for HIGH, +20% for MED, +0% for LOW
-//   - DP confluence: +40%
-//   - DP rank ≤ 10 (top of perpetual corpus): +30% additional
-// Tunable. Track candidates that consistently rank too low/high in production
-// and adjust the weights here.
+// Additive points across independent signal categories, so a name that shows
+// up in several places outranks a one-signal wonder even at lower premium:
+//   flow        0–40  premium percentile among the day's qualifiers × confidence
+//   sentiment   0–25  C/P-ratio extremity from the chain-flow dashboard
+//   dark pool   10/15 ranked print ≤48h (15 if corpus rank ≤10)
+//   persistence 5/day fired on prior sessions (max 20, 5-day lookback)
+//   agreement   +10%  flow direction and sentiment side concur
+// The full breakdown is persisted in `signals` so the UI can explain the pick.
 
-function computeActionability(agg: TickerAgg, dp: DpInfo | undefined): number {
-  const confBoost =
-    agg.bestConfidence === "HIGH" ? 0.5 :
-    agg.bestConfidence === "MED" ? 0.2 :
-    0;
-  const dpBoost = dp ? 0.4 : 0;
-  const dpTopBoost = dp && dp.rank <= 10 ? 0.3 : 0;
-  return agg.totalPremium * (1 + confBoost + dpBoost + dpTopBoost);
+interface SentInfo {
+  cpRatio: number;
+  side: Direction;      // UP for bullish C/P, DOWN for bearish
+  volume: number;
+}
+
+interface SignalsJson {
+  flow: { pts: number; premium: number; alerts: number };
+  sentiment?: { pts: number; cpRatio: number; side: Direction };
+  darkpool?: { pts: number; rank: number };
+  persistence?: { pts: number; days: number; of: number };
+  agree?: boolean;
+  total: number;
+}
+
+function computeConfluence(
+  agg: TickerAgg,
+  premiumPctl: number,
+  dp: DpInfo | undefined,
+  sent: SentInfo | undefined,
+  persistDays: number,
+): { total: number; signals: SignalsJson } {
+  const confMult = agg.bestConfidence === "HIGH" ? 1 : agg.bestConfidence === "MED" ? 0.8 : 0.6;
+  const flowPts = 40 * premiumPctl * confMult;
+
+  let sentPts = 0;
+  let sentSignal: SignalsJson["sentiment"];
+  if (sent && (sent.cpRatio >= SENT_BULL_CP || sent.cpRatio <= SENT_BEAR_CP)) {
+    // Extremity: 2.0→~8pts scaling to 25 at C/P≥6; bearish mirrors via 1/cp.
+    const ext = sent.cpRatio >= SENT_BULL_CP ? sent.cpRatio : 1 / Math.max(sent.cpRatio, 0.01);
+    sentPts = Math.min(25, 25 * (ext - 1.5) / 4.5);
+    sentPts = Math.max(sentPts, 6); // fired at all = worth something
+    sentSignal = { pts: round1(sentPts), cpRatio: round2(sent.cpRatio), side: sent.side };
+  }
+
+  const dpPts = dp ? (dp.rank <= 10 ? 15 : 10) : 0;
+  const persistPts = Math.min(PERSIST_MAX_PTS, persistDays * PERSIST_PTS_PER_DAY);
+
+  const agree = !!sentSignal && sentSignal.side === agg.direction;
+  let total = flowPts + sentPts + dpPts + persistPts;
+  if (agree) total *= 1.1;
+
+  const signals: SignalsJson = {
+    flow: { pts: round1(flowPts), premium: Math.round(agg.totalPremium), alerts: agg.alertCount },
+    ...(sentSignal ? { sentiment: sentSignal } : {}),
+    ...(dp ? { darkpool: { pts: dpPts, rank: dp.rank } } : {}),
+    ...(persistDays > 0 ? { persistence: { pts: persistPts, days: persistDays, of: PERSIST_LOOKBACK_DAYS } } : {}),
+    ...(sentSignal ? { agree } : {}),
+    total: round1(total),
+  };
+  return { total, signals };
+}
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// ─── Sentiment signal ────────────────────────────────────────────────────────
+//
+// Latest chain-flow snapshot per ticker (same source as the Options-sentiment
+// market dashboard): final cumulative minute of the most recent trading day.
+// At the 07:30 ET run this is the prior session's close — same day the flow
+// candidates come from.
+
+async function latestSentimentByTicker(): Promise<Map<string, SentInfo>> {
+  const out = new Map<string, SentInfo>();
+  try {
+    const latest = await prisma.flowSentimentDay.findFirst({
+      orderBy: { tradingDate: "desc" },
+      select: { tradingDate: true },
+    });
+    if (!latest) return out;
+    const rows = await prisma.$queryRaw<{ ticker: string; last: { callVol?: number; putVol?: number } | null }[]>`
+      SELECT ticker, minutes -> (jsonb_array_length(minutes) - 1) AS last
+      FROM flow_sentiment_days
+      WHERE trading_date = ${latest.tradingDate}`;
+    for (const r of rows) {
+      const callVol = Number(r.last?.callVol ?? 0);
+      const putVol = Number(r.last?.putVol ?? 0);
+      const vol = callVol + putVol;
+      if (vol < SENT_MIN_VOL || putVol <= 0) continue;
+      const cp = callVol / putVol;
+      out.set(r.ticker, { cpRatio: cp, side: cp >= 1 ? "UP" : "DOWN", volume: vol });
+    }
+  } catch (err) {
+    console.error("[hit-list-compute] sentiment signal failed:", err instanceof Error ? err.message : err);
+  }
+  return out;
+}
+
+// ─── Persistence signal ──────────────────────────────────────────────────────
+//
+// How many of the PERSIST_LOOKBACK_DAYS trading days BEFORE the flow day did
+// this ticker already fire a signal (qualifying flow premium OR extreme C/P)?
+// Repeated appearance is the "keeps showing up" part of confluence.
+
+async function persistenceByTicker(
+  flowDayET: string,
+  minPremium: number,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  try {
+    // Lookback window: 9 calendar days ≥ 5 trading days.
+    const end = etMidnightUTC(flowDayET); // exclusive — the flow day itself doesn't count
+    const start = new Date(end.getTime() - 9 * 24 * 60 * 60 * 1000);
+
+    // Flow leg: days where the ticker's summed qualifying premium cleared the bar.
+    const flowDays = await prisma.$queryRaw<{ ticker: string; d: string }[]>`
+      SELECT ticker, DATE(time AT TIME ZONE 'America/New_York')::text AS d
+      FROM flow_alerts
+      WHERE time >= ${start} AND time < ${end}
+      GROUP BY 1, 2
+      HAVING SUM(premium) >= ${minPremium}`;
+
+    // Sentiment leg: days with an extreme C/P on adequate volume.
+    const sentDays = await prisma.$queryRaw<{ ticker: string; d: string; last: { callVol?: number; putVol?: number } | null }[]>`
+      SELECT ticker, trading_date::text AS d, minutes -> (jsonb_array_length(minutes) - 1) AS last
+      FROM flow_sentiment_days
+      WHERE trading_date >= ${start} AND trading_date < ${end}`;
+
+    const daysByTicker = new Map<string, Set<string>>();
+    const add = (ticker: string, d: string) => {
+      const s = daysByTicker.get(ticker) ?? new Set<string>();
+      s.add(d);
+      daysByTicker.set(ticker, s);
+    };
+    for (const r of flowDays) add(r.ticker, r.d);
+    for (const r of sentDays) {
+      const callVol = Number(r.last?.callVol ?? 0);
+      const putVol = Number(r.last?.putVol ?? 0);
+      if (callVol + putVol < SENT_MIN_VOL || putVol <= 0) continue;
+      const cp = callVol / putVol;
+      if (cp >= SENT_BULL_CP || cp <= SENT_BEAR_CP) add(r.ticker, r.d.slice(0, 10));
+    }
+    for (const [ticker, days] of daysByTicker) {
+      out.set(ticker, Math.min(days.size, PERSIST_LOOKBACK_DAYS));
+    }
+  } catch (err) {
+    console.error("[hit-list-compute] persistence signal failed:", err instanceof Error ? err.message : err);
+  }
+  return out;
+}
+
+// ─── Weekly-ATR targets ──────────────────────────────────────────────────────
+//
+// Daily candles → W-FRI weekly bars → Wilder ATR over ATR_WEEKS completed
+// weeks → target ladder at spot ± 0.5 / 1 / 2 ATR (both sides — the user
+// validates direction themselves).
+
+export interface AtrTargets {
+  atrW: number;
+  up05: number; up1: number; up2: number;
+  dn05: number; dn1: number; dn2: number;
+}
+
+async function weeklyAtrTargets(ticker: string, spot: number): Promise<AtrTargets | null> {
+  try {
+    if (!(spot > 0)) return null;
+    // candle_bars stores native 1W bars (bar-start UTC, current week included).
+    const weeks = await prisma.candleBar.findMany({
+      where: { ticker, timeframe: "1W" },
+      orderBy: { barTime: "desc" },
+      take: ATR_WEEKS + 2, // period + prior close + in-progress week
+      select: { high: true, low: true, close: true },
+    });
+    if (weeks.length < 8) return null;
+    weeks.reverse();
+    weeks.pop(); // drop the in-progress current week; TRs need completed weeks
+
+    const trs: number[] = [];
+    for (let i = 1; i < weeks.length; i++) {
+      const w = weeks[i]!, prev = weeks[i - 1]!;
+      const h = Number(w.high), l = Number(w.low), pc = Number(prev.close);
+      trs.push(Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc)));
+    }
+    const period = Math.min(ATR_WEEKS, trs.length);
+    const recent = trs.slice(-period);
+    // Wilder smoothing seeded with the simple mean of the first half.
+    const seedLen = Math.ceil(period / 2);
+    let atr = recent.slice(0, seedLen).reduce((s, v) => s + v, 0) / seedLen;
+    for (const tr of recent.slice(seedLen)) {
+      atr = (atr * (period - 1) + tr) / period;
+    }
+    const r = (v: number) => Math.round(v * 100) / 100;
+    return {
+      atrW: r(atr),
+      up05: r(spot + 0.5 * atr), up1: r(spot + atr), up2: r(spot + 2 * atr),
+      dn05: r(spot - 0.5 * atr), dn1: r(spot - atr), dn2: r(spot - 2 * atr),
+    };
+  } catch (err) {
+    console.error(`[hit-list-compute] ATR failed for ${ticker}:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+// ─── Contract pick ───────────────────────────────────────────────────────────
+//
+// "A top options contract to watch": highest-premium contract among the
+// ticker's qualifying alerts whose expiry is ≤3 months out and whose side
+// matches the confluence direction (calls for UP, puts for DOWN); falls back
+// to any side ≤3 months, then to the raw top alert's contract label.
+
+function pickWatchContract(agg: TickerAgg): string {
+  const now = Date.now();
+  const maxExp = now + CONTRACT_MAX_DTE * 24 * 60 * 60 * 1000;
+  const inWindow = agg.contracts.filter((c) => c.expiry.getTime() > now && c.expiry.getTime() <= maxExp);
+  const wantType = agg.direction === "UP" ? "CALL" : "PUT";
+  const directional = inWindow.filter((c) => c.type === wantType);
+  const pool = directional.length ? directional : inWindow;
+  if (!pool.length) return agg.topAlert!.contract;
+  const best = pool.reduce((a, b) => (b.premium > a.premium ? b : a));
+  return `$${best.strike}${best.type === "CALL" ? "C" : "P"} ${shortDateLabel(best.expiry)}`;
 }
 
 // ─── DP age classifier ───────────────────────────────────────────────────────
@@ -316,7 +551,9 @@ function buildHitListRow(
   rank: number,
   todayDate: Date,
   allBySector: Map<string, TickerAgg[]>,
-  dp: DpInfo | undefined
+  dp: DpInfo | undefined,
+  signals: SignalsJson | null = null,
+  atrTargets: AtrTargets | null = null
 ): Prisma.HitListDailyCreateManyInput {
   const top = entry.topAlert!;
   const contracts = entry.contracts.map((c) => ({
@@ -356,17 +593,19 @@ function buildHitListRow(
     direction: entry.direction,
     confidence: entry.bestConfidence,
     premium: new Prisma.Decimal(entry.totalPremium.toFixed(2)),
-    contract: top.contract,
+    contract: pickWatchContract(entry),
     dpConf: !!dp,
     dpRank: dp?.rank ?? null,
     dpAge: dp?.age ?? null,
     dpPrem: dp ? new Prisma.Decimal(dp.premium.toFixed(2)) : null,
-    thesis: buildThesis(entry, dp),
+    thesis: buildThesis(entry, dp, signals),
     sector: entry.sector,
     actionabilityScore: new Prisma.Decimal(entry.actionability.toFixed(4)),
     contracts: contracts as unknown as Prisma.InputJsonValue,
     peers: peers as unknown as Prisma.InputJsonValue,
     theme: theme as unknown as Prisma.InputJsonValue,
+    signals: (signals ?? undefined) as unknown as Prisma.InputJsonValue,
+    atrTargets: (atrTargets ?? undefined) as unknown as Prisma.InputJsonValue,
   };
 }
 
@@ -376,7 +615,7 @@ function buildHitListRow(
 // shows full text on hover (PRD §6 — Thesis column truncates to flex with
 // hover-full). Keep concise (~80–120 chars).
 
-function buildThesis(entry: TickerAgg, dp: DpInfo | undefined): string {
+function buildThesis(entry: TickerAgg, dp: DpInfo | undefined, signals: SignalsJson | null = null): string {
   const parts: string[] = [];
 
   const counts = entry.execTypeCounts;
@@ -391,8 +630,15 @@ function buildThesis(entry: TickerAgg, dp: DpInfo | undefined): string {
     parts.push(`${entry.alertCount} alert${entry.alertCount === 1 ? "" : "s"}, ${entry.bestConfidence.toLowerCase()} confidence`);
   }
 
+  if (signals?.sentiment) {
+    const s = signals.sentiment;
+    parts.push(`C/P ${s.cpRatio.toFixed(2)} ${s.side === "UP" ? "bullish" : "bearish"}${signals.agree ? " — confirms flow" : ""}`);
+  }
   if (dp) {
     parts.push(`DP confluence at rank #${dp.rank} (${dp.age})`);
+  }
+  if (signals?.persistence) {
+    parts.push(`Signaled ${signals.persistence.days} of last ${signals.persistence.of} sessions`);
   }
 
   return parts.join(". ") + ".";
