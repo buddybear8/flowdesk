@@ -401,7 +401,8 @@ function DetailPanel({
           </div>
         )}
 
-        {/* Weekly-ATR targets */}
+        {/* Weekly-ATR targets — direction-matched: upside for bullish (call)
+            picks, downside for bearish (put) picks */}
         {hit.atrTargets && (
           <div style={{ marginBottom: 12 }}>
             <SectionLabel>Move targets · weekly ATR ${hit.atrTargets.atrW.toFixed(2)}</SectionLabel>
@@ -409,15 +410,22 @@ function DetailPanel({
               className="grid overflow-hidden rounded-md"
               style={{ gridTemplateColumns: "repeat(3, 1fr)", border: "0.5px solid var(--color-border-tertiary)" }}
             >
-              <AtrCell label="+0.5 ATR" value={hit.atrTargets.up05} up primary={hit.direction === "UP"} />
-              <AtrCell label="+1 ATR" value={hit.atrTargets.up1} up primary={hit.direction === "UP"} />
-              <AtrCell label="+2 ATR" value={hit.atrTargets.up2} up primary={hit.direction === "UP"} isLast />
-              <AtrCell label="−0.5 ATR" value={hit.atrTargets.dn05} primary={hit.direction === "DOWN"} />
-              <AtrCell label="−1 ATR" value={hit.atrTargets.dn1} primary={hit.direction === "DOWN"} />
-              <AtrCell label="−2 ATR" value={hit.atrTargets.dn2} primary={hit.direction === "DOWN"} isLast />
+              {hit.direction === "UP" ? (
+                <>
+                  <AtrCell label="Target 1" value={hit.atrTargets.up05} up primary />
+                  <AtrCell label="Target 2" value={hit.atrTargets.up1} up primary />
+                  <AtrCell label="Target 3" value={hit.atrTargets.up2} up primary isLast />
+                </>
+              ) : (
+                <>
+                  <AtrCell label="Target 1" value={hit.atrTargets.dn05} primary />
+                  <AtrCell label="Target 2" value={hit.atrTargets.dn1} primary />
+                  <AtrCell label="Target 3" value={hit.atrTargets.dn2} primary isLast />
+                </>
+              )}
             </div>
             <div style={{ fontSize: 9, color: "var(--color-text-tertiary)", marginTop: 4 }}>
-              From last close ${hit.price.toFixed(2)} · ATR computed on completed weekly bars
+              Targets at {hit.direction === "UP" ? "+" : "−"}0.5 / 1 / 2 weekly ATR from last close ${hit.price.toFixed(2)} · ATR on completed weekly bars
             </div>
           </div>
         )}
@@ -740,11 +748,10 @@ function AtrCell({ label, value, up, primary, isLast }: { label: string; value: 
         padding: "7px 8px",
         textAlign: "center",
         borderRight: isLast ? undefined : "0.5px solid var(--color-border-tertiary)",
-        borderBottom: up ? "0.5px solid var(--color-border-tertiary)" : undefined,
         background: primary ? (up ? "rgba(127,191,82,0.07)" : "rgba(231,106,106,0.07)") : undefined,
       }}
     >
-      <div style={{ fontSize: 9, fontWeight: 500, color, letterSpacing: ".03em", marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 9, fontWeight: 600, color, letterSpacing: ".03em", marginBottom: 2, textTransform: "uppercase" }}>{label}</div>
       <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>${value.toFixed(2)}</div>
     </div>
   );

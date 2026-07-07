@@ -105,7 +105,7 @@ function render(p: unknown): string {
  .agree{font-size:10px;margin-top:5px}
  .atr{display:grid;grid-template-columns:repeat(3,1fr);border:.5px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:4px}
  .acell{padding:7px 8px;text-align:center;border-right:.5px solid var(--border)}
- .acell:nth-child(3n){border-right:none} .acell:nth-child(-n+3){border-bottom:.5px solid var(--border)}
+ .acell:nth-child(3n){border-right:none}
  .acell .al{font-size:9px;font-weight:600;letter-spacing:.03em;margin-bottom:2px}
  .acell .av{font-size:13px;font-weight:500}
  .note{font-size:9px;color:var(--text3);margin-top:4px}
@@ -186,9 +186,10 @@ function renderDetail(){
   +(s.agree!=null?'<div class="agree" style="color:'+(s.agree?G:"var(--text3)")+'">'+(s.agree?"✓ Flow and sentiment agree on direction":"Flow and sentiment point different ways")+'</div>':"")
   +'</div>';}
  if(a){html+='<div class="slabel">Move targets · weekly ATR $'+a.atrW.toFixed(2)+'</div><div class="atr">'
-  +acell("+0.5 ATR",a.up05,true,up)+acell("+1 ATR",a.up1,true,up)+acell("+2 ATR",a.up2,true,up)
-  +acell("−0.5 ATR",a.dn05,false,!up)+acell("−1 ATR",a.dn1,false,!up)+acell("−2 ATR",a.dn2,false,!up)
-  +'</div><div class="note">From last close $'+h.price.toFixed(2)+' · ATR computed on completed weekly bars</div>';}
+  +(up
+    ? acell("Target 1",a.up05,true,true)+acell("Target 2",a.up1,true,true)+acell("Target 3",a.up2,true,true)
+    : acell("Target 1",a.dn05,false,true)+acell("Target 2",a.dn1,false,true)+acell("Target 3",a.dn2,false,true))
+  +'</div><div class="note">Targets at '+(up?"+":"−")+'0.5 / 1 / 2 weekly ATR from last close $'+h.price.toFixed(2)+' · ATR on completed weekly bars</div>';}
  const cs=h.contracts||[];
  if(cs.length){html+='<div class="slabel" style="margin-top:12px">Contracts</div><table class="ctable" style="font-size:11px"><thead><tr><th>Strike</th><th>Expiry</th><th>Premium</th><th>Rule</th><th style="text-align:right">V/OI</th></tr></thead><tbody>'
   +cs.map(c=>'<tr><td style="font-weight:500;font-size:12px">'+c.strikeLabel+'</td><td style="color:var(--text2)">'+c.expiryLabel+'</td><td style="color:'+G+';font-weight:500">'+c.premiumLabel+'</td><td style="font-size:10px;color:var(--text2)">'+c.rule+'</td><td style="text-align:right;color:'+G+';font-weight:500">'+c.vOiLabel+'</td></tr>').join("")
