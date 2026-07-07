@@ -291,22 +291,22 @@ function DetailPanel({
           <div className="text-[12px] text-text-secondary" style={{ lineHeight: 1.6 }}>{hit.thesis}</div>
         </div>
 
-        {/* Confluence breakdown */}
+        {/* Confluence breakdown — factors only; per-signal weightings stay internal */}
         {hit.signals && (
           <div style={{ marginBottom: 12 }}>
-            <SectionLabel>Confluence score · {hit.signals.total} pts</SectionLabel>
+            <SectionLabel>Confluence score · {hit.signals.total}</SectionLabel>
             <div className="rounded-md bg-bg-secondary" style={{ padding: "8px 11px" }}>
-              <ScoreRow label={`Flow — ${fmtP(hit.signals.flow.premium)} / ${hit.signals.flow.alerts} alerts`} pts={hit.signals.flow.pts} max={40} />
+              <ScoreRow label={`Flow — ${fmtP(hit.signals.flow.premium)} / ${hit.signals.flow.alerts} alerts`} />
               {hit.signals.sentiment && (
-                <ScoreRow label={`Sentiment — C/P ${hit.signals.sentiment.cpRatio.toFixed(2)} ${hit.signals.sentiment.side === "UP" ? "bullish" : "bearish"}`} pts={hit.signals.sentiment.pts} max={25} />
+                <ScoreRow label={`Sentiment — C/P ${hit.signals.sentiment.cpRatio.toFixed(2)} ${hit.signals.sentiment.side === "UP" ? "bullish" : "bearish"}`} />
               )}
-              {hit.signals.darkpool && <ScoreRow label={`Dark pool — rank #${hit.signals.darkpool.rank}`} pts={hit.signals.darkpool.pts} max={15} />}
+              {hit.signals.darkpool && <ScoreRow label={`Dark pool — rank #${hit.signals.darkpool.rank}`} />}
               {hit.signals.persistence && (
-                <ScoreRow label={`Persistence — ${hit.signals.persistence.days} of ${hit.signals.persistence.of} sessions`} pts={hit.signals.persistence.pts} max={20} />
+                <ScoreRow label={`Persistence — ${hit.signals.persistence.days} of ${hit.signals.persistence.of} sessions`} />
               )}
               {hit.signals.agree != null && (
                 <div style={{ fontSize: 10, marginTop: 5, color: hit.signals.agree ? "#7FBF52" : "var(--color-text-tertiary)" }}>
-                  {hit.signals.agree ? "✓ Flow and sentiment agree on direction (+10%)" : "Flow and sentiment point different ways"}
+                  {hit.signals.agree ? "✓ Flow and sentiment agree on direction" : "Flow and sentiment point different ways"}
                 </div>
               )}
             </div>
@@ -485,20 +485,20 @@ function SignalBadges({ hit }: { hit: HitListItem }) {
   }
   return (
     <span className="inline-flex items-center gap-[3px]" style={{ flexWrap: "wrap", justifyContent: "center" }}>
-      <Badge bg="rgba(90,169,230,0.14)" color="#5AA9E6" border="rgba(90,169,230,0.4)" title={`Flow: ${fmtP(s.flow.premium)} across ${s.flow.alerts} alerts (${s.flow.pts} pts)`}>F</Badge>
+      <Badge bg="rgba(90,169,230,0.14)" color="#5AA9E6" border="rgba(90,169,230,0.4)" title={`Flow: ${fmtP(s.flow.premium)} across ${s.flow.alerts} alerts`}>F</Badge>
       {s.sentiment && (
         <Badge
           bg={s.sentiment.side === "UP" ? "rgba(127,191,82,0.14)" : "rgba(231,106,106,0.14)"}
           color={s.sentiment.side === "UP" ? "#7FBF52" : "#E76A6A"}
           border={s.sentiment.side === "UP" ? "rgba(127,191,82,0.4)" : "rgba(231,106,106,0.4)"}
-          title={`Sentiment: C/P ${s.sentiment.cpRatio.toFixed(2)} (${s.sentiment.pts} pts)${s.agree ? " — confirms flow" : ""}`}
+          title={`Sentiment: C/P ${s.sentiment.cpRatio.toFixed(2)}${s.agree ? " — confirms flow" : ""}`}
         >
           S
         </Badge>
       )}
-      {s.darkpool && <Badge bg="#EEEDFE" color="#3C3489" border="#AFA9EC" title={`Dark pool rank #${s.darkpool.rank} (${s.darkpool.pts} pts)`}>DP</Badge>}
+      {s.darkpool && <Badge bg="#EEEDFE" color="#3C3489" border="#AFA9EC" title={`Dark pool rank #${s.darkpool.rank}`}>DP</Badge>}
       {s.persistence && (
-        <Badge bg="rgba(201,165,90,0.16)" color="#C9A55A" border="rgba(201,165,90,0.45)" title={`Signaled ${s.persistence.days} of last ${s.persistence.of} sessions (${s.persistence.pts} pts)`}>
+        <Badge bg="rgba(201,165,90,0.16)" color="#C9A55A" border="rgba(201,165,90,0.45)" title={`Signaled ${s.persistence.days} of last ${s.persistence.of} sessions`}>
           ×{s.persistence.days}
         </Badge>
       )}
@@ -622,14 +622,11 @@ function DetailMc({
   );
 }
 
-function ScoreRow({ label, pts, max }: { label: string; pts: number; max: number }) {
+function ScoreRow({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-[8px]" style={{ marginBottom: 4 }}>
+      <span style={{ fontSize: 10, color: "#7FBF52", flexShrink: 0 }}>✓</span>
       <span style={{ fontSize: 11, color: "var(--color-text-secondary)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-      <div style={{ width: 70, height: 4, borderRadius: 2, background: "var(--color-background-primary)", overflow: "hidden", flexShrink: 0 }}>
-        <div style={{ width: `${Math.min(100, (pts / max) * 100)}%`, height: "100%", background: "#C9A55A" }} />
-      </div>
-      <span style={{ fontSize: 10, fontWeight: 500, color: "var(--color-text-primary)", width: 42, textAlign: "right", flexShrink: 0 }}>{pts} pts</span>
     </div>
   );
 }
