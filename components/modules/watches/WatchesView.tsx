@@ -378,18 +378,6 @@ function DetailPanel({
           <div className="text-[12px] text-text-secondary" style={{ lineHeight: 1.6 }}>{hit.thesis}</div>
         </div>
 
-        {/* AI summary — news, signals, recent move (generated premarket) */}
-        {hit.aiSummary && (
-          <div className="rounded-md bg-bg-secondary" style={{ padding: "9px 11px", marginBottom: 12 }}>
-            <div
-              className="text-[9px] font-medium uppercase"
-              style={{ marginBottom: 4, letterSpacing: ".04em", color: "#C9A55A" }}
-            >
-              ✦ AI briefing
-            </div>
-            <div className="text-[12px] text-text-secondary" style={{ lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{hit.aiSummary}</div>
-          </div>
-        )}
 
         {/* Confluence breakdown — factors only; per-signal weightings stay internal */}
         {hit.signals && (
@@ -569,6 +557,19 @@ function DetailPanel({
             </div>
           </div>
         </div>
+
+        {/* AI briefing — news, signals, recent move (generated premarket) */}
+        {hit.aiSummary && (
+          <div className="rounded-md bg-bg-secondary" style={{ padding: "9px 11px", marginBottom: 12 }}>
+            <div
+              className="text-[9px] font-medium uppercase"
+              style={{ marginBottom: 4, letterSpacing: ".04em", color: "#C9A55A" }}
+            >
+              ✦ AI briefing
+            </div>
+            <div className="text-[12px] text-text-secondary" style={{ lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{hit.aiSummary}</div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -178,7 +178,6 @@ function renderDetail(){
   +h.openAlerts.map(a=>'<button onclick="goAlerts()" title="Open in Trade alerts — alerted by '+a.mod+'" style="all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:3px 9px;font-size:11px;font-weight:600;border-radius:6px;background:var(--bg);border:.5px solid var(--gold);color:'+(a.side==="PUT"?R:G)+'">'+a.contract+(a.livePct!=null?' <span style="font-weight:500;color:'+(a.livePct>=0?G:R)+'">'+(a.livePct>=0?"+":"")+a.livePct.toFixed(1)+'%</span>':'')+' <span style="font-size:9px;font-weight:400;color:var(--text3)">'+a.mod+' ↗</span></button>').join("")
   +'</div></div>';}
  html+='<div class="panel"><div class="slabel" style="margin-bottom:4px">Why this stands out</div><div class="thesis">'+h.thesis+'</div></div>';
- if(h.aiSummary){html+='<div class="panel"><div class="slabel" style="color:var(--gold);margin-bottom:4px">✦ AI briefing</div><div class="thesis" style="white-space:pre-wrap">'+h.aiSummary+'</div></div>';}
  if(s){html+='<div class="slabel">Confluence score · '+s.total+'</div><div class="panel">'
   +srow("Flow — "+fmtP(s.flow.premium)+" / "+s.flow.alerts+" alerts")
   +(s.sentiment?srow("Sentiment — C/P "+s.sentiment.cpRatio.toFixed(2)+" "+(s.sentiment.side==="UP"?"bullish":"bearish")):"")
@@ -194,6 +193,7 @@ function renderDetail(){
  if(cs.length){html+='<div class="slabel" style="margin-top:12px">Contracts</div><table class="ctable" style="font-size:11px"><thead><tr><th>Strike</th><th>Expiry</th><th>Premium</th><th>Rule</th><th style="text-align:right">V/OI</th></tr></thead><tbody>'
   +cs.map(c=>'<tr><td style="font-weight:500;font-size:12px">'+c.strikeLabel+'</td><td style="color:var(--text2)">'+c.expiryLabel+'</td><td style="color:'+G+';font-weight:500">'+c.premiumLabel+'</td><td style="font-size:10px;color:var(--text2)">'+c.rule+'</td><td style="text-align:right;color:'+G+';font-weight:500">'+c.vOiLabel+'</td></tr>').join("")
   +'</tbody></table>';}
+ if(h.aiSummary){html+='<div class="panel" style="margin-top:12px"><div class="slabel" style="color:var(--gold);margin-bottom:4px">✦ AI briefing</div><div class="thesis" style="white-space:pre-wrap">'+h.aiSummary+'</div></div>';}
  html+='</div>';
  document.getElementById("detail").innerHTML=html;
 }
