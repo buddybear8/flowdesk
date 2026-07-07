@@ -83,8 +83,9 @@ export default function UserGuidePage() {
             <li>The <B>Signals</B> column shows which categories fired: <B>F</B> flow, <B>S</B> sentiment (green/red by
               side), <B>DP</B> dark pool, <B>×N</B> signaled N of the last 5 sessions.</li>
             <li>Click a row for the detail panel: the <B>confluence score breakdown</B>, a suggested <B>contract to
-              watch</B> (expiry within 3 months, matching the signal direction), and <B>move targets</B> at ±0.5 / 1 / 2
-              weekly ATR from the last close.</li>
+              watch</B> (expiry within 3 months, matching the signal direction), and <B>move targets</B> — Target 1 / 2 / 3 at
+              0.5 / 1 / 2 weekly ATR from the last close, in the signal&rsquo;s direction (upside for bullish picks,
+              downside for bearish).</li>
             <li>This is a screening list, not trade advice — validate each name yourself; the targets frame the size of
               move that would be normal vs outsized.</li>
           </Ul>
