@@ -9,6 +9,24 @@ async function main() {
   const latest = await prisma.hitListDaily.findFirst({ orderBy: { date: "desc" }, select: { date: true } });
   if (!latest) throw new Error("no hit list rows");
   const rows = await prisma.hitListDaily.findMany({ where: { date: latest.date }, orderBy: { rank: "asc" } });
+  const tickers = rows.map((r) => r.ticker);
+  const dateKey = latest.date.toISOString().slice(0, 10);
+  const [summaries, openAlerts] = await Promise.all([
+    prisma.aiSummary.findMany({ where: { kind: { in: tickers.map((t) => `watch-${t}-${dateKey}`) } }, select: { kind: true, body: true } }),
+    prisma.tradeAlert.findMany({
+      where: { ticker: { in: tickers }, status: "OPEN", hidden: false },
+      orderBy: { entryAt: "desc" },
+      select: { ticker: true, side: true, strike: true, expiryLabel: true, livePct: true, moderator: true },
+    }),
+  ]);
+  const sumByTicker = new Map(summaries.map((x) => [x.kind.split("-")[1]!, x.body]));
+  const alertsByTicker = new Map<string, any[]>();
+  for (const a of openAlerts) {
+    const label = a.strike != null ? `$${Number(a.strike)}${a.side === "PUT" ? "P" : "C"}${a.expiryLabel ? " " + a.expiryLabel : ""}` : a.ticker;
+    const list = alertsByTicker.get(a.ticker) ?? [];
+    list.push({ contract: label, side: a.side, livePct: a.livePct != null ? Number(a.livePct) : null, mod: a.moderator });
+    alertsByTicker.set(a.ticker, list);
+  }
 
   const hits = rows.map((r) => ({
     rank: r.rank,
@@ -23,6 +41,9 @@ async function main() {
     contracts: r.contracts,
     signals: r.signals,
     atr: r.atrTargets,
+    score: Number(r.actionabilityScore),
+    aiSummary: sumByTicker.get(r.ticker) ?? null,
+    openAlerts: alertsByTicker.get(r.ticker) ?? [],
   }));
 
   const dateLabel = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric" }).format(latest.date);
@@ -99,7 +120,7 @@ function render(p: unknown): string {
    <div class="sub">Scored across flow · sentiment · dark pool · persistence — computed 7:30 AM ET from the prior session</div></div>
   <div class="sortbar"><span><b>Hit list</b> <span style="color:var(--text2);font-weight:400" id="nrows"></span></span><span style="color:var(--text3);font-size:10px">Sort: Confluence score</span></div>
   <div class="tbl-scroll"><table>
-   <thead><tr><th style="width:22px">#</th><th style="width:64px">Ticker</th><th style="width:46px">Conf.</th><th style="width:64px">Premium</th><th style="width:110px">Contract</th><th style="width:112px;text-align:center">Signals</th><th>Thesis</th></tr></thead>
+   <thead><tr><th style="width:22px">#</th><th style="width:74px">Ticker</th><th style="width:42px">Score</th><th style="width:46px">Conf.</th><th style="width:64px">Premium</th><th style="width:110px">Contract</th><th style="width:112px;text-align:center">Signals</th><th>Thesis</th></tr></thead>
    <tbody id="tbody"></tbody>
   </table></div>
  </div>
@@ -115,14 +136,15 @@ function badges(s){if(!s)return "—";let h='<span class="b bF" title="Flow: '+f
  if(s.darkpool)h+='<span class="b bDP" title="Dark pool rank #'+s.darkpool.rank+'">DP</span>';
  if(s.persistence)h+='<span class="b bP" title="Signaled '+s.persistence.days+' of last '+s.persistence.of+' sessions">×'+s.persistence.days+'</span>';
  return h;}
-let sel=0;
+let sel=0;let panelOpen=true;
 function renderTable(){
  document.getElementById("hdate").textContent=D.dateLabel;
  document.getElementById("nrows").textContent=D.hits.length+" names";
  document.getElementById("tbody").innerHTML=D.hits.map((h,i)=>
-  '<tr class="row'+(i===sel?" sel":"")+'" onclick="pick('+i+')">'
+  '<tr class="row'+(i===sel?" sel":"")+'" onclick="pick('+i+')" style="'+(h.openAlerts.length&&i!==sel?'background:rgba(201,165,90,.07);':'')+(h.openAlerts.length?'box-shadow:inset 2.5px 0 0 var(--gold);':'')+'">'
   +'<td style="font-size:11px;color:var(--text3)">'+h.rank+'</td>'
-  +'<td><span class="tk">'+h.ticker+'</span> <span style="font-size:9px;color:'+(h.direction==="UP"?G:R)+'">'+(h.direction==="UP"?"▲":"▼")+'</span></td>'
+  +'<td><span class="tk">'+h.ticker+'</span> <span style="font-size:9px;color:'+(h.direction==="UP"?G:R)+'">'+(h.direction==="UP"?"▲":"▼")+'</span>'+(h.openAlerts.length?' <span title="Live trade alert: '+h.openAlerts.map(a=>a.contract).join(", ")+'" style="font-size:9px">🔔'+(h.openAlerts.length>1?h.openAlerts.length:"")+'</span>':'')+'</td>'
+  +'<td style="font-size:12px;font-weight:600;color:var(--gold)">'+h.score.toFixed(1)+'</td>'
   +'<td><span class="conf '+confCls(h.confidence)+'">'+h.confidence+'</span></td>'
   +'<td style="font-size:12px;font-weight:500;color:'+(h.direction==="UP"?G:R)+'">'+fmtP(h.premium)+'</td>'
   +'<td style="font-size:11px">'+h.contract+'</td>'
@@ -132,16 +154,31 @@ function renderTable(){
 function srow(label){return '<div class="srow"><span style="font-size:10px;color:'+G+';flex-shrink:0">✓</span><span class="n">'+label+'</span></div>';}
 function acell(label,val,up,primary){return '<div class="acell" style="'+(primary?('background:'+(up?'rgba(127,191,82,.07)':'rgba(231,106,106,.07)')):'')+'"><div class="al" style="color:'+(up?G:R)+'">'+label+'</div><div class="av">$'+val.toFixed(2)+'</div></div>';}
 function pick(i){sel=i;renderTable();renderDetail();}
+function goAlerts(){alert("In the live app this opens the Trade alerts dashboard");}
+function setPanel(open){panelOpen=open;renderDetail();}
 function renderDetail(){
  const h=D.hits[sel];const s=h.signals;const a=h.atr;const up=h.direction==="UP";
- let html='<div class="rhead"><div style="display:flex;justify-content:space-between;align-items:flex-start">'
+ const el=document.getElementById("detail");
+ if(!panelOpen){
+  el.style.flex="0 0 26px";
+  el.innerHTML='<button onclick="setPanel(true)" title="Expand" style="all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 0;width:26px;height:100%"><span style="font-size:11px;color:var(--text2)">«</span><span style="font-size:10px;font-weight:600;color:var(--gold);writing-mode:vertical-rl">'+h.ticker+'</span></button>';
+  return;
+ }
+ el.style.flex="1";
+ let html='<div style="display:flex;justify-content:flex-end;padding:6px 12px;border-bottom:.5px solid var(--border)"><button onclick="setPanel(false)" style="all:unset;cursor:pointer;font-size:11px;color:var(--text2)">Minimize »</button></div>';
+ html+='<div class="rhead"><div style="display:flex;justify-content:space-between;align-items:flex-start">'
   +'<div><div class="rname">'+h.ticker+'</div><div class="rsec">'+h.sector+' · #'+h.rank+'</div></div>'
   +'<span style="font-size:20px;font-weight:500">$'+h.price.toFixed(2)+'</span></div>'
   +'<div class="dirpill" style="background:'+(up?"rgba(127,191,82,.14)":"rgba(231,106,106,.14)")+';color:'+(up?G:R)+';border:.5px solid '+(up?G:R)+'">'+(up?"▲ Bullish":"▼ Bearish")+'</div>'
   +'<div class="mgrid"><div class="mc"><div class="l">Total premium</div><div class="v">'+fmtP(h.premium)+'</div></div>'
   +'<div class="mc"><div class="l">Score</div><div class="v" style="color:var(--gold)">'+(s?s.total:"—")+'</div></div>'
   +'<div class="mc"><div class="l">Confidence</div><div class="v">'+h.confidence+'</div></div></div></div>';
- html+='<div class="sec"><div class="panel"><div class="slabel" style="margin-bottom:4px">Why this stands out</div><div class="thesis">'+h.thesis+'</div></div>';
+ html+='<div class="sec">';
+ if(h.openAlerts.length){html+='<div class="panel" style="background:rgba(201,165,90,.10);border-left:3px solid var(--gold);border-radius:0 8px 8px 0"><div class="slabel" style="color:var(--gold);margin-bottom:6px">🔔 Live trade alert'+(h.openAlerts.length>1?"s":"")+' on '+h.ticker+'</div><div style="display:flex;gap:5px;flex-wrap:wrap">'
+  +h.openAlerts.map(a=>'<button onclick="goAlerts()" title="Open in Trade alerts — alerted by '+a.mod+'" style="all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:3px 9px;font-size:11px;font-weight:600;border-radius:6px;background:var(--bg);border:.5px solid var(--gold);color:'+(a.side==="PUT"?R:G)+'">'+a.contract+(a.livePct!=null?' <span style="font-weight:500;color:'+(a.livePct>=0?G:R)+'">'+(a.livePct>=0?"+":"")+a.livePct.toFixed(1)+'%</span>':'')+' <span style="font-size:9px;font-weight:400;color:var(--text3)">'+a.mod+' ↗</span></button>').join("")
+  +'</div></div>';}
+ html+='<div class="panel"><div class="slabel" style="margin-bottom:4px">Why this stands out</div><div class="thesis">'+h.thesis+'</div></div>';
+ if(h.aiSummary){html+='<div class="panel"><div class="slabel" style="color:var(--gold);margin-bottom:4px">✦ AI briefing</div><div class="thesis" style="white-space:pre-wrap">'+h.aiSummary+'</div></div>';}
  if(s){html+='<div class="slabel">Confluence score · '+s.total+'</div><div class="panel">'
   +srow("Flow — "+fmtP(s.flow.premium)+" / "+s.flow.alerts+" alerts")
   +(s.sentiment?srow("Sentiment — C/P "+s.sentiment.cpRatio.toFixed(2)+" "+(s.sentiment.side==="UP"?"bullish":"bearish")):"")

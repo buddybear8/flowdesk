@@ -30,7 +30,7 @@ Signals: 1-2 sentences interpreting why the screen flagged this name, based ONLY
 
 Price action: 2-3 sentences describing the stock's move over the last 1-2 weeks using ONLY the price series provided (trend, magnitude, notable days, where it sits vs the recent range).
 
-Rules: under 170 words total. No preamble, no narration of your search process, no investment advice, no disclaimers. Plain text only — no markdown headings other than the three section labels above.`;
+Rules: under 170 words total. No preamble, no narration of your search process, no investment advice, no disclaimers. Do not append word counts, notes, or anything after the three sections. Plain text only — no markdown headings other than the three section labels above.`;
 
 interface CandlePoint {
   d: string;
@@ -140,6 +140,7 @@ async function runWithWebSearch(
 
   let messages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: userPrompt }];
   let tokens = 0;
+  const parts: string[] = [];
 
   for (let i = 0; i <= MAX_CONTINUATIONS; i++) {
     const response = await client.messages.create({
@@ -151,19 +152,30 @@ async function runWithWebSearch(
     });
     tokens += (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0);
 
+    // Accumulate ALL text blocks — the model may write a section, run more
+    // searches, then continue in a later block (taking only the last block
+    // dropped the News section in testing). Web-search citations split text
+    // into contiguous fragments, so join WITHOUT trimming/separators to keep
+    // sentences intact.
+    for (const b of response.content) {
+      if (b.type === "text" && b.text) parts.push(b.text);
+    }
+
     if (response.stop_reason === "pause_turn" && i < MAX_CONTINUATIONS) {
       // Re-send with the paused assistant turn appended — server resumes.
       messages = [...messages, { role: "assistant", content: response.content }];
       continue;
     }
-
-    // Final answer = last text block (earlier text blocks can precede searches).
-    const texts = response.content.filter((b): b is Anthropic.Messages.TextBlock => b.type === "text");
-    const text = texts.length ? texts[texts.length - 1]!.text.trim() : "";
-    if (!text) return null;
-    return { text, tokens };
+    break;
   }
-  return null;
+
+  let text = parts.join("").trim();
+  // The brief must start at "News:" — drop any pre-search narration the model
+  // emitted before the final answer.
+  const newsIdx = text.indexOf("News:");
+  if (newsIdx > 0) text = text.slice(newsIdx);
+  if (!text) return null;
+  return { text, tokens };
 }
 
 // Today's date in ET as YYYY-MM-DD.
