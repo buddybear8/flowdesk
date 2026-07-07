@@ -185,11 +185,11 @@ function renderDetail(){
   +(s.persistence?srow("Persistence — "+s.persistence.days+" of "+s.persistence.of+" sessions"):"")
   +(s.agree!=null?'<div class="agree" style="color:'+(s.agree?G:"var(--text3)")+'">'+(s.agree?"✓ Flow and sentiment agree on direction":"Flow and sentiment point different ways")+'</div>':"")
   +'</div>';}
- if(a){html+='<div class="slabel">Move targets · weekly ATR $'+a.atrW.toFixed(2)+'</div><div class="atr">'
+ if(a){html+='<div class="slabel">Move targets</div><div class="atr">'
   +(up
     ? acell("Target 1",a.up05,true,true)+acell("Target 2",a.up1,true,true)+acell("Target 3",a.up2,true,true)
     : acell("Target 1",a.dn05,false,true)+acell("Target 2",a.dn1,false,true)+acell("Target 3",a.dn2,false,true))
-  +'</div><div class="note">Targets at '+(up?"+":"−")+'0.5 / 1 / 2 weekly ATR from last close $'+h.price.toFixed(2)+' · ATR on completed weekly bars</div>';}
+  +'</div><div class="note">From last close $'+h.price.toFixed(2)+'</div>';}
  const cs=h.contracts||[];
  if(cs.length){html+='<div class="slabel" style="margin-top:12px">Contracts</div><table class="ctable" style="font-size:11px"><thead><tr><th>Strike</th><th>Expiry</th><th>Premium</th><th>Rule</th><th style="text-align:right">V/OI</th></tr></thead><tbody>'
   +cs.map(c=>'<tr><td style="font-weight:500;font-size:12px">'+c.strikeLabel+'</td><td style="color:var(--text2)">'+c.expiryLabel+'</td><td style="color:'+G+';font-weight:500">'+c.premiumLabel+'</td><td style="font-size:10px;color:var(--text2)">'+c.rule+'</td><td style="text-align:right;color:'+G+';font-weight:500">'+c.vOiLabel+'</td></tr>').join("")

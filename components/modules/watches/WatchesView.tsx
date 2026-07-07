@@ -401,11 +401,12 @@ function DetailPanel({
           </div>
         )}
 
-        {/* Weekly-ATR targets — direction-matched: upside for bullish (call)
-            picks, downside for bearish (put) picks */}
+        {/* Move targets — direction-matched: upside for bullish (call) picks,
+            downside for bearish (put) picks. Derivation (weekly ATR) is
+            intentionally not surfaced in the UI. */}
         {hit.atrTargets && (
           <div style={{ marginBottom: 12 }}>
-            <SectionLabel>Move targets · weekly ATR ${hit.atrTargets.atrW.toFixed(2)}</SectionLabel>
+            <SectionLabel>Move targets</SectionLabel>
             <div
               className="grid overflow-hidden rounded-md"
               style={{ gridTemplateColumns: "repeat(3, 1fr)", border: "0.5px solid var(--color-border-tertiary)" }}
@@ -425,7 +426,7 @@ function DetailPanel({
               )}
             </div>
             <div style={{ fontSize: 9, color: "var(--color-text-tertiary)", marginTop: 4 }}>
-              Targets at {hit.direction === "UP" ? "+" : "−"}0.5 / 1 / 2 weekly ATR from last close ${hit.price.toFixed(2)} · ATR on completed weekly bars
+              From last close ${hit.price.toFixed(2)}
             </div>
           </div>
         )}
