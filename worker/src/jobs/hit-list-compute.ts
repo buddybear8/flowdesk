@@ -51,6 +51,15 @@ const DP_CONFLUENCE_HOURS = 48;
 const SENT_BULL_CP = 2.0;   // same thresholds as the sentiment dashboard
 const SENT_BEAR_CP = 0.5;
 const SENT_MIN_VOL = 5_000;
+
+// Moneyness weighting for the flow score — OTM strikes carry more directional
+// conviction than ITM, so their premium counts more toward the flow points
+// (and the suggested-contract pick). ATM band is ±2.5% of spot. Raw premium is
+// still what's displayed; only the scoring uses the weighted sum.
+const FLOW_WEIGHT_OTM = 1.5;
+const FLOW_WEIGHT_ATM = 1.0;
+const FLOW_WEIGHT_ITM = 0.75;
+const ATM_BAND = 0.025;
 const PERSIST_LOOKBACK_DAYS = 5;   // trading days
 const PERSIST_PTS_PER_DAY = 5;
 const PERSIST_MAX_PTS = 20;
@@ -62,6 +71,7 @@ interface TickerAgg {
   ticker: string;
   sector: string;
   totalPremium: number;
+  weightedPremium: number; // moneyness-weighted (OTM > ATM > ITM) — drives the flow score
   alertCount: number;
   bestConfidence: Confidence;
   direction: Direction;
@@ -70,12 +80,23 @@ interface TickerAgg {
     strike: number;
     expiry: Date;
     premium: number;
+    wPremium: number; // moneyness-weighted premium (contract pick ordering)
     rule: string;
     type: string;
     size: number;
     oi: number;
   }>; // top 5 by premium
   execTypeCounts: Record<string, number>;
+}
+
+// Moneyness weight for one alert: OTM = strike beyond spot in the option's
+// direction (calls above / puts below), ITM the reverse, ATM within ±ATM_BAND.
+function moneynessWeight(type: string, strike: number, spot: number): number {
+  if (!(spot > 0) || !(strike > 0)) return FLOW_WEIGHT_ATM;
+  const dist = (strike - spot) / spot; // >0 = above spot
+  if (Math.abs(dist) <= ATM_BAND) return FLOW_WEIGHT_ATM;
+  const otm = type === "CALL" ? dist > 0 : dist < 0;
+  return otm ? FLOW_WEIGHT_OTM : FLOW_WEIGHT_ITM;
 }
 
 // Result of joining DP confluence per ticker.
@@ -173,15 +194,16 @@ export async function computeHitList(): Promise<void> {
       dp?: DpInfo;
       signals: SignalsJson;
     }
-    // Premium percentile within today's qualifying set drives the flow points.
-    const premiums = candidates.map((c) => c.totalPremium).sort((a, b) => a - b);
+    // Moneyness-weighted premium percentile within today's qualifying set
+    // drives the flow points (OTM-heavy flow ranks above equal-dollar ITM flow).
+    const premiums = candidates.map((c) => c.weightedPremium).sort((a, b) => a - b);
     const pctl = (v: number) => (premiums.length <= 1 ? 1 : premiums.filter((p) => p <= v).length / premiums.length);
 
     const scored: Scored[] = candidates.map((agg) => {
       const dp = dpByTicker.get(agg.ticker);
       const sent = sentByTicker.get(agg.ticker);
       const persistDays = persistByTicker.get(agg.ticker) ?? 0;
-      const { total, signals } = computeConfluence(agg, pctl(agg.totalPremium), dp, sent, persistDays);
+      const { total, signals } = computeConfluence(agg, pctl(agg.weightedPremium), dp, sent, persistDays);
       return { ...agg, dp, signals, actionability: total };
     });
     scored.sort((a, b) => b.actionability - a.actionability);
@@ -262,6 +284,7 @@ function aggregateByTicker(
         ticker,
         sector: a.sector,
         totalPremium: 0,
+        weightedPremium: 0,
         alertCount: 0,
         bestConfidence: a.confidence as Confidence,
         direction: "UP",
@@ -273,7 +296,9 @@ function aggregateByTicker(
       sentimentCounts.set(ticker, { bull: 0, bear: 0 });
     }
 
+    const w = moneynessWeight(a.type, Number(a.strike), Number(a.spot));
     agg.totalPremium += premium;
+    agg.weightedPremium += premium * w;
     agg.alertCount += 1;
     if (rankConfidence(a.confidence as Confidence) > rankConfidence(agg.bestConfidence)) {
       agg.bestConfidence = a.confidence as Confidence;
@@ -292,6 +317,7 @@ function aggregateByTicker(
         strike: Number(a.strike),
         expiry: a.expiry,
         premium,
+        wPremium: premium * w,
         rule: a.rule,
         type: a.type,
         size: a.size,
@@ -532,7 +558,7 @@ function pickWatchContract(agg: TickerAgg): string {
   const directional = inWindow.filter((c) => c.type === wantType);
   const pool = directional.length ? directional : inWindow;
   if (!pool.length) return agg.topAlert!.contract;
-  const best = pool.reduce((a, b) => (b.premium > a.premium ? b : a));
+  const best = pool.reduce((a, b) => (b.wPremium > a.wPremium ? b : a));
   return `$${best.strike}${best.type === "CALL" ? "C" : "P"} ${shortDateLabel(best.expiry)}`;
 }
 
