@@ -8,6 +8,7 @@ import type {
   HitListTheme,
   HitListSignals,
   HitListAtrTargets,
+  HitListOpenAlert,
   SectorFlow,
   Confidence,
   Direction,
@@ -69,7 +70,39 @@ export async function GET() {
     });
   }
 
-  // 2. Map hit list rows to HitListItem.
+  // 2. Joins: AI summaries (kind="watch-{TICKER}-{date}") + live open trade
+  // alerts. Both computed at request time so the view stays current — open
+  // alerts update as the trade-alerts cron ingests new Discord posts.
+  const tickers = hits.map((r) => r.ticker);
+  const dateKey = presentationDate.toISOString().slice(0, 10);
+  const [summaries, openTradeAlerts] = await Promise.all([
+    prisma.aiSummary.findMany({
+      where: { kind: { in: tickers.map((t) => `watch-${t}-${dateKey}`) } },
+      select: { kind: true, body: true },
+    }),
+    prisma.tradeAlert.findMany({
+      where: { ticker: { in: tickers }, status: "OPEN", hidden: false },
+      orderBy: { entryAt: "desc" },
+      select: { ticker: true, side: true, strike: true, expiryLabel: true, livePct: true, moderator: true },
+    }),
+  ]);
+  const summaryByTicker = new Map(summaries.map((s) => [s.kind.split("-")[1]!, s.body]));
+  const alertsByTicker = new Map<string, HitListOpenAlert[]>();
+  for (const a of openTradeAlerts) {
+    const label = a.strike != null
+      ? `$${Number(a.strike)}${a.side === "PUT" ? "P" : "C"}${a.expiryLabel ? ` ${a.expiryLabel}` : ""}`
+      : a.ticker;
+    const list = alertsByTicker.get(a.ticker) ?? [];
+    list.push({
+      contract: label,
+      side: a.side as HitListOpenAlert["side"],
+      livePct: a.livePct != null ? Number(a.livePct) : null,
+      moderator: a.moderator,
+    });
+    alertsByTicker.set(a.ticker, list);
+  }
+
+  // 3. Map hit list rows to HitListItem.
   const items: HitListItem[] = hits.map((r) => ({
     rank: r.rank,
     ticker: r.ticker,
@@ -89,6 +122,9 @@ export async function GET() {
     theme: r.theme as unknown as HitListTheme,
     ...(r.signals ? { signals: r.signals as unknown as HitListSignals } : {}),
     ...(r.atrTargets ? { atrTargets: r.atrTargets as unknown as HitListAtrTargets } : {}),
+    score: Number(r.actionabilityScore),
+    ...(summaryByTicker.has(r.ticker) ? { aiSummary: summaryByTicker.get(r.ticker)! } : {}),
+    ...(alertsByTicker.has(r.ticker) ? { openAlerts: alertsByTicker.get(r.ticker)! } : {}),
   }));
 
   // 3. sectorFlow + callPutLabel: aggregate flow_alerts on the prior trading

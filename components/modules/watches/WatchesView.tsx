@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { clsx } from "clsx";
 import type { HitListItem, HitListPayload } from "@/lib/types";
 
@@ -31,9 +32,15 @@ export function WatchesView() {
   const [sortKey, setSortKey] = useState<SortKey>("rank");
   const [selRow, setSelRow] = useState<number | null>(0);
   const [selContract, setSelContract] = useState(0);
+  const [panelOpen, setPanelOpen] = useState(true);
 
   useEffect(() => {
-    fetch("/api/watches").then(r => r.json()).then(setPayload);
+    let cancelled = false;
+    const load = () => fetch("/api/watches").then(r => r.json()).then(p => { if (!cancelled) setPayload(p); }).catch(() => {});
+    load();
+    // Refresh so live trade alerts stay current as new trades are alerted.
+    const id = setInterval(load, 60_000);
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
   const hits = useMemo(() => {
@@ -49,6 +56,7 @@ export function WatchesView() {
 
   const sfMax = Math.max(...payload.sectorFlow.map(s => Math.abs(s.netPremium)));
   const selected = selRow !== null ? hits[selRow] : null;
+  const showPanel = !!selected && panelOpen;
 
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -56,9 +64,9 @@ export function WatchesView() {
       <div
         className={clsx(
           "flex flex-col overflow-hidden",
-          selected ? "w-[520px] flex-shrink-0" : "flex-1"
+          showPanel ? "w-[520px] flex-shrink-0" : "flex-1"
         )}
-        style={{ borderRight: selected ? "0.5px solid var(--color-border-tertiary)" : "none" }}
+        style={{ borderRight: showPanel ? "0.5px solid var(--color-border-tertiary)" : "none" }}
       >
         {/* Session header */}
         <div
@@ -119,7 +127,8 @@ export function WatchesView() {
             <thead>
               <tr>
                 <Th w={22}>#</Th>
-                <Th w={66}>Ticker</Th>
+                <Th w={76}>Ticker</Th>
+                <Th w={42}>Score</Th>
                 <Th w={48}>Conf.</Th>
                 <Th w={68}>Premium</Th>
                 <Th w={96}>Contract</Th>
@@ -136,16 +145,29 @@ export function WatchesView() {
                   className="cursor-pointer"
                   style={{
                     borderBottom: "0.5px solid var(--color-border-tertiary)",
-                    background: i === selRow ? "var(--color-background-info)" : undefined,
+                    // Live trade alerted on this ticker → gold-tinted row.
+                    background: i === selRow
+                      ? "var(--color-background-info)"
+                      : h.openAlerts?.length ? "rgba(201, 165, 90, 0.07)" : undefined,
+                    boxShadow: h.openAlerts?.length ? "inset 2.5px 0 0 #C9A55A" : undefined,
                   }}
                 >
                   <Td style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{h.rank}</Td>
                   <Td>
-                    <span className="font-medium" style={{ fontSize: 13, color: i === selRow ? "#C9A55A" : "#C9A55A" }}>{h.ticker}</span>{" "}
+                    <span className="font-medium" style={{ fontSize: 13, color: "#C9A55A" }}>{h.ticker}</span>{" "}
                     <span style={{ fontSize: 9, color: h.direction === "UP" ? "#7FBF52" : "#E76A6A" }}>
                       {h.direction === "UP" ? "▲" : "▼"}
                     </span>
+                    {h.openAlerts && h.openAlerts.length > 0 && (
+                      <span
+                        title={`Live trade alert${h.openAlerts.length > 1 ? "s" : ""}: ${h.openAlerts.map(a => a.contract).join(", ")}`}
+                        style={{ fontSize: 9, marginLeft: 3 }}
+                      >
+                        🔔{h.openAlerts.length > 1 ? h.openAlerts.length : ""}
+                      </span>
+                    )}
                   </Td>
+                  <Td style={{ fontSize: 12, fontWeight: 600, color: "#C9A55A" }}>{h.score != null ? h.score.toFixed(1) : "—"}</Td>
                   <Td>
                     <ConfBadge conf={h.confidence} />
                   </Td>
@@ -203,14 +225,26 @@ export function WatchesView() {
         </div>
       </div>
 
-      {/* RIGHT DETAIL PANEL */}
-      {selected && (
+      {/* RIGHT DETAIL PANEL (minimizable) */}
+      {showPanel && selected && (
         <DetailPanel
           hit={selected}
           selectedContractIdx={selContract}
           onSelectContract={setSelContract}
           onReturn={() => setSelRow(null)}
+          onMinimize={() => setPanelOpen(false)}
         />
+      )}
+      {selected && !panelOpen && (
+        <button
+          onClick={() => setPanelOpen(true)}
+          title={`Expand ${selected.ticker} detail`}
+          className="flex flex-col items-center flex-shrink-0 cursor-pointer bg-bg-primary hover:bg-bg-secondary"
+          style={{ width: 26, border: "none", borderLeft: "0.5px solid var(--color-border-tertiary)", padding: "10px 0", gap: 8 }}
+        >
+          <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>«</span>
+          <span style={{ fontSize: 10, fontWeight: 600, color: "#C9A55A", writingMode: "vertical-rl" }}>{selected.ticker}</span>
+        </button>
       )}
     </div>
   );
@@ -221,12 +255,15 @@ function DetailPanel({
   selectedContractIdx,
   onSelectContract,
   onReturn,
+  onMinimize,
 }: {
   hit: HitListItem;
   selectedContractIdx: number;
   onSelectContract: (i: number) => void;
   onReturn: () => void;
+  onMinimize: () => void;
 }) {
+  const router = useRouter();
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-bg-primary">
       <div
@@ -240,7 +277,14 @@ function DetailPanel({
         >
           ↩ Return to overview
         </button>
-        <span className="text-[10px] text-text-tertiary">Following focus</span>
+        <button
+          onClick={onMinimize}
+          title="Minimize panel"
+          className="cursor-pointer text-[11px] text-text-secondary hover:text-text-primary"
+          style={{ background: "transparent", border: "none", padding: 0 }}
+        >
+          Minimize »
+        </button>
       </div>
 
       <div className="px-[14px] py-[12px] flex-shrink-0" style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
@@ -280,6 +324,49 @@ function DetailPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto px-[14px] py-[12px]">
+        {/* Live trade alerts on this ticker */}
+        {hit.openAlerts && hit.openAlerts.length > 0 && (
+          <div
+            style={{
+              padding: "9px 11px",
+              marginBottom: 12,
+              borderRadius: "0 8px 8px 0",
+              background: "rgba(201, 165, 90, 0.10)",
+              borderLeft: "3px solid #C9A55A",
+            }}
+          >
+            <div style={{ fontSize: 9, fontWeight: 500, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6, color: "#C9A55A" }}>
+              🔔 Live trade alert{hit.openAlerts.length > 1 ? "s" : ""} on {hit.ticker}
+            </div>
+            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+              {hit.openAlerts.map((a, i) => (
+                <button
+                  key={i}
+                  onClick={() => router.push("/trade-alerts")}
+                  title={`Open in Trade alerts — alerted by ${a.moderator}`}
+                  className="inline-flex items-center gap-[5px] rounded-md cursor-pointer hover:opacity-85"
+                  style={{
+                    padding: "3px 9px",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: "var(--color-background-primary)",
+                    border: "0.5px solid #C9A55A",
+                    color: a.side === "PUT" ? "#E76A6A" : "#7FBF52",
+                  }}
+                >
+                  {a.contract}
+                  {a.livePct != null && (
+                    <span style={{ fontWeight: 500, color: a.livePct >= 0 ? "#7FBF52" : "#E76A6A" }}>
+                      {a.livePct >= 0 ? "+" : ""}{a.livePct.toFixed(1)}%
+                    </span>
+                  )}
+                  <span style={{ fontSize: 9, fontWeight: 400, color: "var(--color-text-tertiary)" }}>{a.moderator} ↗</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Why this stands out */}
         <div className="rounded-md bg-bg-secondary" style={{ padding: "9px 11px", marginBottom: 12 }}>
           <div
@@ -290,6 +377,19 @@ function DetailPanel({
           </div>
           <div className="text-[12px] text-text-secondary" style={{ lineHeight: 1.6 }}>{hit.thesis}</div>
         </div>
+
+        {/* AI summary — news, signals, recent move (generated premarket) */}
+        {hit.aiSummary && (
+          <div className="rounded-md bg-bg-secondary" style={{ padding: "9px 11px", marginBottom: 12 }}>
+            <div
+              className="text-[9px] font-medium uppercase"
+              style={{ marginBottom: 4, letterSpacing: ".04em", color: "#C9A55A" }}
+            >
+              ✦ AI briefing
+            </div>
+            <div className="text-[12px] text-text-secondary" style={{ lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{hit.aiSummary}</div>
+          </div>
+        )}
 
         {/* Confluence breakdown — factors only; per-signal weightings stay internal */}
         {hit.signals && (

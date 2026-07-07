@@ -279,6 +279,15 @@ export interface HitListAtrTargets {
   dn05: number; dn1: number; dn2: number;
 }
 
+// Live open trade alert on a hit-list ticker (joined from trade_alerts at
+// request time, so it stays current as trades are alerted).
+export interface HitListOpenAlert {
+  contract: string;             // "$200C Jul 30" style label
+  side: "CALL" | "PUT" | "LONG";
+  livePct: number | null;
+  moderator: string;
+}
+
 export interface HitListItem {
   rank: number;
   ticker: string;
@@ -298,6 +307,9 @@ export interface HitListItem {
   theme: HitListTheme;
   signals?: HitListSignals;
   atrTargets?: HitListAtrTargets;
+  score?: number;               // confluence score (actionabilityScore)
+  aiSummary?: string;           // Claude-generated news/signals/price brief
+  openAlerts?: HitListOpenAlert[];
 }
 
 export interface SectorFlow {
