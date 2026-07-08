@@ -60,11 +60,11 @@ export function WatchesView() {
 
   return (
     <div className="flex flex-1 overflow-hidden">
-      {/* LEFT PANEL */}
+      {/* LEFT PANEL — half the screen while the detail pane is open */}
       <div
         className={clsx(
           "flex flex-col overflow-hidden",
-          showPanel ? "w-[520px] flex-shrink-0" : "flex-1"
+          showPanel ? "w-1/2 flex-shrink-0" : "flex-1"
         )}
         style={{ borderRight: showPanel ? "0.5px solid var(--color-border-tertiary)" : "none" }}
       >
@@ -134,7 +134,7 @@ export function WatchesView() {
                 <Th w={96}>Contract</Th>
                 <Th w={104} center>Signals</Th>
                 <Th>Thesis</Th>
-                <Th w={80}>Sector</Th>
+                {!showPanel && <Th w={80}>Sector</Th>}
               </tr>
             </thead>
             <tbody>
@@ -176,8 +176,15 @@ export function WatchesView() {
                   <Td center>
                     <SignalBadges hit={h} />
                   </Td>
-                  <Td style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{h.thesis}</Td>
-                  <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{h.sector}</Td>
+                  <td
+                    title={h.thesis}
+                    style={{ padding: "6px 10px", verticalAlign: "middle", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 0, fontSize: 11, color: "var(--color-text-secondary)" }}
+                  >
+                    {h.thesis}
+                  </td>
+                  {!showPanel && (
+                    <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)", overflow: "hidden", textOverflow: "ellipsis" }}>{h.sector}</Td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -590,25 +597,25 @@ function SignalBadges({ hit }: { hit: HitListItem }) {
   if (!s) {
     // Pre-confluence rows: fall back to the old DP pill.
     return hit.dpConf
-      ? <Badge bg="#EEEDFE" color="#3C3489" border="#AFA9EC" title={`Dark pool rank #${hit.dpRank}`}>DP</Badge>
+      ? <Badge bg="#EEEDFE" color="#3C3489" border="#AFA9EC" title={`Dark pool — ranked print #${hit.dpRank} in the last 48h`}>DP</Badge>
       : <span style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>—</span>;
   }
   return (
     <span className="inline-flex items-center gap-[3px]" style={{ flexWrap: "wrap", justifyContent: "center" }}>
-      <Badge bg="rgba(90,169,230,0.14)" color="#5AA9E6" border="rgba(90,169,230,0.4)" title={`Flow: ${fmtP(s.flow.premium)} across ${s.flow.alerts} alerts`}>F</Badge>
+      <Badge bg="rgba(90,169,230,0.14)" color="#5AA9E6" border="rgba(90,169,230,0.4)" title={`Options flow — ${fmtP(s.flow.premium)} across ${s.flow.alerts} alerts`}>F</Badge>
       {s.sentiment && (
         <Badge
           bg={s.sentiment.side === "UP" ? "rgba(127,191,82,0.14)" : "rgba(231,106,106,0.14)"}
           color={s.sentiment.side === "UP" ? "#7FBF52" : "#E76A6A"}
           border={s.sentiment.side === "UP" ? "rgba(127,191,82,0.4)" : "rgba(231,106,106,0.4)"}
-          title={`Sentiment: C/P ${s.sentiment.cpRatio.toFixed(2)}${s.agree ? " — confirms flow" : ""}`}
+          title={`Sentiment — C/P ${s.sentiment.cpRatio.toFixed(2)} ${s.sentiment.side === "UP" ? "bullish" : "bearish"}${s.agree ? ", confirms flow" : ""}`}
         >
           S
         </Badge>
       )}
-      {s.darkpool && <Badge bg="#EEEDFE" color="#3C3489" border="#AFA9EC" title={`Dark pool rank #${s.darkpool.rank}`}>DP</Badge>}
+      {s.darkpool && <Badge bg="#EEEDFE" color="#3C3489" border="#AFA9EC" title={`Dark pool — ranked print #${s.darkpool.rank} in the last 48h`}>DP</Badge>}
       {s.persistence && (
-        <Badge bg="rgba(201,165,90,0.16)" color="#C9A55A" border="rgba(201,165,90,0.45)" title={`Signaled ${s.persistence.days} of last ${s.persistence.of} sessions`}>
+        <Badge bg="rgba(201,165,90,0.16)" color="#C9A55A" border="rgba(201,165,90,0.45)" title={`Persistence — signaled ${s.persistence.days} of the last ${s.persistence.of} sessions`}>
           ×{s.persistence.days}
         </Badge>
       )}
@@ -616,14 +623,40 @@ function SignalBadges({ hit }: { hit: HitListItem }) {
   );
 }
 
+// Badge with an instant styled tooltip (native `title` is slow/unreliable and
+// the `help` cursor reads as a bare "?").
 function Badge({ children, bg, color, border, title }: { children: React.ReactNode; bg: string; color: string; border: string; title?: string }) {
   return (
-    <span
-      title={title}
-      className="inline-flex items-center font-medium rounded-[3px]"
-      style={{ fontSize: 9, padding: "2px 5px", background: bg, color, border: `0.5px solid ${border}`, cursor: title ? "help" : undefined }}
-    >
-      {children}
+    <span className="relative inline-flex group">
+      <span
+        className="inline-flex items-center font-medium rounded-[3px]"
+        style={{ fontSize: 9, padding: "2px 5px", background: bg, color, border: `0.5px solid ${border}` }}
+      >
+        {children}
+      </span>
+      {title && (
+        <span
+          className="pointer-events-none absolute hidden group-hover:block"
+          style={{
+            top: "calc(100% + 5px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 60,
+            whiteSpace: "nowrap",
+            fontSize: 10.5,
+            fontWeight: 400,
+            lineHeight: 1.4,
+            padding: "5px 9px",
+            borderRadius: 6,
+            background: "var(--color-background-primary)",
+            color: "var(--color-text-primary)",
+            border: "0.5px solid var(--color-border-secondary)",
+            boxShadow: "0 6px 20px rgba(0,0,0,0.45)",
+          }}
+        >
+          {title}
+        </span>
+      )}
     </span>
   );
 }
