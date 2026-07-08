@@ -26,7 +26,7 @@ import { importPolygonDailyFlatFile } from "./jobs/polygon-daily-flatfile.js";
 import { pollPolygonIntraday } from "./jobs/polygon-hourly-intraday.js";
 import { pollCandles } from "./jobs/candles.js";
 import { pollTradeAlerts } from "./jobs/trade-alerts.js";
-import { disconnectPrisma } from "./lib/prisma.js";
+import { prisma, disconnectPrisma } from "./lib/prisma.js";
 
 const ts = () => new Date().toISOString();
 
@@ -93,6 +93,29 @@ cron.schedule("0 30 5 * * 1-5", safe("refresh-ticker-metadata", refreshTickerMet
 cron.schedule("0 0 7 * * 1-5", safe("ai-summarizer-gex", runAiSummarizerGex));
 cron.schedule("0 30 7 * * 1-5", safe("hit-list-compute", computeHitList));
 cron.schedule("0 45 7 * * 1-5", safe("ai-summarizer-watches", runAiSummarizerWatches));
+
+// Boot-time catch-up: node-cron one-shot schedules are missed if the process
+// was down/restarting at fire time (2026-07-08: worker down over the 7:00-7:45
+// ET window → no hit list that morning). If we boot on a weekday after 07:30
+// ET and today's hit list is missing, run compute + briefs immediately.
+void (async () => {
+  try {
+    const now = new Date();
+    const et = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now);
+    const get = (t: string) => et.find((x) => x.type === t)?.value ?? "";
+    const dow = get("weekday");
+    const minutes = Number(get("hour")) * 60 + Number(get("minute"));
+    if (dow === "Sat" || dow === "Sun" || minutes < 7 * 60 + 30) return;
+    const todayET = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(now);
+    const existing = await prisma.hitListDaily.count({ where: { date: new Date(`${todayET}T00:00:00.000Z`) } });
+    if (existing > 0) return;
+    console.log(`[${ts()}] [worker] catch-up: no hit list for ${todayET} after 07:30 ET — running compute + briefs`);
+    await safe("hit-list-compute-catchup", computeHitList)();
+    await safe("ai-summarizer-watches-catchup", runAiSummarizerWatches)();
+  } catch (err) {
+    console.error(`[${ts()}] [worker] catch-up check failed:`, err instanceof Error ? err.message : err);
+  }
+})();
 // S3 training-data archive (jobs/archive.ts) — 02:00 ET daily, one hour BEFORE
 // the retention sweeps delete anything. Copies each complete UTC day of
 // flow_alerts / flow_sentiment_days / gex(+heatmap) / dark_pool_prints to
