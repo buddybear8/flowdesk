@@ -34,15 +34,17 @@ export function WatchesView() {
   const [selRow, setSelRow] = useState<number | null>(0);
   const [selContract, setSelContract] = useState(0);
   const [panelOpen, setPanelOpen] = useState(true);
+  // null = latest session; a YYYY-MM-DD selects a prior day's hit list (30-day history).
+  const [date, setDate] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    const load = () => fetch("/api/watches").then(r => r.json()).then(p => { if (!cancelled) setPayload(p); }).catch(() => {});
+    const load = () => fetch(`/api/watches${date ? `?date=${date}` : ""}`).then(r => r.json()).then(p => { if (!cancelled) setPayload(p); }).catch(() => {});
     load();
     // Refresh so live trade alerts stay current as new trades are alerted.
     const id = setInterval(load, 60_000);
     return () => { cancelled = true; clearInterval(id); };
-  }, []);
+  }, [date]);
 
   const hits = useMemo(() => {
     if (!payload) return [];
@@ -75,7 +77,29 @@ export function WatchesView() {
           style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
         >
           <div className="flex items-center gap-[9px] mb-[5px]">
-            <span className="text-[14px] font-medium text-text-primary">{payload.sessionMeta.date}</span>
+            {payload.availableDates && payload.availableDates.length > 1 ? (
+              <select
+                value={date ?? payload.availableDates[0]}
+                onChange={e => {
+                  const v = e.target.value;
+                  setDate(v === payload.availableDates![0] ? null : v);
+                  setSelRow(0);
+                  setSelContract(0);
+                }}
+                className="text-[13px] font-medium rounded-md outline-none cursor-pointer text-text-primary bg-bg-primary"
+                style={{ padding: "3px 7px", border: "0.5px solid var(--color-border-secondary)" }}
+                title="View a prior day's hit list (up to 30 days back)"
+              >
+                {payload.availableDates.map((d, i) => (
+                  <option key={d} value={d}>
+                    {new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })}
+                    {i === 0 ? " · latest" : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-[14px] font-medium text-text-primary">{payload.sessionMeta.date}</span>
+            )}
             <span
               className="inline-flex items-center gap-[3px] text-[10px] font-medium rounded-full"
               style={{
@@ -134,7 +158,7 @@ export function WatchesView() {
                 <Th w={68}>Premium</Th>
                 <Th w={96}>Contract</Th>
                 <Th w={124} center>Signals</Th>
-                <Th w={44} center>Alert</Th>
+                <Th w={92} center>Open Trade Alert</Th>
                 <Th>Thesis</Th>
                 {!showPanel && <Th w={80}>Sector</Th>}
               </tr>

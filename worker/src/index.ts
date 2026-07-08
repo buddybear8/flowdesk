@@ -14,7 +14,7 @@ import {
   pollMarketTide,
   computeNetImpact,
 } from "./jobs/uw.js";
-import { runFlowRetentionSweep, runDpRetentionSweep, runGexHeatmapRetentionSweep, runFlowSentimentRetentionSweep } from "./jobs/retention.js";
+import { runFlowRetentionSweep, runDpRetentionSweep, runGexHeatmapRetentionSweep, runFlowSentimentRetentionSweep, runWatchesRetentionSweep } from "./jobs/retention.js";
 import { runArchiveSweep } from "./jobs/archive.js";
 import { pollFlowSentiment } from "./jobs/flow-sentiment.js";
 import { HOT_TICKERS, TAIL_TICKERS } from "./lib/sentiment-tickers.js";
@@ -101,6 +101,7 @@ cron.schedule("0 0 2 * * *", safe("archive-sweep", () => runArchiveSweep()));
 
 cron.schedule("0 0 3 * * 1-5", safe("retention-sweeps", async () => {
   await Promise.all([runFlowRetentionSweep(), runDpRetentionSweep(), runGexHeatmapRetentionSweep(), runFlowSentimentRetentionSweep()]);
+  await runWatchesRetentionSweep();
 }));
 
 // ─── 🗄 Archived in v1.4 (do NOT re-add in V1) ────────────────────────────────

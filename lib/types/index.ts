@@ -327,6 +327,8 @@ export interface HitListPayload {
   };
   hits: HitListItem[];
   sectorFlow: SectorFlow[];
+  date?: string;             // YYYY-MM-DD of the displayed hit list
+  availableDates?: string[]; // last ≤30 sessions with a stored hit list
 }
 
 // ---------- 5. SentimentTicker (Module 2) ----------

@@ -28,16 +28,32 @@ const ISO_DATE_FMT = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/New_York",
 });
 
-export async function GET() {
-  // 1. Latest hit list. The worker writes today's row at 07:30 ET; if today
-  // hasn't been computed yet (e.g. the dashboard is opened over the weekend),
-  // fall back to the most recent available date so the page isn't empty.
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function GET(req: Request) {
+  // History support: the worker writes one hit list per trading day and keeps
+  // 30 days (retention sweep). `?date=YYYY-MM-DD` selects a prior day;
+  // `availableDates` in the payload drives the picker.
+  const qDate = new URL(req.url).searchParams.get("date");
+  const dateRows = await prisma.hitListDaily.findMany({
+    distinct: ["date"],
+    orderBy: { date: "desc" },
+    take: 30,
+    select: { date: true },
+  });
+  const availableDates = dateRows.map((d) => d.date.toISOString().slice(0, 10));
+
+  // 1. Pick the date: explicit ?date= if we have rows for it, else today,
+  // falling back to the most recent available date so the page isn't empty.
   const todayDate = new Date(ISO_DATE_FMT.format(new Date()));
+  let presentationDate =
+    qDate && DATE_RE.test(qDate) && availableDates.includes(qDate)
+      ? new Date(`${qDate}T00:00:00.000Z`)
+      : todayDate;
   let hits = await prisma.hitListDaily.findMany({
-    where: { date: todayDate },
+    where: { date: presentationDate },
     orderBy: { rank: "asc" },
   });
-  let presentationDate = todayDate;
 
   if (hits.length === 0) {
     const latest = await prisma.hitListDaily.findFirst({
@@ -67,6 +83,8 @@ export async function GET() {
       },
       hits: [],
       sectorFlow: [],
+      date: ISO_DATE_FMT.format(new Date()),
+      availableDates,
     });
   }
 
@@ -170,6 +188,8 @@ export async function GET() {
     },
     hits: items,
     sectorFlow,
+    date: presentationDate.toISOString().slice(0, 10),
+    availableDates,
   });
 }
 

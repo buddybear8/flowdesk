@@ -105,3 +105,22 @@ export async function runFlowSentimentRetentionSweep(): Promise<void> {
 }
 
 // Shutdown handled centrally via ../lib/prisma.js; no per-file disconnect needed.
+
+// ─── Daily Watches history: 30-day rolling window ────────────────────────────
+// hit_list_daily powers the Daily Watches date lookback (30 days per spec);
+// the per-day AI briefs (ai_summaries kind "watch-*") age out with it.
+
+export async function runWatchesRetentionSweep(): Promise<void> {
+  try {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const rows = await prisma.hitListDaily.deleteMany({ where: { date: { lt: cutoff } } });
+    const briefs = await prisma.aiSummary.deleteMany({
+      where: { kind: { startsWith: "watch-" }, generatedAt: { lt: cutoff } },
+    });
+    console.log(
+      `[retention:watches] ${ts()} deleted ${rows.count} hit-list rows + ${briefs.count} AI briefs older than ${cutoff.toISOString()}`
+    );
+  } catch (err) {
+    console.error("[retention:watches] failed:", err instanceof Error ? err.message : err);
+  }
+}
