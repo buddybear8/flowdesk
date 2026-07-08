@@ -27,6 +27,9 @@ const TICKER_PATTERNS: Record<string, ExpiryPattern> = {
   GOOGL: "MWF",
   NFLX: "MWF",
   MSFT: "MWF",
+  MU: "FRIDAY",
+  DRAM: "FRIDAY",
+  SPCX: "FRIDAY",
 };
 
 function isExpirationDay(date: Date, pattern: ExpiryPattern): boolean {
