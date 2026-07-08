@@ -72,6 +72,9 @@ export function WatchesView() {
   const selected = selRow !== null ? hits[selRow] : null;
   // Desktop only — on mobile the list is always full-width and the detail is an overlay.
   const showPanel = !isMobile && !!selected && panelOpen;
+  // Mobile-only: extra vertical cell padding so list rows are >=40px tap
+  // targets (12 + 12 + ~16px content). Desktop keeps Td's default 6px.
+  const mRowPad = isMobile ? { paddingTop: 12, paddingBottom: 12 } : undefined;
 
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -200,14 +203,14 @@ export function WatchesView() {
                     boxShadow: h.openAlerts?.length ? "inset 2.5px 0 0 #C9A55A" : undefined,
                   }}
                 >
-                  <Td style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{h.rank}</Td>
-                  <Td>
+                  <Td style={{ fontSize: 11, color: "var(--color-text-tertiary)", ...mRowPad }}>{h.rank}</Td>
+                  <Td style={mRowPad}>
                     <span className="font-medium" style={{ fontSize: 13, color: "#C9A55A" }}>{h.ticker}</span>{" "}
                     <span style={{ fontSize: 9, color: h.direction === "UP" ? "#7FBF52" : "#E76A6A" }}>
                       {h.direction === "UP" ? "▲" : "▼"}
                     </span>
                   </Td>
-                  <Td style={{ fontSize: 12, fontWeight: 600, color: "#C9A55A" }}>{h.score != null ? h.score.toFixed(1) : "—"}</Td>
+                  <Td style={{ fontSize: 12, fontWeight: 600, color: "#C9A55A", ...mRowPad }}>{h.score != null ? h.score.toFixed(1) : "—"}</Td>
                   {!isMobile && (
                     <Td>
                       <ConfBadge conf={h.confidence} />
@@ -216,19 +219,40 @@ export function WatchesView() {
                   {!isMobile && (
                     <Td style={{ fontSize: 12, fontWeight: 500, color: contractType(h.contract) === "P" ? "#E76A6A" : contractType(h.contract) === "C" ? "#7FBF52" : "var(--color-text-primary)" }}>{fmtP(h.premium)}</Td>
                   )}
-                  <Td style={{ fontSize: 11, fontWeight: 500, color: contractType(h.contract) === "P" ? "#E76A6A" : contractType(h.contract) === "C" ? "#7FBF52" : "var(--color-text-primary)", ...(isMobile ? { overflow: "hidden", textOverflow: "ellipsis" } : undefined) }}>{h.contract}</Td>
+                  <Td style={{ fontSize: 11, fontWeight: 500, color: contractType(h.contract) === "P" ? "#E76A6A" : contractType(h.contract) === "C" ? "#7FBF52" : "var(--color-text-primary)", ...(isMobile ? { overflow: "hidden", textOverflow: "ellipsis" } : undefined), ...mRowPad }}>{h.contract}</Td>
                   {!isMobile && (
                     <Td center>
                       <SignalBadges hit={h} />
                     </Td>
                   )}
-                  <Td center>
+                  <Td center style={mRowPad}>
                     {h.openAlerts && h.openAlerts.length > 0 ? (
                       <button
                         onClick={(e) => { e.stopPropagation(); router.push("/trade-alerts"); }}
                         title={`Live trade alert${h.openAlerts.length > 1 ? "s" : ""}: ${h.openAlerts.map(a => a.contract).join(", ")} — click to open Trade alerts`}
                         className="cursor-pointer"
-                        style={{ background: "transparent", border: "none", padding: 0, fontSize: 11, color: "#C9A55A", fontWeight: 600 }}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          padding: 0,
+                          fontSize: 11,
+                          color: "#C9A55A",
+                          fontWeight: 600,
+                          // Mobile-only: >=40px tap target; negative vertical
+                          // margin cancels the extra height so the row stays
+                          // at the 40px set by the cell padding.
+                          ...(isMobile
+                            ? {
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                minWidth: 40,
+                                minHeight: 40,
+                                margin: "-12px 0",
+                                verticalAlign: "middle",
+                              }
+                            : undefined),
+                        }}
                       >
                         🔔{h.openAlerts.length > 1 ? h.openAlerts.length : ""}
                       </button>

@@ -65,7 +65,10 @@ export function Topbar() {
 
   return (
     <header
-      className="flex h-11 items-center gap-[10px] bg-bg-primary px-[14px] flex-shrink-0"
+      // cs-safe-area-topbar (app/globals.css, <768px only): pads the bar
+      // below the iOS status bar/notch when viewport-fit=cover is active
+      // (standalone PWA / Capacitor). Resolves to 0 everywhere else.
+      className="cs-safe-area-topbar flex h-11 items-center gap-[10px] bg-bg-primary px-[14px] flex-shrink-0"
       style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
     >
       <button

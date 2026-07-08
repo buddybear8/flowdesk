@@ -113,6 +113,69 @@ integrate Firebase Messaging so the token can be exchanged:
 4. Server-side sending: use a Firebase Admin SDK service-account JSON (worker env
    var) and the FCM HTTP v1 API.
 
+## Icons & splash screens
+
+Web-app (PWA) icon assets already exist in the repo's `public/`:
+
+- `icon-192.png` / `icon-512.png` — manifest icons, `purpose: "any"` (full-bleed).
+- `icon-192-maskable.png` / `icon-512-maskable.png` — manifest icons,
+  `purpose: "maskable"`: artwork inset to the central 80% safe zone on the
+  `#0B1220` brand background, fully opaque (regenerate the same way if the
+  artwork changes: resize source to 80%, composite centered on `#0B1220`).
+- `apple-touch-icon.png` — 180x180 full-bleed (NOT maskable-padded), alpha
+  flattened onto `#0B1220`; referenced from `app/layout.tsx` metadata.
+
+Native (store) assets are generated with
+[`@capacitor/assets`](https://github.com/ionic-team/capacitor-assets):
+
+```bash
+cd mobile
+
+# Splash fade-out is configured in capacitor.config.ts (SplashScreen block);
+# the plugin must be installed for it to take effect:
+npm install @capacitor/splash-screen
+
+# Masters — create an assets/ folder containing:
+#   assets/icon.png    1024x1024, NO alpha (iOS requirement), artwork inset
+#                      ~80% on #0B1220 (same safe-zone rule as the maskable
+#                      PWA icons; Android adaptive icons crop harder)
+#   assets/splash.png       2732x2732, centered logo on #0B1220
+#   assets/splash-dark.png  same file (app is dark-only)
+
+npx @capacitor/assets generate \
+  --iconBackgroundColor '#0B1220' --iconBackgroundColorDark '#0B1220' \
+  --splashBackgroundColor '#0B1220' --splashBackgroundColorDark '#0B1220'
+
+npx cap sync
+```
+
+This writes the full icon set (including Android adaptive foreground/background
+layers) and all splash densities into `android/` — and `ios/` once
+`npx cap add ios` has been run. Colors match `capacitor.config.ts`
+(`backgroundColor` + `SplashScreen.backgroundColor` = `#0B1220`) so
+splash → WebView → page paint is one seamless dark surface.
+
+## Safe-area insets (iOS notch / home indicator)
+
+The web app ships mobile-only utility classes (appended at the end of
+`app/globals.css`) that consume `env(safe-area-inset-*)`; they activate under
+`viewport-fit=cover` (set via the `viewport` export in `app/layout.tsx`) plus
+`black-translucent` status bar, and are no-ops on desktop and non-notch
+devices:
+
+- `cs-safe-area-topbar` — pads the top bar below the status bar and grows its
+  `h-11` (44px) height by the inset. **Apply to** the root `<header>` row in
+  `components/layout/Topbar.tsx` (and mirror the height on the `h-11` Suspense
+  fallback in `app/(modules)/layout.tsx` to avoid layout shift).
+- `cs-safe-area-drawer` — pads the drawer panel clear of the status bar, home
+  indicator, and left landscape inset. **Apply to** the panel `<div>`
+  (`absolute left-0 top-0 … w-[240px]`) in
+  `components/layout/MobileNavDrawer.tsx`.
+
+The classes are defined but **not yet applied** — `Topbar.tsx`,
+`MobileNavDrawer.tsx`, and `app/(modules)/layout.tsx` are owned by the
+responsive-UI workstream; apply them there (one `className` addition each).
+
 ## Store submission
 
 ### iOS (App Store)
@@ -152,16 +215,29 @@ integrate Firebase Messaging so the token can be exchanged:
   hits an empty state or a signup/pay wall. Keep this account active for every
   review cycle, including updates.
 
-## TODOs
+## Store checklist status
 
-- [ ] **App icon:** 1024x1024 master PNG (no alpha for iOS). Generate platform
-      sets with `npx @capacitor/assets generate --iconBackgroundColor '#0a0a0a'`.
-- [ ] **Splash screen:** 2732x2732 master PNG, dark background matching the app
-      theme (`--color-background-primary`); generate via `@capacitor/assets` as
-      above and consider adding `@capacitor/splash-screen` for fade-out control.
+- [x] PWA maskable icons (`public/icon-192-maskable.png`, `public/icon-512-maskable.png`)
+      wired into `app/manifest.ts` with `purpose: "maskable"`.
+- [x] `apple-touch-icon.png` (180x180) + iOS web-app metadata
+      (`appleWebApp` capable / `black-translucent` / title "Champagne") and
+      `themeColor #0B1220` + `viewport-fit=cover` in `app/layout.tsx`.
+- [x] Splash + StatusBar config in `capacitor.config.ts`
+      (`#0B1220` background, StatusBar `style: 'DARK'`, WebView
+      `backgroundColor` matched).
+- [x] Safe-area utility classes defined in `app/globals.css`
+      (`cs-safe-area-topbar`, `cs-safe-area-drawer`).
+- [ ] Apply the safe-area classes in `Topbar.tsx` / `MobileNavDrawer.tsx`
+      (responsive-UI workstream — see "Safe-area insets" above).
+- [ ] Install `@capacitor/splash-screen`; create `assets/icon.png` (1024x1024,
+      no alpha) + `assets/splash.png` (2732x2732) masters and run
+      `npx @capacitor/assets generate` (see "Icons & splash screens" above).
 - [ ] Run `npx cap add ios` after installing CocoaPods.
 - [ ] Add `google-services.json` (Android) and APNs key/capability (iOS).
 - [ ] iOS: integrate Firebase Messaging + `@capacitor-community/fcm` for the
       APNs→FCM token exchange (see "Push notifications setup" above).
 - [x] Implement `/api/push/register` persistence + a worker job that sends pushes.
 - [ ] Hide pricing/upgrade UI in the web app when running inside the native shell.
+- [ ] App Store Connect record, privacy labels, screenshots, reviewer demo
+      account (see "Store submission" / "App Store guideline mitigations").
+- [ ] Play Console listing, signed `.aab`, content rating, data-safety form.

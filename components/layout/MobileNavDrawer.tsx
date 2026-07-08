@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   MODULES,
   COMMUNITY_PERFORMANCE,
@@ -19,12 +19,53 @@ import { useIsMobile } from "@/lib/use-mobile";
 export function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
   const isMobile = useIsMobile();
+  const panelRef = useRef<HTMLElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
 
-  // Close on Escape while open.
+  // Capture whatever had focus when the drawer opened (the hamburger button)
+  // BEFORE moving initial focus into the drawer, and restore it on close.
+  // The effect owns initial focus (rather than an autoFocus attribute on the
+  // close button) because autoFocus fires during React's commit phase —
+  // earlier than this effect — which would make prevFocus the drawer's own
+  // close button and break restoration.
+  useEffect(() => {
+    if (!open) return;
+    const prevFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeBtnRef.current?.focus();
+    return () => {
+      prevFocus?.focus();
+    };
+  }, [open]);
+
+  // Close on Escape + trap Tab/Shift+Tab inside the open drawer.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusables = Array.from(
+        panel.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null);
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || !(active instanceof Node) || !panel.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !(active instanceof Node) || !panel.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -48,6 +89,9 @@ export function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () 
       <style>{`
         @keyframes cs-drawer-scrim-in { from { opacity: 0; } to { opacity: 1; } }
         @keyframes cs-drawer-panel-in { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+        /* Mobile-only tap targets: drawer renders exclusively <768px, so this
+           cannot affect the desktop Sidebar's NavRow styling. */
+        .cs-drawer-nav a { min-height: 40px; }
       `}</style>
       {/* Dark scrim — tap to close */}
       <div
@@ -57,10 +101,14 @@ export function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () 
       />
       {/* Slide-in panel */}
       <aside
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Navigation"
-        className="absolute left-0 top-0 flex h-full w-[240px] max-w-[82vw] flex-col bg-bg-primary"
+        // cs-safe-area-drawer (app/globals.css, <768px only): pads the panel
+        // clear of the status bar, home indicator, and landscape left inset
+        // when viewport-fit=cover is active. Resolves to 0 elsewhere.
+        className="cs-safe-area-drawer absolute left-0 top-0 flex h-full w-[240px] max-w-[82vw] flex-col bg-bg-primary"
         style={{
           overscrollBehavior: "contain",
           borderRight: "0.5px solid var(--color-border-tertiary)",
@@ -90,9 +138,9 @@ export function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () 
             type="button"
             aria-label="Close navigation"
             onClick={onClose}
-            // eslint-disable-next-line jsx-a11y/no-autofocus -- initial focus
-            // belongs inside the modal drawer when it opens
-            autoFocus
+            // Initial focus is set by the [open] effect via this ref (after
+            // capturing the previously focused element for restoration).
+            ref={closeBtnRef}
             // box-content + padding + negative margin = 28px visual square
             // with a 40px touch target, no layout shift (mobile-only UI).
             className="box-content flex h-[28px] w-[28px] flex-shrink-0 items-center justify-center rounded-md p-[6px] -m-[6px] text-text-secondary hover:bg-bg-secondary"
@@ -107,7 +155,7 @@ export function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () 
             tapped, so a missed tap on a section label / whitespace doesn't
             dismiss the menu. overscroll-contain stops scroll chaining. */}
         <nav
-          className="flex-1 overflow-y-auto px-[6px] py-[8px]"
+          className="cs-drawer-nav flex-1 overflow-y-auto px-[6px] py-[8px]"
           style={{ overscrollBehavior: "contain" }}
           onClick={(e) => {
             if ((e.target as HTMLElement).closest("a")) onClose();
@@ -127,7 +175,7 @@ export function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () 
           ))}
         </nav>
 
-        <div className="px-[6px] py-[7px]" style={{ borderTop: "0.5px solid var(--color-border-tertiary)" }}>
+        <div className="cs-drawer-nav px-[6px] py-[7px]" style={{ borderTop: "0.5px solid var(--color-border-tertiary)" }}>
           <Link
             href="/settings"
             onClick={onClose}

@@ -79,6 +79,25 @@ export function FlowView() {
   const [alerts, setAlerts] = useState<FlowAlert[]>([]);
   const [filter, setFilter] = useState<FilterState>(() => ({ ...INITIAL_FILTER, date: todayET() }));
   const [sortKey, setSortKey] = useState<SortKey>("time");
+  // Mobile-only: collapsed/expanded state of the filter bar above the feed.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // Count of filters that differ from their defaults (excludes `date`, which
+  // Reset intentionally preserves). Shown on the mobile Filters toggle so
+  // hidden-but-active filters are still discoverable while collapsed.
+  const activeFilterCount = useMemo(() => {
+    let n = 0;
+    for (const k of ["type", "side", "sent", "exec", "prem", "conf", "rule", "dte", "sector"] as const) {
+      if (filter[k] !== "ALL") n++;
+    }
+    if (filter.ticker.trim()) n++;
+    if (filter.sweepOnly) n++;
+    if (filter.otmOnly) n++;
+    if (filter.sizeOverOi) n++;
+    if (filter.premMin) n++;
+    if (filter.premMax) n++;
+    return n;
+  }, [filter]);
 
   useEffect(() => {
     const params = new URLSearchParams({ date: filter.date });
@@ -129,14 +148,17 @@ export function FlowView() {
   const totalPrem = rows.reduce((s, r) => s + r.premium, 0);
 
   return (
-    // Mobile (<768px): single vertical page scroll; filter panel stacks below
-    // the feed (order-2); the table pans horizontally in its own container.
-    <div className={clsx("flex flex-1", isMobile ? "flex-col overflow-y-auto" : "overflow-hidden")}>
-      {/* LEFT FILTER PANEL (stacks below the feed on mobile) */}
-      <FilterPanel filter={filter} setFilter={setFilter} />
+    // Mobile (<768px): the view fills the (bounded) shell height and the feed
+    // table scrolls inside its own container, so the sticky column headers
+    // genuinely stick. Filters live in a collapsible bar pinned above the feed
+    // instead of stacking below it. Desktop layout is untouched.
+    <div className={clsx("flex flex-1", isMobile ? "flex-col min-h-0 overflow-hidden" : "overflow-hidden")}>
+      {/* LEFT FILTER PANEL (desktop only; on mobile the panel renders inside
+          the collapsible filter bar below the toolbar) */}
+      {!isMobile && <FilterPanel filter={filter} setFilter={setFilter} />}
 
       {/* FEED AREA */}
-      <div className={clsx("flex flex-col min-w-0", isMobile ? "order-1" : "flex-1 overflow-hidden")}>
+      <div className={clsx("flex flex-col min-w-0 flex-1", isMobile ? "min-h-0" : "overflow-hidden")}>
         {/* Stats bar */}
         <div
           className="flex items-center flex-wrap px-[12px] py-[7px] flex-shrink-0 bg-bg-primary"
@@ -191,9 +213,61 @@ export function FlowView() {
           </select>
         </div>
 
-        {/* Table — on mobile it pans horizontally inside this container; the
-            low-value Date/Rule columns are dropped there to keep it tighter. */}
-        <div className={isMobile ? "overflow-x-auto" : "flex-1 overflow-y-auto"}>
+        {/* Mobile-only collapsible filter bar, pinned above the feed. Expands
+            in place (simple expand/collapse) to reveal the same FilterPanel
+            the desktop shows in its left rail. */}
+        {isMobile && (
+          <div
+            className="flex-shrink-0 bg-bg-primary"
+            style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
+          >
+            <div className="flex items-center justify-between px-[12px] py-[6px]">
+              <button
+                onClick={() => setFiltersOpen(o => !o)}
+                aria-expanded={filtersOpen}
+                className="flex items-center gap-[5px] cursor-pointer rounded-full"
+                style={{
+                  fontSize: 10,
+                  fontWeight: 500,
+                  padding: "3px 10px",
+                  border: `0.5px solid ${activeFilterCount > 0 ? "#C9A55A" : "var(--color-border-secondary)"}`,
+                  background: activeFilterCount > 0 ? "rgba(201, 165, 90, 0.18)" : "var(--color-background-secondary)",
+                  color: activeFilterCount > 0 ? "#C9A55A" : "var(--color-text-secondary)",
+                }}
+              >
+                <span style={{ fontSize: 8, lineHeight: 1 }}>{filtersOpen ? "▾" : "▸"}</span>
+                Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+              </button>
+              {activeFilterCount > 0 && (
+                <button
+                  onClick={() => setFilter(f => ({ ...INITIAL_FILTER, date: f.date }))}
+                  className="cursor-pointer rounded-full"
+                  style={{
+                    fontSize: 10,
+                    color: "var(--color-text-info)",
+                    padding: "2px 7px",
+                    border: "0.5px solid var(--color-border-info)",
+                  }}
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+            {filtersOpen && (
+              <div
+                className="overflow-y-auto"
+                style={{ maxHeight: "45vh", borderTop: "0.5px solid var(--color-border-tertiary)" }}
+              >
+                <FilterPanel filter={filter} setFilter={setFilter} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Table — on mobile it scrolls (both axes) inside this container so
+            the sticky headers stay pinned; the low-value Date/Rule columns
+            are dropped there to keep it tighter. */}
+        <div className={isMobile ? "flex-1 min-h-0 overflow-y-auto overflow-x-auto" : "flex-1 overflow-y-auto"}>
           <table style={{ width: "100%", minWidth: isMobile ? 900 : undefined, borderCollapse: "collapse" }}>
             <thead>
               <tr>
@@ -281,32 +355,32 @@ function FilterPanel({ filter, setFilter }: { filter: FilterState; setFilter: Re
     <aside
       className={clsx(
         "flex flex-shrink-0 flex-col bg-bg-primary",
-        isMobile ? "w-full order-2" : "w-[210px] overflow-hidden"
+        isMobile ? "w-full" : "w-[210px] overflow-hidden"
       )}
-      style={
-        isMobile
-          ? { borderTop: "0.5px solid var(--color-border-tertiary)" }
-          : { borderRight: "0.5px solid var(--color-border-tertiary)" }
-      }
+      style={isMobile ? undefined : { borderRight: "0.5px solid var(--color-border-tertiary)" }}
     >
-      <div
-        className="flex items-center justify-between px-[12px] py-[9px] flex-shrink-0"
-        style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
-      >
-        <span className="text-[12px] font-medium text-text-primary">Filters</span>
-        <button
-          onClick={() => setFilter(f => ({ ...INITIAL_FILTER, date: f.date }))}
-          className="cursor-pointer rounded-full"
-          style={{
-            fontSize: 10,
-            color: "var(--color-text-info)",
-            padding: "2px 7px",
-            border: "0.5px solid var(--color-border-info)",
-          }}
+      {/* On mobile the collapsible bar above the feed owns the "Filters"
+          label and Reset button, so the panel header is desktop-only. */}
+      {!isMobile && (
+        <div
+          className="flex items-center justify-between px-[12px] py-[9px] flex-shrink-0"
+          style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
         >
-          Reset
-        </button>
-      </div>
+          <span className="text-[12px] font-medium text-text-primary">Filters</span>
+          <button
+            onClick={() => setFilter(f => ({ ...INITIAL_FILTER, date: f.date }))}
+            className="cursor-pointer rounded-full"
+            style={{
+              fontSize: 10,
+              color: "var(--color-text-info)",
+              padding: "2px 7px",
+              border: "0.5px solid var(--color-border-info)",
+            }}
+          >
+            Reset
+          </button>
+        </div>
+      )}
       <div className={clsx("px-[12px] py-[10px]", !isMobile && "flex-1 overflow-y-auto")}>
         <div className="mb-[12px]">
           <FpLabel>Trading day</FpLabel>

@@ -10,9 +10,6 @@ export default function manifest(): MetadataRoute.Manifest {
     // No orientation lock — the charts module benefits from landscape.
     background_color: "#0B1220",
     theme_color: "#0B1220",
-    // No `maskable` entries yet: the artwork is full-bleed with no safe-zone
-    // padding, so circular/squircle launcher masks would crop it. Add real
-    // maskable variants (logo inset to the central 80%) before re-adding.
     icons: [
       {
         src: "/icon-192.png",
@@ -25,6 +22,20 @@ export default function manifest(): MetadataRoute.Manifest {
         sizes: "512x512",
         type: "image/png",
         purpose: "any",
+      },
+      // Dedicated safe-zone variants for launcher masks (circle/squircle):
+      // artwork inset to the central 80% on the #0B1220 brand background.
+      {
+        src: "/icon-192-maskable.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "maskable",
+      },
+      {
+        src: "/icon-512-maskable.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable",
       },
     ],
   };

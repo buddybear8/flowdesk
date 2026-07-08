@@ -1,5 +1,5 @@
 // Auto-generated from worker/src/lib/ticker-thresholds.json.
-// The 229 tickers we maintain a historical-block-trade corpus for.
+// The 230 tickers we maintain a historical-block-trade corpus for.
 // Source of truth for the dark-pool ticker filter — only these tickers
 // have data in dark_pool_prints since the 2026-05-13 Polygon cutover.
 
@@ -9,7 +9,7 @@ export const TRACKED_TICKERS: readonly string[] = [
   "ASTS", "AVGO", "AXP", "BA", "BABA", "BAC", "BBD", "BIDU",
   "BLNK", "BMNR", "BMY", "BND", "BYND", "C", "CAR", "CAVA",
   "CCJ", "CCL", "CELH", "CHWY", "CIFR", "CLF", "CMCSA", "CMG",
-  "COIN", "COST", "CRCL", "CRM", "CRWD", "CRWV", "CSCO", "CVNA",
+  "COIN", "COST", "CRCL", "CRM", "CRWD", "CRWV", "CSCO", "CVNA", "DRAM",
   "CVS", "CVX", "DAL", "DDOG", "DELL", "DIA", "DIS", "DJT",
   "DKNG", "DUOL", "EBAY", "EEM", "ELF", "ENPH", "EOSE", "EPV",
   "ETSY", "EWY", "F", "FCX", "FSLR", "FUBO", "FXI", "GE",

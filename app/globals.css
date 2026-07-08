@@ -57,3 +57,37 @@ html, body {
 .blink {
   animation: blink 1.4s infinite;
 }
+
+/* ------------------------------------------------------------------------
+   iOS safe-area (notch / home-indicator) utilities — APPENDED, mobile-only.
+
+   Effective only when the layout viewport extends into the insets, i.e. in
+   the standalone PWA / Capacitor shell with viewport-fit=cover (set via the
+   `viewport` export in app/layout.tsx) and statusBarStyle black-translucent.
+   env(safe-area-inset-*) resolves to 0px everywhere else, and the whole
+   block is scoped below Tailwind's md breakpoint (768px), so desktop is
+   pixel-identical.
+
+   Consumers (see mobile/README.md → "Safe-area insets"):
+     .cs-safe-area-topbar → the Topbar header row (components/layout/Topbar.tsx)
+     .cs-safe-area-drawer → the MobileNavDrawer panel
+                            (components/layout/MobileNavDrawer.tsx)
+   Both classes are applied in those components (mobile-only surfaces).
+   ------------------------------------------------------------------------ */
+@media (max-width: 767px) {
+  /* Topbar: keep the 44px (h-11) content row, grow the bar downward from
+     under the status bar. Height override is needed because h-11 is a fixed
+     height and the bar is box-sizing: border-box. */
+  .cs-safe-area-topbar {
+    padding-top: env(safe-area-inset-top, 0px);
+    height: calc(44px + env(safe-area-inset-top, 0px));
+  }
+
+  /* Drawer panel: full-height left panel — pad it clear of the status bar,
+     the home indicator, and the left inset in landscape. */
+  .cs-safe-area-drawer {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+}

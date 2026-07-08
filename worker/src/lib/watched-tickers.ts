@@ -21,6 +21,9 @@ export const WATCHED_TICKERS = [
   "NFLX",
   "MSFT",
   "AAPL",
+  "MU",
+  "DRAM",
+  "SPCX",
 ] as const;
 
 export type WatchedTicker = (typeof WATCHED_TICKERS)[number];
