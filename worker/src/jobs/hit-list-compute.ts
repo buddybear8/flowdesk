@@ -682,9 +682,11 @@ function formatMoney(n: number): string {
 }
 
 function shortDateLabel(d: Date): string {
-  // "May 15" — month + day, ET-anchored to avoid UTC drift on dates near midnight.
+  // "May 15" — month + day. Expiry is a @db.Date (UTC midnight), so format in
+  // UTC: rendering in ET lands on the previous evening and shifts every label
+  // back one day (2026-07-08 bug: "$1560C Jul 16" for a Jul 17 Friday expiry).
   return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
+    timeZone: "UTC",
     month: "short",
     day: "numeric",
   }).format(d);
