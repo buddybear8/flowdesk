@@ -28,6 +28,7 @@ function confColor(c: string): string {
 type SortKey = "rank" | "prem" | "conf";
 
 export function WatchesView() {
+  const router = useRouter();
   const [payload, setPayload] = useState<HitListPayload | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("rank");
   const [selRow, setSelRow] = useState<number | null>(0);
@@ -127,12 +128,13 @@ export function WatchesView() {
             <thead>
               <tr>
                 <Th w={22}>#</Th>
-                <Th w={76}>Ticker</Th>
+                <Th w={64}>Ticker</Th>
                 <Th w={42}>Score</Th>
                 <Th w={48}>Conf.</Th>
                 <Th w={68}>Premium</Th>
                 <Th w={96}>Contract</Th>
-                <Th w={104} center>Signals</Th>
+                <Th w={124} center>Signals</Th>
+                <Th w={44} center>Alert</Th>
                 <Th>Thesis</Th>
                 {!showPanel && <Th w={80}>Sector</Th>}
               </tr>
@@ -158,14 +160,6 @@ export function WatchesView() {
                     <span style={{ fontSize: 9, color: h.direction === "UP" ? "#7FBF52" : "#E76A6A" }}>
                       {h.direction === "UP" ? "▲" : "▼"}
                     </span>
-                    {h.openAlerts && h.openAlerts.length > 0 && (
-                      <span
-                        title={`Live trade alert${h.openAlerts.length > 1 ? "s" : ""}: ${h.openAlerts.map(a => a.contract).join(", ")}`}
-                        style={{ fontSize: 9, marginLeft: 3 }}
-                      >
-                        🔔{h.openAlerts.length > 1 ? h.openAlerts.length : ""}
-                      </span>
-                    )}
                   </Td>
                   <Td style={{ fontSize: 12, fontWeight: 600, color: "#C9A55A" }}>{h.score != null ? h.score.toFixed(1) : "—"}</Td>
                   <Td>
@@ -175,6 +169,20 @@ export function WatchesView() {
                   <Td style={{ fontSize: 11, color: "var(--color-text-primary)" }}>{h.contract}</Td>
                   <Td center>
                     <SignalBadges hit={h} />
+                  </Td>
+                  <Td center>
+                    {h.openAlerts && h.openAlerts.length > 0 ? (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); router.push("/trade-alerts"); }}
+                        title={`Live trade alert${h.openAlerts.length > 1 ? "s" : ""}: ${h.openAlerts.map(a => a.contract).join(", ")} — click to open Trade alerts`}
+                        className="cursor-pointer"
+                        style={{ background: "transparent", border: "none", padding: 0, fontSize: 11, color: "#C9A55A", fontWeight: 600 }}
+                      >
+                        🔔{h.openAlerts.length > 1 ? h.openAlerts.length : ""}
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>—</span>
+                    )}
                   </Td>
                   <td
                     title={h.thesis}
@@ -601,7 +609,7 @@ function SignalBadges({ hit }: { hit: HitListItem }) {
       : <span style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>—</span>;
   }
   return (
-    <span className="inline-flex items-center gap-[3px]" style={{ flexWrap: "wrap", justifyContent: "center" }}>
+    <span className="inline-flex items-center gap-[3px]" style={{ flexWrap: "nowrap", justifyContent: "center" }}>
       <Badge bg="rgba(90,169,230,0.14)" color="#5AA9E6" border="rgba(90,169,230,0.4)" title={`Options flow — ${fmtP(s.flow.premium)} across ${s.flow.alerts} alerts`}>F</Badge>
       {s.sentiment && (
         <Badge
