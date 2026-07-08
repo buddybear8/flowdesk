@@ -127,6 +127,10 @@ export async function computeHitList(): Promise<void> {
         premium: { gte: criteria.minPremium },
         confidence: { in: confSet },
         exec: { in: [...criteria.execTypes] },
+        // Ask-side only: calls and puts BOUGHT at the ask. Bid-side (sold)
+        // contracts are closing/premium-selling flow, not directional
+        // conviction — they're excluded from the confluence inputs entirely.
+        side: "BUY",
         ...(criteria.excludeSectors.length > 0
           ? { sector: { notIn: [...criteria.excludeSectors] } }
           : {}),

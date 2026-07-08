@@ -25,6 +25,12 @@ function confColor(c: string): string {
   return "#E76A6A";
 }
 
+// "$200C Jul 30" / "$510P Dec 15" → C | P (null for unparsable labels).
+function contractType(label: string): "C" | "P" | null {
+  const m = label.match(/\$[\d.]+([CP])\b/);
+  return (m?.[1] as "C" | "P") ?? null;
+}
+
 type SortKey = "rank" | "prem" | "conf";
 
 export function WatchesView() {
@@ -189,8 +195,8 @@ export function WatchesView() {
                   <Td>
                     <ConfBadge conf={h.confidence} />
                   </Td>
-                  <Td style={{ fontSize: 12, fontWeight: 500, color: h.direction === "UP" ? "#7FBF52" : "#E76A6A" }}>{fmtP(h.premium)}</Td>
-                  <Td style={{ fontSize: 11, color: "var(--color-text-primary)" }}>{h.contract}</Td>
+                  <Td style={{ fontSize: 12, fontWeight: 500, color: contractType(h.contract) === "P" ? "#E76A6A" : contractType(h.contract) === "C" ? "#7FBF52" : "var(--color-text-primary)" }}>{fmtP(h.premium)}</Td>
+                  <Td style={{ fontSize: 11, fontWeight: 500, color: contractType(h.contract) === "P" ? "#E76A6A" : contractType(h.contract) === "C" ? "#7FBF52" : "var(--color-text-primary)" }}>{h.contract}</Td>
                   <Td center>
                     <SignalBadges hit={h} />
                   </Td>
