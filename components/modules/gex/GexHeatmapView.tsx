@@ -18,6 +18,7 @@ import {
 } from "./heatmap-shared";
 import { HeatmapModeToggle, CustomTickerPicker } from "./HeatmapModeControls";
 import { MultiHeatmapView } from "./MultiHeatmapView";
+import { useIsMobile } from "@/lib/use-mobile";
 
 const TICKERS = ["SPY", "SPX", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT", "AAPL"];
 
@@ -32,6 +33,7 @@ export function GexHeatmapView() {
   const standardEnabled = tickerRestored && modeRestored && mode === "standard";
   const { data, error, notFound, loading } = useHeatmapData(ticker, standardEnabled);
   const now = useNow();
+  const isMobile = useIsMobile();
 
   const cellMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -164,7 +166,17 @@ export function GexHeatmapView() {
           </span>
         </div>
 
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+        <div
+          style={{
+            marginLeft: "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            // Mobile: allow the freshness pill / mode toggle / picker to wrap
+            // instead of overflowing the title strip.
+            flexWrap: isMobile ? "wrap" : undefined,
+          }}
+        >
           {/* Freshness pill — Standard mode only; multi-mode shows per strip */}
           {fresh && (
             <span
@@ -222,7 +234,9 @@ export function GexHeatmapView() {
           margin: "0 14px 14px 14px",
           borderRadius: 10,
           border: "0.5px solid var(--color-border-tertiary)",
-          overflow: "hidden",
+          // Mobile: the strike × expiration grid pans horizontally (and
+          // vertically) inside this container instead of being crushed.
+          overflow: isMobile ? "auto" : "hidden",
           display: "flex",
           flexDirection: "column",
           minHeight: 0,
@@ -263,13 +277,16 @@ export function GexHeatmapView() {
         ) : !data ? null : (
           <table
             style={{
-              width: "100%",
-              height: "100%",
+              // Mobile: let columns take their natural width and pan inside
+              // the overflow-auto container above.
+              width: isMobile ? "max-content" : "100%",
+              minWidth: isMobile ? "100%" : undefined,
+              height: isMobile ? undefined : "100%",
               borderCollapse: "separate",
               borderSpacing: 0,
               fontSize: 10,
               fontVariantNumeric: "tabular-nums",
-              tableLayout: "fixed",
+              tableLayout: isMobile ? "auto" : "fixed",
             }}
           >
             <thead>
@@ -284,6 +301,8 @@ export function GexHeatmapView() {
                     background: "var(--color-background-primary)",
                     borderBottom: "0.5px solid var(--color-border-tertiary)",
                     width: 90,
+                    // Mobile: pin the header row and strike column while panning.
+                    ...(isMobile ? { position: "sticky" as const, top: 0, left: 0, zIndex: 3 } : null),
                   }}
                 >
                   Strike
@@ -300,6 +319,7 @@ export function GexHeatmapView() {
                       whiteSpace: "nowrap",
                       background: "var(--color-background-primary)",
                       borderBottom: "0.5px solid var(--color-border-tertiary)",
+                      ...(isMobile ? { position: "sticky" as const, top: 0, zIndex: 2 } : null),
                     }}
                   >
                     {exp.label}
@@ -314,12 +334,19 @@ export function GexHeatmapView() {
                   <tr key={strike}>
                     <td
                       style={{
-                        padding: "0 10px",
+                        padding: isMobile ? "4px 10px" : "0 10px",
                         color: isSpotRow ? COLOR_SPOT : "var(--color-text-primary)",
                         fontWeight: isSpotRow ? 600 : 500,
-                        background: isSpotRow ? "rgba(34, 211, 238, 0.07)" : "var(--color-background-primary)",
+                        // Mobile sticky column needs an opaque background so
+                        // panned cells don't show through the spot-row tint.
+                        background: isSpotRow
+                          ? isMobile
+                            ? "linear-gradient(rgba(34, 211, 238, 0.07), rgba(34, 211, 238, 0.07)), var(--color-background-primary)"
+                            : "rgba(34, 211, 238, 0.07)"
+                          : "var(--color-background-primary)",
                         whiteSpace: "nowrap",
                         borderTop: isSpotRow ? `1.5px dashed ${COLOR_SPOT}` : "0.5px solid rgba(255,255,255,0.03)",
+                        ...(isMobile ? { position: "sticky" as const, left: 0, zIndex: 1 } : null),
                       }}
                     >
                       {isSpotRow && <span style={{ marginRight: 3, fontSize: 8 }}>◀</span>}
@@ -346,7 +373,7 @@ export function GexHeatmapView() {
                         <td
                           key={exp.date}
                           style={{
-                            padding: "0 10px",
+                            padding: isMobile ? "4px 10px" : "0 10px",
                             textAlign: "right",
                             background: bg,
                             color: textColor,

@@ -16,7 +16,7 @@ const BORDER = "0.5px solid var(--color-border-tertiary)";
 export default function UserGuidePage() {
   return (
     <div className="flex-1 overflow-y-auto" style={{ background: "var(--color-background-tertiary)" }}>
-      <div style={{ maxWidth: 900, margin: "0 auto", padding: "22px 28px 80px" }}>
+      <div className="mx-auto max-w-[900px] pt-[22px] pb-[80px] px-[28px] max-md:px-4">
         {/* Hero */}
         <div style={{ background: "linear-gradient(160deg, var(--color-background-secondary), var(--color-background-primary))", border: BORDER, borderRadius: 16, padding: "24px 26px", marginBottom: 22 }}>
           <div style={{ fontSize: 24, fontWeight: 600, color: TP, marginBottom: 6 }}>Champagne Intelligence Operator’s Manual</div>
@@ -54,7 +54,7 @@ export default function UserGuidePage() {
           </Card>
           <Card>
             <H3>Color &amp; symbol legend</H3>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 20px" }}>
+            <div className="grid grid-cols-2 gap-x-5 gap-y-2 max-md:grid-cols-1">
               <Legend sw={BUY}>Bullish · bought-at-ask · calls · gains</Legend>
               <Legend sw={SELL}>Bearish · sold-at-bid · puts · losses</Legend>
               <Legend sw={GOLD}>Active tab / selected</Legend>
@@ -211,8 +211,8 @@ export default function UserGuidePage() {
 
         {/* Glossary */}
         <H2>Glossary</H2>
-        <div style={{ background: "var(--color-background-primary)", border: BORDER, borderRadius: 12, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <div style={{ background: "var(--color-background-primary)", border: BORDER, borderRadius: 12, overflow: "hidden", overflowX: "auto" }}>
+          <table style={{ width: "100%", minWidth: 480, borderCollapse: "collapse", fontSize: 13 }}>
             <tbody>
               {GLOSSARY.map(([term, def]) => (
                 <tr key={term} style={{ borderBottom: BORDER }}>
@@ -244,7 +244,9 @@ const GLOSSARY: [string, string][] = [
   ["Market pulse", "Net call-vs-put premium across the whole market — an aggregate risk-appetite gauge."],
 ];
 
-const grid2: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12 };
+// min(320px, 100%) keeps auto-fit from overflowing when the container is
+// narrower than 320px (small phones); identical to minmax(320px, 1fr) otherwise.
+const grid2: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))", gap: 12 };
 
 function H2({ children }: { children: React.ReactNode }) {
   return <div style={{ fontSize: 18, fontWeight: 600, color: TP, margin: "30px 0 12px", paddingTop: 12, borderTop: BORDER }}>{children}</div>;
@@ -282,7 +284,7 @@ function Legend({ sw, mono, children }: { sw?: string; mono?: string; children: 
 function Mod({ icon, title, route, one, tabs, children }: { icon: string; title: string; route: string; one?: string; tabs?: string[]; children: React.ReactNode }) {
   return (
     <div style={{ background: "var(--color-background-primary)", border: BORDER, borderRadius: 14, overflow: "hidden", margin: "16px 0" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "15px 18px", borderBottom: BORDER }}>
+      <div className="flex items-center gap-3 max-md:flex-wrap" style={{ padding: "15px 18px", borderBottom: BORDER }}>
         <div style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", fontSize: 17, background: "var(--color-background-secondary)", border: BORDER, flex: "none" }}>{icon}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div><b style={{ fontSize: 15, color: TP }}>{title}</b><span style={{ color: T3, fontSize: 12, marginLeft: 8, fontFamily: "ui-monospace, monospace" }}>{route}</span></div>

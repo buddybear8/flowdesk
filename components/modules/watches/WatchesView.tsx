@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { clsx } from "clsx";
 import type { HitListItem, HitListPayload } from "@/lib/types";
+import { useIsMobile } from "@/lib/use-mobile";
 
 function fmtP(v: number): string {
   const a = Math.abs(v);
@@ -35,11 +36,15 @@ type SortKey = "rank" | "prem" | "conf";
 
 export function WatchesView() {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [payload, setPayload] = useState<HitListPayload | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("rank");
   const [selRow, setSelRow] = useState<number | null>(0);
   const [selContract, setSelContract] = useState(0);
   const [panelOpen, setPanelOpen] = useState(true);
+  // Mobile-only: the detail renders as a full-screen overlay, opened by a row
+  // tap (never auto-opened, unlike the desktop side panel).
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   // null = latest session; a YYYY-MM-DD selects a prior day's hit list (30-day history).
   const [date, setDate] = useState<string | null>(null);
 
@@ -65,11 +70,12 @@ export function WatchesView() {
 
   const sfMax = Math.max(...payload.sectorFlow.map(s => Math.abs(s.netPremium)));
   const selected = selRow !== null ? hits[selRow] : null;
-  const showPanel = !!selected && panelOpen;
+  // Desktop only — on mobile the list is always full-width and the detail is an overlay.
+  const showPanel = !isMobile && !!selected && panelOpen;
 
   return (
     <div className="flex flex-1 overflow-hidden">
-      {/* LEFT PANEL — half the screen while the detail pane is open */}
+      {/* LEFT PANEL — half the screen while the detail pane is open (desktop) */}
       <div
         className={clsx(
           "flex flex-col overflow-hidden",
@@ -82,7 +88,7 @@ export function WatchesView() {
           className="px-[14px] py-[9px] bg-bg-primary flex-shrink-0"
           style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
         >
-          <div className="flex items-center gap-[9px] mb-[5px]">
+          <div className={clsx("flex items-center gap-[9px] mb-[5px]", isMobile && "flex-wrap")}>
             {payload.availableDates && payload.availableDates.length > 1 ? (
               <select
                 value={date ?? payload.availableDates[0]}
@@ -156,24 +162,34 @@ export function WatchesView() {
         <div className="flex-1 overflow-y-auto">
           <table className="w-full" style={{ borderCollapse: "collapse", tableLayout: "fixed" }}>
             <thead>
-              <tr>
-                <Th w={22}>#</Th>
-                <Th w={64}>Ticker</Th>
-                <Th w={42}>Score</Th>
-                <Th w={48}>Conf.</Th>
-                <Th w={68}>Premium</Th>
-                <Th w={96}>Contract</Th>
-                <Th w={124} center>Signals</Th>
-                <Th w={92} center>Open Trade Alert</Th>
-                <Th>Thesis</Th>
-                {!showPanel && <Th w={80}>Sector</Th>}
-              </tr>
+              {isMobile ? (
+                <tr>
+                  <Th w={26}>#</Th>
+                  <Th w={66}>Ticker</Th>
+                  <Th w={48}>Score</Th>
+                  <Th>Contract</Th>
+                  <Th w={54} center>Alert</Th>
+                </tr>
+              ) : (
+                <tr>
+                  <Th w={22}>#</Th>
+                  <Th w={64}>Ticker</Th>
+                  <Th w={42}>Score</Th>
+                  <Th w={48}>Conf.</Th>
+                  <Th w={68}>Premium</Th>
+                  <Th w={96}>Contract</Th>
+                  <Th w={124} center>Signals</Th>
+                  <Th w={92} center>Open Trade Alert</Th>
+                  <Th>Thesis</Th>
+                  {!showPanel && <Th w={80}>Sector</Th>}
+                </tr>
+              )}
             </thead>
             <tbody>
               {hits.map((h, i) => (
                 <tr
                   key={h.rank}
-                  onClick={() => { setSelRow(i); setSelContract(0); }}
+                  onClick={() => { setSelRow(i); setSelContract(0); if (isMobile) setMobileDetailOpen(true); }}
                   className="cursor-pointer"
                   style={{
                     borderBottom: "0.5px solid var(--color-border-tertiary)",
@@ -192,14 +208,20 @@ export function WatchesView() {
                     </span>
                   </Td>
                   <Td style={{ fontSize: 12, fontWeight: 600, color: "#C9A55A" }}>{h.score != null ? h.score.toFixed(1) : "—"}</Td>
-                  <Td>
-                    <ConfBadge conf={h.confidence} />
-                  </Td>
-                  <Td style={{ fontSize: 12, fontWeight: 500, color: contractType(h.contract) === "P" ? "#E76A6A" : contractType(h.contract) === "C" ? "#7FBF52" : "var(--color-text-primary)" }}>{fmtP(h.premium)}</Td>
-                  <Td style={{ fontSize: 11, fontWeight: 500, color: contractType(h.contract) === "P" ? "#E76A6A" : contractType(h.contract) === "C" ? "#7FBF52" : "var(--color-text-primary)" }}>{h.contract}</Td>
-                  <Td center>
-                    <SignalBadges hit={h} />
-                  </Td>
+                  {!isMobile && (
+                    <Td>
+                      <ConfBadge conf={h.confidence} />
+                    </Td>
+                  )}
+                  {!isMobile && (
+                    <Td style={{ fontSize: 12, fontWeight: 500, color: contractType(h.contract) === "P" ? "#E76A6A" : contractType(h.contract) === "C" ? "#7FBF52" : "var(--color-text-primary)" }}>{fmtP(h.premium)}</Td>
+                  )}
+                  <Td style={{ fontSize: 11, fontWeight: 500, color: contractType(h.contract) === "P" ? "#E76A6A" : contractType(h.contract) === "C" ? "#7FBF52" : "var(--color-text-primary)", ...(isMobile ? { overflow: "hidden", textOverflow: "ellipsis" } : undefined) }}>{h.contract}</Td>
+                  {!isMobile && (
+                    <Td center>
+                      <SignalBadges hit={h} />
+                    </Td>
+                  )}
                   <Td center>
                     {h.openAlerts && h.openAlerts.length > 0 ? (
                       <button
@@ -214,13 +236,15 @@ export function WatchesView() {
                       <span style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>—</span>
                     )}
                   </Td>
-                  <td
-                    title={h.thesis}
-                    style={{ padding: "6px 10px", verticalAlign: "middle", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 0, fontSize: 11, color: "var(--color-text-secondary)" }}
-                  >
-                    {h.thesis}
-                  </td>
-                  {!showPanel && (
+                  {!isMobile && (
+                    <td
+                      title={h.thesis}
+                      style={{ padding: "6px 10px", verticalAlign: "middle", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 0, fontSize: 11, color: "var(--color-text-secondary)" }}
+                    >
+                      {h.thesis}
+                    </td>
+                  )}
+                  {!isMobile && !showPanel && (
                     <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)", overflow: "hidden", textOverflow: "ellipsis" }}>{h.sector}</Td>
                   )}
                 </tr>
@@ -270,7 +294,7 @@ export function WatchesView() {
         </div>
       </div>
 
-      {/* RIGHT DETAIL PANEL (minimizable) */}
+      {/* RIGHT DETAIL PANEL (minimizable, desktop) */}
       {showPanel && selected && (
         <DetailPanel
           hit={selected}
@@ -280,7 +304,18 @@ export function WatchesView() {
           onMinimize={() => setPanelOpen(false)}
         />
       )}
-      {selected && !panelOpen && (
+      {/* MOBILE DETAIL — full-screen overlay with its own scroll */}
+      {isMobile && mobileDetailOpen && selected && (
+        <DetailPanel
+          hit={selected}
+          selectedContractIdx={selContract}
+          onSelectContract={setSelContract}
+          onReturn={() => setMobileDetailOpen(false)}
+          onMinimize={() => setMobileDetailOpen(false)}
+          mobile
+        />
+      )}
+      {!isMobile && selected && !panelOpen && (
         <button
           onClick={() => setPanelOpen(true)}
           title={`Expand ${selected.ticker} detail`}
@@ -301,16 +336,24 @@ function DetailPanel({
   onSelectContract,
   onReturn,
   onMinimize,
+  mobile,
 }: {
   hit: HitListItem;
   selectedContractIdx: number;
   onSelectContract: (i: number) => void;
   onReturn: () => void;
   onMinimize: () => void;
+  mobile?: boolean;
 }) {
   const router = useRouter();
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-bg-primary">
+    <div
+      className={clsx(
+        "flex flex-col overflow-hidden bg-bg-primary",
+        mobile ? "fixed inset-0" : "flex-1"
+      )}
+      style={mobile ? { zIndex: 90 } : undefined}
+    >
       <div
         className="flex items-center justify-between px-[14px] py-[7px] flex-shrink-0"
         style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
@@ -318,18 +361,20 @@ function DetailPanel({
         <button
           onClick={onReturn}
           className="cursor-pointer text-[11px] text-text-secondary hover:text-text-primary"
-          style={{ background: "transparent", border: "none", padding: 0 }}
+          style={{ background: "transparent", border: "none", padding: mobile ? "6px 0" : 0 }}
         >
-          ↩ Return to overview
+          {mobile ? "← Back to list" : "↩ Return to overview"}
         </button>
-        <button
-          onClick={onMinimize}
-          title="Minimize panel"
-          className="cursor-pointer text-[11px] text-text-secondary hover:text-text-primary"
-          style={{ background: "transparent", border: "none", padding: 0 }}
-        >
-          Minimize »
-        </button>
+        {!mobile && (
+          <button
+            onClick={onMinimize}
+            title="Minimize panel"
+            className="cursor-pointer text-[11px] text-text-secondary hover:text-text-primary"
+            style={{ background: "transparent", border: "none", padding: 0 }}
+          >
+            Minimize »
+          </button>
+        )}
       </div>
 
       <div className="px-[14px] py-[12px] flex-shrink-0" style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
@@ -476,10 +521,11 @@ function DetailPanel({
           </div>
         )}
 
-        {/* Contracts table */}
+        {/* Contracts table — horizontally scrollable on mobile so 5 columns fit 390px */}
         <div style={{ marginBottom: 14 }}>
           <SectionLabel>Contracts</SectionLabel>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+          <div style={mobile ? { overflowX: "auto", WebkitOverflowScrolling: "touch" } : undefined}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: mobile ? 420 : undefined }}>
             <thead>
               <tr>
                 {["Strike", "Expiry", "Premium", "Rule", "V/OI"].map((h, i) => (
@@ -521,6 +567,7 @@ function DetailPanel({
               ))}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* Dark pool confluence */}

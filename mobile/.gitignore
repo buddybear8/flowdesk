@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# iOS
+ios/Pods/
+ios/App/build/
+ios/App/output/
+ios/DerivedData/
+*.xcuserstate
+
+# Android
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/.idea/
+android/app/release/
+
+# Capacitor
+.capacitor/
+
+# Build outputs
+www/dist/
+dist/
+build/
+
+# Misc
+.DS_Store
+*.log

@@ -17,6 +17,7 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { sendPushToAll } from "../lib/push.js";
 
 export { disconnectPrisma } from "../lib/prisma.js";
 
@@ -365,13 +366,58 @@ async function repriceStandingOpen(sinceMs: number): Promise<void> {
   }
 }
 
+// ── Push notification for genuinely new positions ────────────────────────────
+
+// Contract-ish one-liner for the push body, e.g. "$150C 7/18 @ $2.35 —
+// ModName (Medium)" for options or "NVDA LONG @ $118.42 — ModName (Small)"
+// for equities. Mirrors the label style /api/watches builds for open alerts.
+function pushSummary(p: Position): string {
+  const contract = p.strike != null
+    ? `$${p.strike}${p.side === "PUT" ? "P" : "C"}${p.expiryLabel ? ` ${p.expiryLabel}` : ""}`
+    : `${p.ticker} ${p.side}`;
+  return `${contract} @ $${p.entryPrice} — ${p.moderator} (${p.sizeLabel})`;
+}
+
 // ── Entry point ──────────────────────────────────────────────────────────────
 
+// Only push for positions whose OPEN is this recent. The job re-derives 30
+// days of history on every run, so "not in the table yet" alone is NOT
+// "just happened" — a fresh DB, a truncated table, a new channel, or a
+// parser improvement would otherwise blast stale alerts for the whole
+// lookback window. One hour comfortably covers the 5-min poll cadence plus
+// short worker downtime without ever notifying about old positions.
+const PUSH_RECENCY_MS = 60 * 60 * 1000;
+
+// In-flight guard: the market-hours and settle crons can overlap (both fire
+// at 16:30), and a long run can outlast the 5-min cadence. Two concurrent
+// runs would each snapshot knownIds before the other upserts and double-push
+// every new position, so overlapping ticks are skipped instead.
+let pollInFlight = false;
+
 export async function pollTradeAlerts(lookbackDays: number = REDERIVE_DAYS): Promise<void> {
+  if (pollInFlight) {
+    console.log("[trade-alerts] previous run still in flight — skipping this tick");
+    return;
+  }
+  pollInFlight = true;
+  try {
+    await pollTradeAlertsInner(lookbackDays);
+  } finally {
+    pollInFlight = false;
+  }
+}
+
+async function pollTradeAlertsInner(lookbackDays: number): Promise<void> {
   const chans = channels();
   if (!chans.length) { console.error("[trade-alerts] no channels configured (DISCORD_*_CHANNEL_ID)"); return; }
   const sinceMs = Date.now() - lookbackDays * 86400000;
   let upserts = 0;
+
+  // Snapshot the openMessageIds already in the table BEFORE upserting so we
+  // can tell genuinely NEW positions (first time we see this open message)
+  // apart from the re-derives this job does on every run.
+  const existingRows = await prisma.tradeAlert.findMany({ select: { openMessageId: true } });
+  const knownIds = new Set(existingRows.map((r) => r.openMessageId));
 
   for (const ch of chans) {
     const msgs = await fetchRecentMessages(ch.id, sinceMs);
@@ -380,7 +426,22 @@ export async function pollTradeAlerts(lookbackDays: number = REDERIVE_DAYS): Pro
     const positions = buildPositions(events);
     for (const p of positions) {
       await priceAndSettle(p);
-      try { await upsertPosition(p); upserts++; } catch (err) {
+      const isNew = !knownIds.has(p.openMessageId);
+      try {
+        await upsertPosition(p); upserts++;
+        if (isNew) {
+          knownIds.add(p.openMessageId);
+          // Push only for positions that are genuinely fresh: still OPEN and
+          // opened within PUSH_RECENCY_MS. Rederives/backfills (fresh env,
+          // restored table, new channel) insert rows without notifying.
+          const isFresh = p.status === "OPEN" && Date.now() - p.entryAt.getTime() <= PUSH_RECENCY_MS;
+          if (isFresh) {
+            // Fire-and-forget — a push failure must never break ingestion,
+            // and sendPushToAll no-ops when FCM_SERVICE_ACCOUNT_JSON is unset.
+            sendPushToAll(`New trade alert: ${p.ticker}`, pushSummary(p)).catch(console.error);
+          }
+        }
+      } catch (err) {
         console.error(`[trade-alerts] upsert ${p.ticker} failed:`, err instanceof Error ? err.message : err);
       }
       await sleep(120);

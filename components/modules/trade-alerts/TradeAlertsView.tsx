@@ -14,6 +14,7 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 import type { TradeAlertsPayload, TradeAlertRow } from "@/lib/types";
+import { useIsMobile } from "@/lib/use-mobile";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler);
 
@@ -135,8 +136,15 @@ function buildCols(live: boolean): AlertCol[] {
   ];
 }
 
+// Columns kept on mobile (<768px): CONTRACT / LIVE P&L (or RESULT) / REALIZED / ALERTED BY.
+const MOBILE_COL_KEYS = new Set(["contract", "result", "realized", "alertedBy"]);
+
 function AlertsTable({ rows, live }: { rows: TradeAlertRow[]; live: boolean }) {
-  const cols = useMemo(() => buildCols(live), [live]);
+  const isMobile = useIsMobile();
+  const cols = useMemo(() => {
+    const all = buildCols(live);
+    return isMobile ? all.filter((c) => MOBILE_COL_KEYS.has(c.key)) : all;
+  }, [live, isMobile]);
   // Own sort state per table instance — sorting Open Now never touches Track
   // record, and vice versa. `null` keeps the server order (entry, most recent).
   const [sort, setSort] = useState<{ key: string; dir: SortDir } | null>(null);
@@ -184,27 +192,48 @@ function AlertsTable({ rows, live }: { rows: TradeAlertRow[]; live: boolean }) {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((r) => {
-            const result = live ? r.livePct : (r.realizedPct ?? r.livePct);
-            return (
-              <tr key={r.id} style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
-                <Td left><span style={{ color: r.side === "PUT" ? LOSS : GAIN, fontWeight: 600 }}>{contractLabel(r)}</span></Td>
-                <Td>{fmtDate(r.entryAt)}</Td>
-                <Td>{r.expiryLabel ? `${r.expiryLabel}${r.dte != null ? ` · ${r.dte}d` : ""}` : "—"}</Td>
-                <Td><SizePill size={r.sizeLabel} /></Td>
-                <Td><Remaining frac={r.remainingFrac} /></Td>
-                <Td>{r.entryPrice.toFixed(2)}</Td>
-                <Td>{r.lastMark != null ? r.lastMark.toFixed(2) : "—"}</Td>
-                <Td bold color={col(result)}>{pct(result)}</Td>
-                <Td color={col(r.realizedPct)}>{pct(r.realizedPct)}</Td>
-                <Td left><span style={{ color: "var(--color-text-secondary)" }}>{r.moderator}</span></Td>
-              </tr>
-            );
-          })}
+          {sorted.map((r) => (
+            <tr key={r.id} style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
+              {cols.map((c) => (
+                <AlertCell key={c.key} colKey={c.key} r={r} live={live} />
+              ))}
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
   );
+}
+
+// One body cell per column key — same markup as before, but keyed so the row
+// can render only the columns visible at the current breakpoint.
+function AlertCell({ colKey, r, live }: { colKey: string; r: TradeAlertRow; live: boolean }) {
+  switch (colKey) {
+    case "contract":
+      return <Td left><span style={{ color: r.side === "PUT" ? LOSS : GAIN, fontWeight: 600 }}>{contractLabel(r)}</span></Td>;
+    case "alerted":
+      return <Td>{fmtDate(r.entryAt)}</Td>;
+    case "exp":
+      return <Td>{r.expiryLabel ? `${r.expiryLabel}${r.dte != null ? ` · ${r.dte}d` : ""}` : "—"}</Td>;
+    case "size":
+      return <Td><SizePill size={r.sizeLabel} /></Td>;
+    case "remaining":
+      return <Td><Remaining frac={r.remainingFrac} /></Td>;
+    case "entry":
+      return <Td>{r.entryPrice.toFixed(2)}</Td>;
+    case "mark":
+      return <Td>{r.lastMark != null ? r.lastMark.toFixed(2) : "—"}</Td>;
+    case "result": {
+      const result = live ? r.livePct : (r.realizedPct ?? r.livePct);
+      return <Td bold color={col(result)}>{pct(result)}</Td>;
+    }
+    case "realized":
+      return <Td color={col(r.realizedPct)}>{pct(r.realizedPct)}</Td>;
+    case "alertedBy":
+      return <Td left><span style={{ color: "var(--color-text-secondary)" }}>{r.moderator}</span></Td>;
+    default:
+      return null;
+  }
 }
 
 function Td({ children, left, bold, color }: { children: React.ReactNode; left?: boolean; bold?: boolean; color?: string }) {

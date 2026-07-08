@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { clsx } from "clsx";
 import type { DarkPoolPrint } from "@/lib/types";
 import { TRACKED_TICKERS } from "@/lib/tracked-tickers";
+import { useIsMobile } from "@/lib/use-mobile";
 
 type DPFilter = {
   onlyRanked: boolean;
@@ -57,6 +59,7 @@ function formatTime(iso: string): string {
 }
 
 export function DarkpoolView() {
+  const isMobile = useIsMobile();
   const [prints, setPrints] = useState<DarkPoolPrint[]>([]);
   const [filter, setFilter] = useState<DPFilter>(INITIAL);
   const [sortKey, setSortKey] = useState<SortKey>("time");
@@ -99,11 +102,20 @@ export function DarkpoolView() {
   const bestRank = rows.length ? Math.min(...rows.map(r => r.all_time_rank)) : "-";
 
   return (
-    <div className="flex flex-1 overflow-hidden">
-      {/* FILTER PANEL */}
+    // Mobile (<768px): single vertical page scroll; filter panel stacks below
+    // the feed; the table pans horizontally in its own container.
+    <div className={clsx("flex flex-1", isMobile ? "flex-col overflow-y-auto" : "overflow-hidden")}>
+      {/* FILTER PANEL (stacks below the feed on mobile) */}
       <aside
-        className="flex w-[210px] flex-shrink-0 flex-col overflow-hidden bg-bg-primary"
-        style={{ borderRight: "0.5px solid var(--color-border-tertiary)" }}
+        className={clsx(
+          "flex flex-shrink-0 flex-col bg-bg-primary",
+          isMobile ? "w-full order-2" : "w-[210px] overflow-hidden"
+        )}
+        style={
+          isMobile
+            ? { borderTop: "0.5px solid var(--color-border-tertiary)" }
+            : { borderRight: "0.5px solid var(--color-border-tertiary)" }
+        }
       >
         <div
           className="flex items-center justify-between px-[12px] py-[9px] flex-shrink-0"
@@ -119,7 +131,7 @@ export function DarkpoolView() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-[12px] py-[10px]">
+        <div className={clsx("px-[12px] py-[10px]", !isMobile && "flex-1 overflow-y-auto")}>
           <div className="mb-[12px]">
             <FpLabel>Ranking</FpLabel>
             <Tog
@@ -145,7 +157,7 @@ export function DarkpoolView() {
       </aside>
 
       {/* FEED AREA */}
-      <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
+      <div className={clsx("flex flex-col min-w-0", isMobile ? "order-1" : "flex-1 overflow-hidden")}>
         <div
           className="flex items-center flex-wrap px-[12px] py-[7px] flex-shrink-0 bg-bg-primary"
           style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
@@ -156,7 +168,10 @@ export function DarkpoolView() {
         </div>
 
         <div
-          className="flex items-center gap-[7px] px-[12px] py-[6px] bg-bg-primary flex-shrink-0"
+          className={clsx(
+            "flex items-center gap-[7px] px-[12px] py-[6px] bg-bg-primary flex-shrink-0",
+            isMobile && "flex-wrap"
+          )}
           style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
         >
           <div className="flex items-center gap-[5px]" style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
@@ -204,8 +219,9 @@ export function DarkpoolView() {
           </select>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        {/* Table — pans horizontally on mobile (Time column is wide) */}
+        <div className={isMobile ? "overflow-x-auto" : "flex-1 overflow-y-auto"}>
+          <table style={{ width: "100%", minWidth: isMobile ? 640 : undefined, borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 <Th>Time</Th><Th>Ticker</Th><Th>Price</Th><Th>Size</Th><Th>Premium</Th><Th center>Trade rank</Th>

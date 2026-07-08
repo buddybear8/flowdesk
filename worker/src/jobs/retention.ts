@@ -124,3 +124,27 @@ export async function runWatchesRetentionSweep(): Promise<void> {
     console.error("[retention:watches] failed:", err instanceof Error ? err.message : err);
   }
 }
+
+// ─── Push devices: 30-day staleness window on lastSeenAt ─────────────────────
+//
+// The native shell re-registers its token on every app launch (bumping
+// lastSeenAt via @updatedAt), so a device not seen for 30 days means the
+// user stopped opening the app — or can no longer sign in (lapsed Whop
+// subscription: /api/push/register sits behind the auth proxy, so their
+// re-registrations 401 and lastSeenAt goes stale). This sweep is what
+// eventually revokes push delivery for lapsed accounts; FCM-level pruning
+// in lib/push.ts only covers tokens FCM itself reports dead/invalid.
+
+export async function runPushDeviceRetentionSweep(): Promise<void> {
+  try {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const result = await prisma.pushDevice.deleteMany({
+      where: { lastSeenAt: { lt: cutoff } },
+    });
+    console.log(
+      `[retention:push-devices] ${ts()} deleted ${result.count} device tokens not seen since ${cutoff.toISOString()}`
+    );
+  } catch (err) {
+    console.error("[retention:push-devices] failed:", err instanceof Error ? err.message : err);
+  }
+}

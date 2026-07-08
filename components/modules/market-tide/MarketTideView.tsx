@@ -77,8 +77,8 @@ export function MarketTideView() {
 
       {/* Stats strip */}
       <div
-        className="grid gap-[10px]"
-        style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))", marginBottom: 12 }}
+        className="grid gap-[10px] grid-cols-3 max-md:grid-cols-2"
+        style={{ marginBottom: 12 }}
       >
         <Mc label="Volume (5-min bucket)" value={noTide ? "—" : fmtVol(data.tide.volumeCurrent)} sub="rolling" subColor="var(--color-text-secondary)" />
         <Mc label="Net call premium" value={noTide ? "—" : fmtPrem(data.tide.netCallPremiumCurrent)} valueColor="#7FBF52" sub="cumulative today" subColor="#7FBF52" />

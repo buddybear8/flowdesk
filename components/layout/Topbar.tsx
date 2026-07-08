@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { MobileNavDrawer } from "@/components/layout/MobileNavDrawer";
 
 // Regular US equity session, ET. DST is handled automatically because we
 // derive ET wallclock via Intl with timeZone="America/New_York".
@@ -55,21 +56,42 @@ export function Topbar() {
     return () => clearInterval(id);
   }, []);
 
+  // Mobile-only nav drawer (<768px). The hamburger is hidden at md+ so the
+  // desktop Topbar renders exactly as before.
+  const [navOpen, setNavOpen] = useState(false);
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
+
   return (
     <header
       className="flex h-11 items-center gap-[10px] bg-bg-primary px-[14px] flex-shrink-0"
       style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
     >
-      <div className="flex items-center gap-[5px] text-[12px]">
-        <span className="text-text-secondary">{mod.label}</span>
+      <button
+        type="button"
+        aria-label="Open navigation"
+        onClick={() => setNavOpen(true)}
+        // box-content + p + negative margins: 28px visual square with a 40px
+        // touch target, occupying the same layout space (button is md:hidden,
+        // so desktop is untouched).
+        className="md:hidden box-content p-[6px] -my-[6px] -mr-[6px] -ml-[10px] flex h-[28px] w-[28px] flex-shrink-0 items-center justify-center rounded-md text-text-secondary hover:bg-bg-secondary"
+      >
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+          <path d="M2 3.75h11M2 7.5h11M2 11.25h11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        </svg>
+      </button>
+      <MobileNavDrawer open={navOpen} onClose={() => setNavOpen(false)} />
+      <div className="flex items-center gap-[5px] text-[12px] max-md:min-w-0 max-md:overflow-hidden">
+        <span className="text-text-secondary max-md:truncate">{mod.label}</span>
         {mod.tabs.length > 0 && (
           <>
             <span className="text-text-tertiary">/</span>
-            <span className="font-medium text-text-primary">{subLabel}</span>
+            <span className="font-medium text-text-primary max-md:truncate">{subLabel}</span>
           </>
         )}
       </div>
-      <div className="ml-auto flex items-center gap-[7px]">
+      <div className="ml-auto flex items-center gap-[7px] max-md:flex-shrink-0">
         {key === "charts" && (
           <span
             className="text-[10px] font-medium rounded-full"

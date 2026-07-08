@@ -17,6 +17,7 @@ import { clsx } from "clsx";
 import type { GEXPayload } from "@/lib/types";
 import { formatUsd, pickStrikesCentered } from "@/lib/utils";
 import { useGexTicker } from "@/lib/use-gex-ticker";
+import { useIsMobile } from "@/lib/use-mobile";
 
 // Dollar gamma per 1% move is related to "gamma in shares" by:
 //   dollarGamma = gammaShares × spot² × 0.01
@@ -108,6 +109,7 @@ export function GexView() {
   const [showOI, setShowOI] = useState(true);
   const [strikeCount, setStrikeCount] = useState<StrikeCount>("25");
   const [data, setData] = useState<GEXPayload | null>(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (!restored) return; // wait until the persisted ticker is applied
@@ -168,7 +170,13 @@ export function GexView() {
       </div>
 
       {/* 5 metric cards */}
-      <div className="grid gap-[8px]" style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))", marginBottom: 12 }}>
+      <div
+        className="grid gap-[8px]"
+        style={{
+          gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(5, minmax(0, 1fr))",
+          marginBottom: 12,
+        }}
+      >
         <Mc label="Net GEX (OI)" value={netGexOiUsd} valueColor={pos ? "#7FBF52" : "#E76A6A"} sub={`${pos ? "Positive" : "Negative"} regime`} subColor={pos ? "#7FBF52" : "#E76A6A"} />
         <Mc label="Gamma flip" value={`$${data.keyLevels.gammaFlip.toLocaleString()}`} valueColor="#E2BF73" sub={`${Math.abs(data.keyLevels.spot - data.keyLevels.gammaFlip).toFixed(0)}pts ${data.keyLevels.spot > data.keyLevels.gammaFlip ? "below" : "above"} spot`} subColor="#E2BF73" />
         <Mc label="Call wall" value={`$${data.keyLevels.callWall.toLocaleString()}`} valueColor="#7FBF52" sub="Resistance" subColor="var(--color-text-secondary)" />
@@ -177,7 +185,11 @@ export function GexView() {
       </div>
 
       {/* Chart + details */}
-      <div className="grid gap-[12px]" style={{ gridTemplateColumns: "1fr 240px" }}>
+      {/* Mobile: single column — the Details card stacks below the chart. */}
+      <div
+        className="grid gap-[12px]"
+        style={{ gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "1fr 240px" }}
+      >
         <Card>
           <div className="flex flex-wrap items-start justify-between gap-[7px]" style={{ marginBottom: 10 }}>
             <div>
@@ -194,7 +206,7 @@ export function GexView() {
                   <SeriesButton active={showOI} onClick={() => { if (!(showDV || !showOI)) return; setShowOI(v => !v); }} activeClass="on-oi" color="#7F77DD" label="Open interest" />
                 </div>
               </div>
-              <div style={{ position: "relative", width: "100%", height: 340 }}>
+              <div style={{ position: "relative", width: "100%", height: isMobile ? "min(340px, 60vh)" : 340 }}>
                 <GexBarChart data={data} showDV={showDV} showOI={showOI} strikeCount={strikeCount} />
               </div>
             </Card>
@@ -262,7 +274,7 @@ export function GexView() {
 
 function StrikeCountToggle({ value, onChange }: { value: StrikeCount; onChange: (c: StrikeCount) => void }) {
   return (
-    <div className="inline-flex rounded-md bg-bg-secondary" style={{ padding: 2, gap: 1 }}>
+    <div className="inline-flex max-md:flex-wrap rounded-md bg-bg-secondary" style={{ padding: 2, gap: 1 }}>
       {(["5", "10", "15", "20", "25", "40", "50"] as StrikeCount[]).map(c => (
         <button
           key={c}

@@ -32,7 +32,12 @@ function FlowPageInner() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <TabBar tabs={TABS} activeId={activeId} onChange={() => {}} />
+      {/* Wrapper lets the sub-tabs pan horizontally on narrow (mobile)
+          viewports instead of overflowing; max-md gate keeps desktop free
+          of the extra scroll container (pixel-identical). */}
+      <div className="flex-shrink-0 max-md:overflow-x-auto">
+        <TabBar tabs={TABS} activeId={activeId} onChange={() => {}} />
+      </div>
       {activeId === "lottos" ? (
         <LottosView />
       ) : activeId === "sweep" ? (

@@ -25,7 +25,10 @@ function TradeAlertsPageInner() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <TabBar tabs={TABS} activeId={TABS[tabIdx]?.id ?? "options"} onChange={() => {}} />
+      {/* max-md wrapper: sub-tab bar scrolls horizontally instead of overflowing on mobile */}
+      <div className="flex-shrink-0 max-md:overflow-x-auto">
+        <TabBar tabs={TABS} activeId={TABS[tabIdx]?.id ?? "options"} onChange={() => {}} />
+      </div>
       <TradeAlertsView assetType={assetType} key={assetType} />
     </div>
   );

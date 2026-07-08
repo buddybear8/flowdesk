@@ -23,6 +23,7 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { sendPushToAll } from "../lib/push.js";
 
 const ts = () => new Date().toISOString();
 
@@ -238,7 +239,7 @@ export async function computeHitList(): Promise<void> {
       buildHitListRow(entry, i + 1, todayDate, allBySector, entry.dp, entry.signals, atrByTicker.get(entry.ticker) ?? null)
     );
 
-    await prisma.$transaction([
+    const [deleted] = await prisma.$transaction([
       prisma.hitListDaily.deleteMany({ where: { date: todayDate } }),
       prisma.hitListDaily.createMany({ data: newRows }),
     ]);
@@ -247,6 +248,18 @@ export async function computeHitList(): Promise<void> {
       `[hit-list-compute] ${ts()} wrote ${top.length} rows for ${todayET} ` +
         `(from ${alerts.length} alerts on ${priorDayET}, ${candidates.length} candidates, ${dpByTicker.size} with DP confluence)`
     );
+
+    // Fire-and-forget push — a push failure must never break the compute,
+    // and sendPushToAll no-ops when FCM_SERVICE_ACCOUNT_JSON is unset.
+    // Only announce when today's rows did NOT already exist: the job is
+    // deliberately re-runnable (manual runs, boot-time catch-up racing the
+    // 07:30 cron), and a same-day recompute must not re-broadcast.
+    if (top.length > 0 && deleted.count === 0) {
+      sendPushToAll(
+        "Daily Watches is live",
+        `Today's top ${top.length} confluence picks are ready`
+      ).catch(console.error);
+    }
   } catch (err) {
     console.error(
       "[hit-list-compute] failed:",

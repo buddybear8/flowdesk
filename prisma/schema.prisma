@@ -459,3 +459,21 @@ model VerificationToken {
 //   @@index([ticker])
 //   @@map("sentiment_snapshots")
 // }
+
+// ═══════════════════════════════════════════════════════════════
+// 6. 📱 Push notifications — registered FCM device tokens
+// ═══════════════════════════════════════════════════════════════
+
+// One row per device token registered via POST /api/push/register.
+// The worker fans push notifications out to every row (see
+// worker/src/lib/push.ts) and prunes tokens FCM reports as dead.
+model PushDevice {
+  id         BigInt   @id @default(autoincrement())
+  token      String   @unique
+  platform   String   @db.VarChar(10)
+  userId     String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  lastSeenAt DateTime @updatedAt @map("last_seen_at")
+
+  @@map("push_devices")
+}

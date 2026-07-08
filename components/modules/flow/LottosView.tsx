@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { clsx } from "clsx";
 import type { FlowAlert } from "@/lib/types";
 import { buildLottoMock } from "@/lib/mock/lotto-alerts";
+import { useIsMobile } from "@/lib/use-mobile";
 import { Badge, fmtP, SL, StatGroup, SV, Td, Th } from "./shared";
 
 type SortKey = "time" | "prem" | "size";
@@ -15,6 +17,7 @@ export function LottosView() {
   // ?mock=1 — opt-in preview mode for layout work without a live DB. Read once
   // on render; toggling the URL switches data source without a hard reload.
   const useMock = useSearchParams().get("mock") === "1";
+  const isMobile = useIsMobile();
 
   const [alerts, setAlerts] = useState<FlowAlert[]>([]);
   const [date, setDate] = useState<string>(() => todayET());
@@ -51,14 +54,23 @@ export function LottosView() {
   const totalPrem = rows.reduce((s, r) => s + r.premium, 0);
 
   return (
-    <div className="flex flex-1 overflow-hidden">
+    // Mobile (<768px): single vertical page scroll; preset panel stacks below
+    // the feed; the table pans horizontally in its own container.
+    <div className={clsx("flex flex-1", isMobile ? "flex-col overflow-y-auto" : "overflow-hidden")}>
       {/* LEFT SIDE — preset banner + only-user-facing knob (Exactly at ask). The
           actual filter set is intentionally NOT shown here; it's the product's
           secret-sauce criteria. Server-locked filters live in
           app/api/flow/lottos/route.ts. */}
       <aside
-        className="flex w-[210px] flex-shrink-0 flex-col overflow-hidden bg-bg-primary"
-        style={{ borderRight: "0.5px solid var(--color-border-tertiary)" }}
+        className={clsx(
+          "flex flex-shrink-0 flex-col bg-bg-primary",
+          isMobile ? "w-full order-2" : "w-[210px] overflow-hidden"
+        )}
+        style={
+          isMobile
+            ? { borderTop: "0.5px solid var(--color-border-tertiary)" }
+            : { borderRight: "0.5px solid var(--color-border-tertiary)" }
+        }
       >
         <div
           className="flex items-center justify-between px-[12px] py-[9px] flex-shrink-0"
@@ -78,7 +90,7 @@ export function LottosView() {
             {useMock ? "MOCK" : "LOCKED"}
           </span>
         </div>
-        <div className="flex-1 overflow-y-auto px-[12px] py-[10px]">
+        <div className={clsx("px-[12px] py-[10px]", !isMobile && "flex-1 overflow-y-auto")}>
           {/* Trading day */}
           <div className="mb-[12px]">
             <FpLabel>Trading day</FpLabel>
@@ -170,7 +182,7 @@ export function LottosView() {
       </aside>
 
       {/* FEED AREA */}
-      <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
+      <div className={clsx("flex flex-col min-w-0", isMobile ? "order-1" : "flex-1 overflow-hidden")}>
         {/* Stats bar */}
         <div
           className="flex items-center flex-wrap px-[12px] py-[7px] flex-shrink-0 bg-bg-primary"
@@ -200,7 +212,10 @@ export function LottosView() {
 
         {/* Toolbar */}
         <div
-          className="flex items-center gap-[7px] px-[12px] py-[6px] bg-bg-primary flex-shrink-0"
+          className={clsx(
+            "flex items-center gap-[7px] px-[12px] py-[6px] bg-bg-primary flex-shrink-0",
+            isMobile && "flex-wrap"
+          )}
           style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
         >
           <input
@@ -238,9 +253,10 @@ export function LottosView() {
           </select>
         </div>
 
-        {/* Table */}
-        <div className="flex-1 overflow-y-auto">
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        {/* Table — on mobile it pans horizontally inside this container; the
+            low-value Date/Rule columns are dropped there to keep it tighter. */}
+        <div className={isMobile ? "overflow-x-auto" : "flex-1 overflow-y-auto"}>
+          <table style={{ width: "100%", minWidth: isMobile ? 950 : undefined, borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 {[
@@ -259,9 +275,11 @@ export function LottosView() {
                   "Premium",
                   "Spot",
                   "Rule",
-                ].map((h) => (
-                  <Th key={h}>{h}</Th>
-                ))}
+                ]
+                  .filter((h) => !isMobile || (h !== "Date" && h !== "Rule"))
+                  .map((h) => (
+                    <Th key={h}>{h}</Th>
+                  ))}
               </tr>
             </thead>
             <tbody>
@@ -277,7 +295,9 @@ export function LottosView() {
                       cursor: "pointer",
                     }}
                   >
-                    <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{r.date}</Td>
+                    {!isMobile && (
+                      <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{r.date}</Td>
+                    )}
                     <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{r.time}</Td>
                     <Td style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-primary)" }}>
                       {r.ticker}
@@ -333,14 +353,16 @@ export function LottosView() {
                     <Td style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
                       ${r.spot.toFixed(2)}
                     </Td>
-                    <Td style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{r.rule}</Td>
+                    {!isMobile && (
+                      <Td style={{ fontSize: 10, color: "var(--color-text-secondary)" }}>{r.rule}</Td>
+                    )}
                   </tr>
                 );
               })}
               {!loading && rows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={15}
+                    colSpan={isMobile ? 13 : 15}
                     style={{
                       padding: "30px 12px",
                       textAlign: "center",

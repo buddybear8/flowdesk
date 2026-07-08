@@ -16,6 +16,7 @@ import {
 import { Bar } from "react-chartjs-2";
 import type { FlowSentimentPayload, SentimentMinute, SentimentStrike, SentimentLabel } from "@/lib/types";
 import { TRACKED_TICKERS } from "@/lib/tracked-tickers";
+import { useIsMobile } from "@/lib/use-mobile";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
@@ -237,6 +238,7 @@ const marginRatioPlugin: Plugin<"bar"> = {
 // ── component ────────────────────────────────────────────────────────────────
 
 export function FlowSentimentView() {
+  const isMobile = useIsMobile();
   const days = useMemo(() => recentWeekdays(6), []);
   const liveDate = days[0]!.date;
 
@@ -372,7 +374,7 @@ export function FlowSentimentView() {
       ) : (
         <>
           {/* Stat cards */}
-          <div className="grid gap-[8px]" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", marginBottom: 12 }}>
+          <div className="grid gap-[8px]" style={{ gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))", marginBottom: 12 }}>
             <Mc label="CALL VOL" value={fmt(current.callVol)} valueColor="#5AA9E6" />
             <Mc label="PUT VOL" value={fmt(current.putVol)} valueColor="#B98AE6" />
             <Mc label="C/P RATIO" value={current.cpRatio.toFixed(2)} valueColor="#E2BF73" />
@@ -403,7 +405,7 @@ export function FlowSentimentView() {
           </Card>
 
           {/* Chart + summary boxes */}
-          <div className="grid gap-[12px]" style={{ gridTemplateColumns: "1fr 200px", marginTop: 12 }}>
+          <div className="grid gap-[12px]" style={{ gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "1fr 200px", marginTop: 12 }}>
             <Card>
               <div className="flex flex-wrap items-center justify-between gap-[7px]" style={{ marginBottom: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>
@@ -419,7 +421,7 @@ export function FlowSentimentView() {
               </div>
             </Card>
 
-            <div className="flex flex-col gap-[10px]">
+            <div className={isMobile ? "grid grid-cols-2 gap-[10px]" : "flex flex-col gap-[10px]"}>
               <SummaryBox title="CALLS" buy={summary.cBuy} sell={summary.cSell} ratio={summary.cRatio} count={displayed.length} />
               <SummaryBox title="PUTS" buy={summary.pBuy} sell={summary.pSell} ratio={summary.pRatio} count={displayed.length} />
             </div>

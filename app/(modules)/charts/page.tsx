@@ -8,6 +8,7 @@ import {
 } from "@/lib/candles";
 import { TRACKED_TICKERS } from "@/lib/tracked-tickers";
 import { TickerSearch } from "@/components/modules/charts/TickerSearch";
+import { useIsMobile } from "@/lib/use-mobile";
 
 // Chart wraps the imperative Lightweight Charts lib — client-only, no SSR.
 const TickerPriceChart = dynamic(
@@ -60,6 +61,7 @@ function usePolled<T>(url: string): { data: T | null; error: string | null; last
 }
 
 export default function ChartsPage() {
+  const isMobile = useIsMobile();
   const [ticker, setTicker] = useState<string>("SPY");
   const [tf, setTf] = useState<Timeframe>("1D");
 
@@ -91,7 +93,7 @@ export default function ChartsPage() {
   const loadError = candlesState.error && !candlesState.data;
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden" style={{ background: "var(--color-background-tertiary)" }}>
+    <div className="flex flex-1 flex-col overflow-hidden max-md:overflow-y-auto" style={{ background: "var(--color-background-tertiary)" }}>
       {/* ── header ── */}
       <div className="flex flex-wrap items-start gap-x-[18px] gap-y-[8px]" style={{ padding: "10px 14px 8px" }}>
         <div>
@@ -124,7 +126,7 @@ export default function ChartsPage() {
           </div>
         </div>
 
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ marginLeft: "auto", display: "flex", flexWrap: isMobile ? "wrap" : undefined, alignItems: "center", gap: 10 }}>
           <div style={{ display: "inline-flex", border: "0.5px solid var(--color-border-secondary)", borderRadius: 7, overflow: "hidden" }}>
             {TIMEFRAMES.map((t, i) => (
               <button key={t} onClick={() => setTf(t)}
@@ -172,7 +174,10 @@ export default function ChartsPage() {
 
       {/* ── chart card ── */}
       <div style={{
-        flex: 1, margin: "0 14px 14px", borderRadius: 10, position: "relative", minHeight: 0,
+        // Mobile: page scrolls (max-md:overflow-y-auto above), so the chart keeps a
+        // usable min height instead of being squeezed by wrapped controls.
+        flex: 1, margin: "0 14px 14px", borderRadius: 10, position: "relative",
+        minHeight: isMobile ? 340 : 0,
         border: "0.5px solid var(--color-border-tertiary)", overflow: "hidden",
         background: "var(--color-background-primary)",
       }}>

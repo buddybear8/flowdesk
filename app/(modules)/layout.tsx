@@ -5,6 +5,7 @@
 import { Suspense } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
+import { PushRegistration } from "@/components/native/PushRegistration";
 
 export default function ModulesLayout({
   children,
@@ -12,10 +13,17 @@ export default function ModulesLayout({
   children: React.ReactNode;
 }) {
   return (
+    // max-md:h-dvh — on mobile the shell tracks the DYNAMIC viewport height so
+    // the collapsing browser toolbar never hides the bottom of a module;
+    // h-screen (100vh) stays first as the fallback for older WebKit and is
+    // untouched at md+ (desktop pixel-identical).
     <div
-      className="flex h-screen w-screen overflow-hidden"
+      className="flex h-screen max-md:h-dvh w-screen overflow-hidden"
       style={{ background: "var(--color-background-tertiary)" }}
     >
+      {/* Registers the device for push when running inside the Capacitor
+          native shell; renders nothing and no-ops in a plain browser. */}
+      <PushRegistration />
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         <Suspense fallback={<div className="h-11 flex-shrink-0" />}>

@@ -55,7 +55,7 @@ export function MarketDashboardView() {
       </div>
 
       {/* Indices + mega caps */}
-      <div className="grid gap-[12px]" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", marginBottom: 12 }}>
+      <div className="grid gap-[12px]" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(380px, 100%), 1fr))", marginBottom: 12 }}>
         <Card>
           <SectionTitle>Major indices</SectionTitle>
           <SummaryTable rows={data.indices} />
@@ -67,7 +67,7 @@ export function MarketDashboardView() {
       </div>
 
       {/* Bullish / bearish leaders */}
-      <div className="grid gap-[12px]" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))" }}>
+      <div className="grid gap-[12px]" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(380px, 100%), 1fr))" }}>
         <Card>
           <SectionTitle count={data.topBullish.length} accent={BULL}>
             Top bullish sentiment <Thin>C/P &gt; {2.0}</Thin>

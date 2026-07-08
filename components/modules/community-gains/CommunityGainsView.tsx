@@ -215,8 +215,8 @@ export function CommunityGainsView() {
   }), [data]);
 
   return (
-    <div className="flex flex-1 flex-col overflow-auto p-6">
-      <header className="mb-4 flex items-baseline gap-4">
+    <div className="flex flex-1 flex-col overflow-auto p-6 max-md:p-4">
+      <header className="mb-4 flex items-baseline gap-4 max-md:flex-wrap max-md:gap-y-1">
         <h1 className="text-[22px] font-semibold" style={{ color: GOLD, letterSpacing: "0.01em" }}>
           Champagne Sessions Verified Community Gains
         </h1>
@@ -247,7 +247,7 @@ export function CommunityGainsView() {
 
       {data && (
         <>
-          <section className="mb-4 grid grid-cols-2 gap-3">
+          <section className="mb-4 grid grid-cols-2 gap-3 max-md:grid-cols-1">
             <StatCard
               label="Lifetime verified"
               value={formatMoney(data.lifetime_total)}
@@ -271,7 +271,7 @@ export function CommunityGainsView() {
               <div className="text-[12px]" style={{ color: TEXT_MUTED }}>Cumulative</div>
               <div className="text-[10px]" style={{ color: TEXT_MUTED }}>Hover for monthly details</div>
             </div>
-            <div style={{ height: 360 }}>
+            <div className="h-[360px] max-md:h-[260px]">
               {cumulativeChart && <Line data={cumulativeChart} options={cumulativeOptions} />}
             </div>
           </section>

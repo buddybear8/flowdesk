@@ -6,14 +6,14 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { clsx } from "clsx";
 
-type NavEntry = {
+export type NavEntry = {
   href: string;
   label: string;
   icon: string;
   badge?: { text: string; variant: "red" | "green" };
 };
 
-const MODULES: NavEntry[] = [
+export const MODULES: NavEntry[] = [
   { href: "/watches",     label: "Daily watches",     icon: "🔥",   badge: { text: "new", variant: "green" } },
   // Sentiment tracker — archived from V1 (PRD §7 archive banner). Route, page,
   // and component remain in the repo; un-comment this entry to re-enable.
@@ -27,11 +27,11 @@ const MODULES: NavEntry[] = [
   { href: "/darkpool",    label: "Dark pools",        icon: "🌊" },
 ];
 
-const COMMUNITY_PERFORMANCE: NavEntry[] = [
+export const COMMUNITY_PERFORMANCE: NavEntry[] = [
   { href: "/community-gains", label: "Community Gains", icon: "🍾" },
 ];
 
-const USER_GUIDE: NavEntry[] = [
+export const USER_GUIDE: NavEntry[] = [
   { href: "/user-guide", label: "Platform manual", icon: "📖" },
 ];
 
@@ -46,7 +46,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className="flex h-full w-[192px] flex-shrink-0 flex-col bg-bg-primary"
+      className="flex h-full w-[192px] flex-shrink-0 flex-col bg-bg-primary max-md:hidden"
       style={{ borderRight: "0.5px solid var(--color-border-tertiary)" }}
     >
       <div className="px-3 pt-3 pb-[10px]" style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
@@ -120,7 +120,7 @@ export function Sidebar() {
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+export function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="px-2 text-[9px] font-medium uppercase text-text-tertiary"
@@ -131,7 +131,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function NavRow({ entry, active }: { entry: NavEntry; active: boolean }) {
+export function NavRow({ entry, active }: { entry: NavEntry; active: boolean }) {
   return (
     <Link
       href={entry.href}
