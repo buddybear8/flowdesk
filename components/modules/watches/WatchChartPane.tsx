@@ -7,9 +7,10 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { TIMEFRAMES, type Timeframe, type CandlesResult } from "@/lib/candles";
+import { TIMEFRAMES, type Timeframe, type CandlesResult, type RankedTradesResult } from "@/lib/candles";
 import type { HitListItem } from "@/lib/types";
 import type { ExtraLevel } from "@/components/modules/charts/TickerPriceChart";
+import type { ChartOverlaysPayload } from "@/app/api/chart-overlays/route";
 
 const TickerPriceChart = dynamic(
   () => import("@/components/modules/charts/TickerPriceChart").then((m) => m.TickerPriceChart),
@@ -24,7 +25,7 @@ const TickerPriceChart = dynamic(
   },
 );
 
-const GOLD = "#E2BF73", PURPLE = "#B48EE0";
+const GOLD = "#E2BF73", PURPLE = "#B48EE0", GREEN = "#7FBF52", RED = "#E76A6A", BLUE = "#6AA8E7";
 // Hourly bars ≈ 7 per session — 30 bars ≈ the last week of trading.
 const HOURLY_ZOOM_BARS = 30;
 
@@ -33,6 +34,35 @@ export function WatchChartPane({ hit, onBack }: { hit: HitListItem; onBack: () =
   const [state, setState] = useState<{ data: CandlesResult | null; error: string | null; lastFetched: number }>({
     data: null, error: null, lastFetched: 0,
   });
+  const [showTargets, setShowTargets] = useState(true);
+  const [showGex, setShowGex] = useState(false);
+  const [showDp, setShowDp] = useState(false);
+  const [overlays, setOverlays] = useState<ChartOverlaysPayload | null>(null);
+  const [trades, setTrades] = useState<RankedTradesResult | null>(null);
+
+  // GEX levels / ranked dark-pool trades load lazily on first toggle.
+  useEffect(() => {
+    setOverlays(null);
+    setTrades(null);
+  }, [hit.ticker]);
+  useEffect(() => {
+    if (!showGex || overlays) return;
+    let cancelled = false;
+    fetch(`/api/chart-overlays?ticker=${hit.ticker}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (!cancelled && j) setOverlays(j as ChartOverlaysPayload); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [showGex, overlays, hit.ticker]);
+  useEffect(() => {
+    if (!showDp || trades) return;
+    let cancelled = false;
+    fetch(`/api/ranked-trades/${hit.ticker}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (!cancelled && j) setTrades(j as RankedTradesResult); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [showDp, trades, hit.ticker]);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,7 +86,7 @@ export function WatchChartPane({ hit, onBack }: { hit: HitListItem; onBack: () =
 
   // Direction-matched target ladder, same side the detail panel shows.
   const extraLevels: ExtraLevel[] = [];
-  if (hit.atrTargets) {
+  if (showTargets && hit.atrTargets) {
     const t = hit.atrTargets;
     const ladder = hit.direction === "UP" ? [t.up05, t.up1, t.up2] : [t.dn05, t.dn1, t.dn2];
     ladder.forEach((price, i) => {
@@ -64,6 +94,17 @@ export function WatchChartPane({ hit, onBack }: { hit: HitListItem; onBack: () =
         extraLevels.push({ price, title: `Target ${i + 1}`, color: PURPLE, style: "dashed" });
       }
     });
+  }
+  const gex = overlays?.gex ?? null;
+  if (showGex && gex) {
+    extraLevels.push(
+      { price: gex.callWall, title: "Call wall", color: GREEN, style: "solid" },
+      { price: gex.putWall, title: "Put wall", color: RED, style: "solid" },
+      { price: gex.gammaFlip, title: "Gamma flip", color: GOLD, style: "dashed" },
+      ...gex.nodes.map((n) => ({
+        price: n.price, title: `GEX #${n.rank}`, color: BLUE, style: "dotted" as const,
+      })),
+    );
   }
 
   return (
@@ -98,6 +139,21 @@ export function WatchChartPane({ hit, onBack }: { hit: HitListItem; onBack: () =
         </div>
       </div>
 
+      <div
+        className="flex items-center gap-[7px] px-[14px] py-[6px] flex-shrink-0"
+        style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}
+      >
+        <MiniToggle on={showTargets} label="Targets" onClick={() => setShowTargets((v) => !v)} />
+        <MiniToggle on={showGex} label="GEX levels" onClick={() => setShowGex((v) => !v)} />
+        <MiniToggle on={showDp} label="Dark pool trades" onClick={() => setShowDp((v) => !v)} />
+        {showGex && overlays && !gex && (
+          <span style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>no GEX data for {hit.ticker}</span>
+        )}
+        {showDp && trades && trades.trades.length === 0 && (
+          <span style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>no ranked trades for {hit.ticker}</span>
+        )}
+      </div>
+
       <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
         {state.error && !state.data ? (
           <div className="flex h-full items-center justify-center text-center" style={{ padding: 24 }}>
@@ -112,10 +168,10 @@ export function WatchChartPane({ hit, onBack }: { hit: HitListItem; onBack: () =
         ) : (
           <TickerPriceChart
             candles={candles}
-            trades={[]}
+            trades={showDp ? (trades?.trades ?? []) : []}
             intraday={tf === "1H"}
-            showBubbles={false}
-            bubbleRank={0}
+            showBubbles={showDp}
+            bubbleRank={20}
             showLevels={false}
             levelRank={0}
             levelSince={0}
@@ -127,5 +183,21 @@ export function WatchChartPane({ hit, onBack }: { hit: HitListItem; onBack: () =
         )}
       </div>
     </div>
+  );
+}
+
+function MiniToggle({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 9px", fontSize: 10.5,
+        fontWeight: 500, fontFamily: "inherit", borderRadius: 999, cursor: "pointer", userSelect: "none",
+        border: `0.5px solid ${on ? "rgba(226,191,115,.5)" : "var(--color-border-secondary)"}`,
+        background: on ? "rgba(226,191,115,.15)" : "var(--color-background-tertiary)",
+        color: on ? GOLD : "var(--color-text-secondary)",
+      }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: on ? GOLD : "var(--color-text-tertiary)" }} />
+      {label}
+    </button>
   );
 }
