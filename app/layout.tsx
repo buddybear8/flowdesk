@@ -31,10 +31,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       {/* max-md:overflow-x-hidden — mobile-only guard against body-level
           horizontal scroll; desktop (md+) body is untouched. */}
-      <body className="max-md:overflow-x-hidden">{children}</body>
+      <body className="max-md:overflow-x-hidden">
+        {/* Apply the saved theme before content paints (no flash). Kept as a
+            parser-blocking inline script on purpose; suppressHydrationWarning
+            on <html> covers the pre-React data-theme attribute. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              'try{var t=localStorage.getItem("cs-theme");if(t==="black"||t==="light")document.documentElement.dataset.theme=t;}catch(e){}',
+          }}
+        />
+        {children}
+      </body>
     </html>
   );
 }

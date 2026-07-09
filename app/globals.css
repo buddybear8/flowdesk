@@ -27,6 +27,51 @@
   --border-radius-xl: 16px;
 }
 
+/* ------------------------------------------------------------------------
+   Themes — [data-theme] on <html> overrides the token set. Default (no
+   attribute) = "blue", the original champagne-navy palette defined in :root
+   above. Persisted per user via localStorage("cs-theme"); applied before
+   first paint by the inline script in app/layout.tsx. Picker:
+   components/settings/AppearancePicker.tsx (Settings → Appearance).
+   ------------------------------------------------------------------------ */
+
+/* 🌑 Black — true-black surfaces, same warm text + accents (OLED-friendly). */
+:root[data-theme="black"] {
+  color-scheme: dark;
+  --color-background-primary: #101014;
+  --color-background-secondary: #1A1A20;
+  --color-background-tertiary: #000000;
+  --color-background-info: rgba(212, 171, 90, 0.16);
+
+  --color-text-primary: #ECECF1;
+  --color-text-secondary: #9C9CA8;
+  --color-text-tertiary: #6A6A76;
+  --color-text-info: #D4AB5A;
+
+  --color-border-tertiary: rgba(255, 255, 255, 0.09);
+  --color-border-secondary: rgba(255, 255, 255, 0.14);
+  --color-border-info: rgba(212, 171, 90, 0.5);
+}
+
+/* ☀️ Light — "champagne paper": warm cream page, white cards, darkened gold
+   for contrast. Semantic gain/loss hexes in components stay constant. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-background-primary: #FFFFFF;
+  --color-background-secondary: #EFEBE0;
+  --color-background-tertiary: #F5F3ED;
+  --color-background-info: rgba(160, 124, 51, 0.13);
+
+  --color-text-primary: #20293A;
+  --color-text-secondary: #59647A;
+  --color-text-tertiary: #8B94A6;
+  --color-text-info: #A07C33;
+
+  --color-border-tertiary: rgba(30, 30, 20, 0.10);
+  --color-border-secondary: rgba(30, 30, 20, 0.16);
+  --color-border-info: rgba(160, 124, 51, 0.5);
+}
+
 html, body {
   font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
   font-size: 12px;

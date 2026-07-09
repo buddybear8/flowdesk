@@ -1,4 +1,5 @@
 import { auth, signOut } from "@/lib/auth";
+import { AppearancePicker } from "@/components/settings/AppearancePicker";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -14,7 +15,7 @@ export default async function SettingsPage() {
           Settings
         </h1>
         <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2, marginBottom: 18 }}>
-          Account info and session controls. More settings coming soon.
+          Account info, appearance, and session controls.
         </p>
 
         <div
@@ -44,6 +45,16 @@ export default async function SettingsPage() {
               </>
             )}
           </dl>
+        </div>
+
+        <div
+          className="bg-bg-primary rounded-[12px]"
+          style={{ border: "0.5px solid var(--color-border-tertiary)", padding: 16, marginBottom: 12 }}
+        >
+          <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 10 }}>
+            Appearance
+          </div>
+          <AppearancePicker />
         </div>
 
         <div
