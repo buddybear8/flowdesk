@@ -11,6 +11,7 @@ import {
   fmtGex,
   cellKey,
   useHeatmapMetric,
+  useHeatmapHorizon,
   metricValue,
   COLOR_POS_TEXT,
   COLOR_NEG_TEXT,
@@ -27,6 +28,7 @@ export function GexHeatmapView() {
   const { ticker, setTicker, restored: tickerRestored } = useGexTicker(TICKERS, "SPY");
   const { mode, setMode, customTickers, setCustomTickers, restored: modeRestored } = useGexHeatmapMode(TICKERS);
   const { metric, setMetric } = useHeatmapMetric();
+  const { horizon, setHorizon } = useHeatmapHorizon();
   const METRIC_LABEL = metric === "vex" ? "VEX" : "GEX";
 
   // Standard mode owns its own data fetch (the existing single-ticker table
@@ -34,7 +36,7 @@ export function GexHeatmapView() {
   // strip. Disabling the fetch when not in Standard mode avoids a wasted
   // request for a hidden view.
   const standardEnabled = tickerRestored && modeRestored && mode === "standard";
-  const { data, error, notFound, loading } = useHeatmapData(ticker, standardEnabled);
+  const { data, error, notFound, loading } = useHeatmapData(ticker, standardEnabled, horizon);
   const now = useNow();
 
   const cellMap = useMemo(() => {
@@ -217,6 +219,28 @@ export function GexHeatmapView() {
             ))}
           </div>
 
+          {/* Horizon toggle — Near (closest expirations) vs Swing (next 5 weekly Fridays) */}
+          <div className="inline-flex rounded-md bg-bg-secondary" style={{ padding: 2, gap: 1 }}>
+            {(["near", "swing"] as const).map((h) => (
+              <button
+                key={h}
+                onClick={() => setHorizon(h)}
+                title={h === "swing" ? "Next 5 weekly (Friday) expirations — swing-trade horizon" : "Closest expirations, including dailies where the ticker has them"}
+                className="text-[10px] cursor-pointer"
+                style={{
+                  padding: "3px 9px",
+                  borderRadius: 5,
+                  background: horizon === h ? "var(--color-background-primary)" : "transparent",
+                  color: horizon === h ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+                  border: horizon === h ? "0.5px solid var(--color-border-tertiary)" : "0.5px solid transparent",
+                  fontWeight: horizon === h ? 600 : 400,
+                }}
+              >
+                {h === "swing" ? "Swing" : "Near"}
+              </button>
+            ))}
+          </div>
+
           {/* Mode toggle — always visible */}
           <HeatmapModeToggle mode={mode} onChange={setMode} />
 
@@ -264,7 +288,7 @@ export function GexHeatmapView() {
         }}
       >
         {mode !== "standard" ? (
-          <MultiHeatmapView tickers={multiTickers} metric={metric} />
+          <MultiHeatmapView tickers={multiTickers} metric={metric} horizon={horizon} />
         ) : loading && !data ? (
           <div className="flex flex-1 items-center justify-center text-text-tertiary text-[12px]">
             Loading heatmap…

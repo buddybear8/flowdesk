@@ -29,6 +29,10 @@ function fmtExpirationLabel(isoDate: string, dte: number): string {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const ticker = (searchParams.get("ticker") ?? "SPY").toUpperCase();
+  // horizon=swing → columns are the next weekly (Friday) expirations instead
+  // of the absolute nearest ones (which for daily-expiry tickers are all
+  // same-week). The worker stores nearest-7 ∪ next-5-Fridays per snapshot.
+  const horizon = searchParams.get("horizon") === "swing" ? "swing" : "near";
   if (!VALID_TICKERS.has(ticker)) {
     return NextResponse.json({ error: "Invalid ticker" }, { status: 400 });
   }
@@ -110,7 +114,11 @@ export async function GET(req: NextRequest) {
   //     5 columns instead of leaving the user with only 2–3.
   const MIN_CELLS_DENSE = 5;
   const MAX_EXPIRATIONS = 5;
-  const scored = cells.expirations
+  const isFriday = (d: string) => new Date(`${d}T12:00:00Z`).getUTCDay() === 5;
+  const expPool = horizon === "swing"
+    ? cells.expirations.filter((e) => isFriday(e.date))
+    : cells.expirations;
+  const scored = expPool
     .map((e) => {
       const populated = orderedStrikes.reduce(
         (n, s) => n + (s.byExp[e.date] ? 1 : 0),

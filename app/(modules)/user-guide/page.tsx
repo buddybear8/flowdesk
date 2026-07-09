@@ -114,7 +114,9 @@ export default function UserGuidePage() {
             <li><B>Heatmap</B> — a strike × expiration grid; scan across expirations to see where positioning concentrates.
               Top GEX nodes are highlighted in yellow and often act as major magnets when far away, and support/resistance
               when price reaches the node. A <B>GEX / VEX</B> toggle switches the grid to vanna exposure — where dealer
-              hedging shifts when implied volatility moves.</li>
+              hedging shifts when implied volatility moves. A <B>Near / Swing</B> toggle controls the columns: Near shows
+              the closest expirations (including dailies on the big index names), while Swing shows the next five weekly
+              Friday expirations for a multi-week view.</li>
             <li>Enter any ticker in the ticker box.</li>
           </Ul>
           <H4>Good to know</H4>

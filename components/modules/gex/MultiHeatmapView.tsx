@@ -15,6 +15,7 @@ import {
   pickCenteredStrikes,
   metricValue,
   type HeatmapMetric,
+  type HeatmapHorizon,
   COLOR_POS_TEXT,
   COLOR_NEG_TEXT,
   COLOR_MAX_ABS_BG,
@@ -24,7 +25,7 @@ import {
 
 const STRIKES_PER_STRIP = 25;
 
-export function MultiHeatmapView({ tickers, metric = "gex" }: { tickers: string[]; metric?: HeatmapMetric }) {
+export function MultiHeatmapView({ tickers, metric = "gex", horizon = "near" }: { tickers: string[]; metric?: HeatmapMetric; horizon?: HeatmapHorizon }) {
   if (tickers.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center" style={{ padding: 24 }}>
@@ -51,14 +52,14 @@ export function MultiHeatmapView({ tickers, metric = "gex" }: { tickers: string[
       }}
     >
       {tickers.map((t) => (
-        <TickerStrip key={t} ticker={t} metric={metric} />
+        <TickerStrip key={t} ticker={t} metric={metric} horizon={horizon} />
       ))}
     </div>
   );
 }
 
-function TickerStrip({ ticker, metric }: { ticker: string; metric: HeatmapMetric }) {
-  const { data, error, notFound, loading } = useHeatmapData(ticker, true);
+function TickerStrip({ ticker, metric, horizon }: { ticker: string; metric: HeatmapMetric; horizon: HeatmapHorizon }) {
+  const { data, error, notFound, loading } = useHeatmapData(ticker, true, horizon);
   const now = useNow();
 
   const strip = useMemo(() => {

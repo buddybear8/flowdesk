@@ -59,7 +59,27 @@ export type HeatmapState = {
   loading: boolean;
 };
 
-export function useHeatmapData(ticker: string, enabled: boolean): HeatmapState {
+export type HeatmapHorizon = "near" | "swing";
+const HORIZON_KEY = "gex-heatmap-horizon";
+
+// Persisted expiration horizon: "near" = closest expirations (default),
+// "swing" = next 5 weekly (Friday) expirations.
+export function useHeatmapHorizon(): { horizon: HeatmapHorizon; setHorizon: (h: HeatmapHorizon) => void } {
+  const [horizon, setHorizonState] = useState<HeatmapHorizon>("near");
+  useEffect(() => {
+    try {
+      const h = localStorage.getItem(HORIZON_KEY);
+      if (h === "swing" || h === "near") setHorizonState(h);
+    } catch { /* defaults */ }
+  }, []);
+  const setHorizon = (h: HeatmapHorizon) => {
+    setHorizonState(h);
+    try { localStorage.setItem(HORIZON_KEY, h); } catch { /* non-fatal */ }
+  };
+  return { horizon, setHorizon };
+}
+
+export function useHeatmapData(ticker: string, enabled: boolean, horizon: HeatmapHorizon = "near"): HeatmapState {
   const [state, setState] = useState<HeatmapState>({
     data: null,
     error: null,
@@ -74,7 +94,7 @@ export function useHeatmapData(ticker: string, enabled: boolean): HeatmapState {
 
     const fetchOnce = async () => {
       try {
-        const r = await fetch(`/api/gex/heatmap?ticker=${ticker}`, { cache: "no-store" });
+        const r = await fetch(`/api/gex/heatmap?ticker=${ticker}&horizon=${horizon}`, { cache: "no-store" });
         if (r.status === 404) {
           if (!cancelled) setState({ data: null, error: null, notFound: true, loading: false });
           return;
@@ -101,7 +121,7 @@ export function useHeatmapData(ticker: string, enabled: boolean): HeatmapState {
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [ticker, enabled]);
+  }, [ticker, enabled, horizon]);
 
   return state;
 }

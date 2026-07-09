@@ -623,17 +623,27 @@ export async function pollGex(): Promise<void> {
       // only chain for a given expiry); the margin lets the route still find
       // 5 good ones in that case. Was 10 — cut to 7 to halve heatmap call
       // volume after the 2026-05-19 daily-quota incident.
-      const nearest = expiryRows
+      const candidatesAll = expiryRows
         .map((r: any) => ({ date: String(r.expiry), dte: Number(r.dte) }))
         .filter((e: { date: string; dte: number }) => Number.isFinite(e.dte) && e.dte >= 0 && /^\d{4}-\d{2}-\d{2}$/.test(e.date))
-        .sort((a: { dte: number }, b: { dte: number }) => a.dte - b.dte)
-        .slice(0, 7);
+        .sort((a: { dte: number }, b: { dte: number }) => a.dte - b.dte);
+      const nearest = candidatesAll.slice(0, 7);
+      // Swing horizon: also fetch the next 5 FRIDAY (weekly) expirations so the
+      // Heatmap tab's "Swing" view has weekly columns for daily/MWF-expiry
+      // tickers (SPY's 7 nearest are all same-week otherwise). For
+      // Friday-only tickers this union is mostly the same set, so the extra
+      // fetch cost lands only on the big daily-expiry names (~1-2 extra pages).
+      const isFriday = (d: string) => new Date(`${d}T12:00:00Z`).getUTCDay() === 5;
+      const fridays = candidatesAll.filter((e: { date: string }) => isFriday(e.date)).slice(0, 5);
+      const byDate = new Map<string, { date: string; dte: number }>();
+      for (const e of [...nearest, ...fridays]) byDate.set(e.date, e);
+      const selected = [...byDate.values()].sort((a, b) => a.dte - b.dte);
 
-      if (nearest.length === 0) {
+      if (selected.length === 0) {
         console.warn(`[uw:gex-heatmap:${ticker}] no expirations from /greek-exposure/expiry`);
         throw new Error("no expirations");
       }
-      const expiryDates: string[] = nearest.map((e: { date: string }) => e.date);
+      const expiryDates: string[] = selected.map((e: { date: string }) => e.date);
       const expParam = expiryDates.map((d) => `expirations[]=${d}`).join("&");
 
       // UW's expiry-strike endpoint is per-ticker inconsistent and flips over
@@ -759,7 +769,7 @@ export async function pollGex(): Promise<void> {
         // Use the real dte from /greek-exposure/expiry; only include expiries
         // that /spot-exposures/expiry-strike actually returned rows for (the
         // two endpoints can disagree at the margins for thin chains).
-        const presentExpirations = nearest
+        const presentExpirations = selected
           .filter((e: { date: string }) => seenExpiries.has(e.date))
           .map((e: { date: string; dte: number }) => ({ date: e.date, dte: e.dte }));
 
