@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { clsx } from "clsx";
 import type { HitListItem, HitListPayload } from "@/lib/types";
 import { WatchChartPane } from "./WatchChartPane";
+import { WatchSentimentPane } from "./WatchSentimentPane";
+
+type PaneView = "list" | "chart" | "sentiment";
 
 function fmtP(v: number): string {
   const a = Math.abs(v);
@@ -41,7 +44,7 @@ export function WatchesView() {
   const [selRow, setSelRow] = useState<number | null>(0);
   const [selContract, setSelContract] = useState(0);
   const [panelOpen, setPanelOpen] = useState(true);
-  const [chartOpen, setChartOpen] = useState(false);
+  const [paneView, setPaneView] = useState<PaneView>("list");
   // null = latest session; a YYYY-MM-DD selects a prior day's hit list (30-day history).
   const [date, setDate] = useState<string | null>(null);
 
@@ -68,7 +71,7 @@ export function WatchesView() {
   const sfMax = Math.max(...payload.sectorFlow.map(s => Math.abs(s.netPremium)));
   const selected = selRow !== null ? hits[selRow] : null;
   const showPanel = !!selected && panelOpen;
-  const showChart = showPanel && chartOpen && !!selected;
+  const leftView: PaneView = showPanel && selected ? paneView : "list";
 
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -81,8 +84,10 @@ export function WatchesView() {
         )}
         style={{ borderRight: showPanel ? "0.5px solid var(--color-border-tertiary)" : "none" }}
       >
-        {showChart && selected ? (
-          <WatchChartPane hit={selected} onBack={() => setChartOpen(false)} />
+        {leftView === "chart" && selected ? (
+          <WatchChartPane hit={selected} onBack={() => setPaneView("list")} />
+        ) : leftView === "sentiment" && selected ? (
+          <WatchSentimentPane hit={selected} onBack={() => setPaneView("list")} />
         ) : (
           <>
         {/* Session header */}
@@ -286,10 +291,10 @@ export function WatchesView() {
           hit={selected}
           selectedContractIdx={selContract}
           onSelectContract={setSelContract}
-          onReturn={() => { setSelRow(null); setChartOpen(false); }}
+          onReturn={() => { setSelRow(null); setPaneView("list"); }}
           onMinimize={() => setPanelOpen(false)}
-          chartOpen={chartOpen}
-          onToggleChart={() => setChartOpen(v => !v)}
+          paneView={paneView}
+          onSetPane={setPaneView}
         />
       )}
       {selected && !panelOpen && (
@@ -307,22 +312,44 @@ export function WatchesView() {
   );
 }
 
+function PaneButton({ active, icon, label, title, onClick }: {
+  active: boolean; icon: string; label: string; title: string; onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={active ? "Return to the hit list" : title}
+      className="inline-flex items-center gap-[6px] font-medium rounded-md cursor-pointer"
+      style={{
+        fontSize: 12.5,
+        padding: "6px 14px",
+        fontFamily: "inherit",
+        background: active ? "rgba(226,191,115,.22)" : "rgba(226,191,115,.12)",
+        color: "#E2BF73",
+        border: `0.5px solid ${active ? "#E2BF73" : "rgba(226,191,115,.5)"}`,
+      }}
+    >
+      {icon} {label}
+    </button>
+  );
+}
+
 function DetailPanel({
   hit,
   selectedContractIdx,
   onSelectContract,
   onReturn,
   onMinimize,
-  chartOpen,
-  onToggleChart,
+  paneView,
+  onSetPane,
 }: {
   hit: HitListItem;
   selectedContractIdx: number;
   onSelectContract: (i: number) => void;
   onReturn: () => void;
   onMinimize: () => void;
-  chartOpen: boolean;
-  onToggleChart: () => void;
+  paneView: PaneView;
+  onSetPane: (v: PaneView) => void;
 }) {
   const router = useRouter();
   return (
@@ -369,21 +396,22 @@ function DetailPanel({
           >
             {hit.direction === "UP" ? "▲ Bullish" : "▼ Bearish"}
           </div>
-          <button
-            onClick={onToggleChart}
-            title={chartOpen ? "Return to the hit list" : "Open the price chart with the target ladder in the left pane"}
-            className="inline-flex items-center gap-[6px] font-medium rounded-md cursor-pointer"
-            style={{
-              fontSize: 12.5,
-              padding: "6px 18px",
-              fontFamily: "inherit",
-              background: chartOpen ? "rgba(226,191,115,.22)" : "rgba(226,191,115,.12)",
-              color: "#E2BF73",
-              border: `0.5px solid ${chartOpen ? "#E2BF73" : "rgba(226,191,115,.5)"}`,
-            }}
-          >
-            📈 {chartOpen ? "Hide chart" : "Chart"}
-          </button>
+          <div className="flex items-center gap-[7px]">
+            <PaneButton
+              active={paneView === "chart"}
+              icon="📈"
+              label="Chart"
+              title="Show the price chart with the target ladder in the left pane"
+              onClick={() => onSetPane(paneView === "chart" ? "list" : "chart")}
+            />
+            <PaneButton
+              active={paneView === "sentiment"}
+              icon="🎯"
+              label="Options sentiment"
+              title="Show the per-strike buy/sell sentiment dashboard in the left pane"
+              onClick={() => onSetPane(paneView === "sentiment" ? "list" : "sentiment")}
+            />
+          </div>
         </div>
         <div
           className="grid overflow-hidden"

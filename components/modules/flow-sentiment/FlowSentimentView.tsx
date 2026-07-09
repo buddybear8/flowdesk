@@ -236,14 +236,22 @@ const marginRatioPlugin: Plugin<"bar"> = {
 
 // ── component ────────────────────────────────────────────────────────────────
 
-export function FlowSentimentView() {
+// compact: half-width embed (Daily Watches deep dive) — hides the title row
+// and ticker input, tightens the grids. fixedTicker pins the ticker from the
+// host instead of the URL/input.
+export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: boolean; fixedTicker?: string } = {}) {
   const days = useMemo(() => recentWeekdays(6), []);
   const liveDate = days[0]!.date;
 
   // Seed the ticker from ?ticker= (set when a row is clicked on the Market
   // dashboard); fall back to SPY.
   const urlTicker = useSearchParams().get("ticker")?.toUpperCase();
-  const [ticker, setTicker] = useState(urlTicker && TICKER_RE.test(urlTicker) ? urlTicker : "SPY");
+  const [ticker, setTicker] = useState(
+    fixedTicker ?? (urlTicker && TICKER_RE.test(urlTicker) ? urlTicker : "SPY"),
+  );
+  useEffect(() => {
+    if (fixedTicker) setTicker(fixedTicker);
+  }, [fixedTicker]);
   const [date, setDate] = useState(liveDate);
   const [strikeCount, setStrikeCount] = useState<StrikeCount>("20");
   const [data, setData] = useState<FlowSentimentPayload | null>(null);
@@ -320,20 +328,22 @@ export function FlowSentimentView() {
   return (
     <div className="flex-1 overflow-y-auto p-[14px]" style={{ background: "var(--color-background-tertiary)" }}>
       {/* Title + ticker + day tabs */}
-      <div className="flex flex-wrap items-start justify-between gap-[8px]" style={{ marginBottom: 12 }}>
-        <div>
-          <div style={{ fontSize: 17, fontWeight: 500, color: "var(--color-text-primary)" }}>
-            Options sentiment — per-strike buy vs sell
+      {!compact && (
+        <div className="flex flex-wrap items-start justify-between gap-[8px]" style={{ marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 500, color: "var(--color-text-primary)" }}>
+              Options sentiment — per-strike buy vs sell
+            </div>
+            <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
+              Bought at ask <span style={{ color: BUY_COLOR }}>(green)</span> vs sold at bid{" "}
+              <span style={{ color: SELL_COLOR }}>(red)</span> · cumulative through the session
+            </div>
           </div>
-          <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
-            Bought at ask <span style={{ color: BUY_COLOR }}>(green)</span> vs sold at bid{" "}
-            <span style={{ color: SELL_COLOR }}>(red)</span> · cumulative through the session
+          <div className="flex flex-wrap items-center gap-[7px]">
+            <TickerInput value={ticker} onChange={setTicker} />
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-[7px]">
-          <TickerInput value={ticker} onChange={setTicker} />
-        </div>
-      </div>
+      )}
 
       {/* HISTORY day tabs */}
       <div className="flex flex-wrap items-center gap-[6px]" style={{ marginBottom: 12 }}>
@@ -372,7 +382,7 @@ export function FlowSentimentView() {
       ) : (
         <>
           {/* Stat cards */}
-          <div className="grid gap-[8px]" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))", marginBottom: 12 }}>
+          <div className="grid gap-[8px]" style={{ gridTemplateColumns: `repeat(${compact ? 2 : 4}, minmax(0, 1fr))`, marginBottom: 12 }}>
             <Mc label="CALL VOL" value={fmt(current.callVol)} valueColor="#5AA9E6" />
             <Mc label="PUT VOL" value={fmt(current.putVol)} valueColor="#B98AE6" />
             <Mc label="C/P RATIO" value={current.cpRatio.toFixed(2)} valueColor="#E2BF73" />
@@ -402,8 +412,9 @@ export function FlowSentimentView() {
             </div>
           </Card>
 
-          {/* Chart + summary boxes */}
-          <div className="grid gap-[12px]" style={{ gridTemplateColumns: "1fr 200px", marginTop: 12 }}>
+          {/* Chart + summary boxes — side column in full view, stacked below
+              the chart in the compact half-width embed */}
+          <div className="grid gap-[12px]" style={{ gridTemplateColumns: compact ? "1fr" : "1fr 200px", marginTop: 12 }}>
             <Card>
               <div className="flex flex-wrap items-center justify-between gap-[7px]" style={{ marginBottom: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>
@@ -419,7 +430,10 @@ export function FlowSentimentView() {
               </div>
             </Card>
 
-            <div className="flex flex-col gap-[10px]">
+            <div
+              className={compact ? "grid gap-[10px]" : "flex flex-col gap-[10px]"}
+              style={compact ? { gridTemplateColumns: "1fr 1fr" } : undefined}
+            >
               <SummaryBox title="CALLS" buy={summary.cBuy} sell={summary.cSell} ratio={summary.cRatio} count={displayed.length} />
               <SummaryBox title="PUTS" buy={summary.pBuy} sell={summary.pSell} ratio={summary.pRatio} count={displayed.length} />
             </div>
