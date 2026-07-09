@@ -13,7 +13,7 @@ const VALID_TICKERS = new Set([
 // DB cells JSON shape — written by pollGex in worker/src/jobs/uw.ts.
 type StoredCells = {
   expirations: { date: string; dte: number }[];
-  strikes: { strike: number; byExp: Record<string, { netOI: number; netDV: number }> }[];
+  strikes: { strike: number; byExp: Record<string, { netOI: number; netDV: number; vOI?: number; vDV?: number }> }[];
 };
 
 function fmtExpirationLabel(isoDate: string, dte: number): string {
@@ -136,7 +136,13 @@ export async function GET(req: NextRequest) {
     for (const exp of expirations) {
       const v = s.byExp[exp.date];
       if (!v) continue;
-      flatCells.push({ strike: s.strike, exp: exp.date, netOI: v.netOI, netDV: v.netDV });
+      flatCells.push({
+        strike: s.strike,
+        exp: exp.date,
+        netOI: v.netOI,
+        netDV: v.netDV,
+        ...(v.vOI !== undefined ? { vOI: v.vOI, vDV: v.vDV ?? 0 } : {}),
+      });
     }
   }
 

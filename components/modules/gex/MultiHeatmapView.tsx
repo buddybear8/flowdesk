@@ -13,6 +13,8 @@ import {
   cellBg,
   fmtGex,
   pickCenteredStrikes,
+  metricValue,
+  type HeatmapMetric,
   COLOR_POS_TEXT,
   COLOR_NEG_TEXT,
   COLOR_MAX_ABS_BG,
@@ -22,7 +24,7 @@ import {
 
 const STRIKES_PER_STRIP = 25;
 
-export function MultiHeatmapView({ tickers }: { tickers: string[] }) {
+export function MultiHeatmapView({ tickers, metric = "gex" }: { tickers: string[]; metric?: HeatmapMetric }) {
   if (tickers.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center" style={{ padding: 24 }}>
@@ -49,13 +51,13 @@ export function MultiHeatmapView({ tickers }: { tickers: string[] }) {
       }}
     >
       {tickers.map((t) => (
-        <TickerStrip key={t} ticker={t} />
+        <TickerStrip key={t} ticker={t} metric={metric} />
       ))}
     </div>
   );
 }
 
-function TickerStrip({ ticker }: { ticker: string }) {
+function TickerStrip({ ticker, metric }: { ticker: string; metric: HeatmapMetric }) {
   const { data, error, notFound, loading } = useHeatmapData(ticker, true);
   const now = useNow();
 
@@ -68,7 +70,9 @@ function TickerStrip({ ticker }: { ticker: string }) {
     // Cell value map for this strip's expiration only.
     const cellMap = new Map<number, number>();
     for (const c of data.cells) {
-      if (c.exp === exp.date) cellMap.set(c.strike, c.netOI);
+      if (c.exp !== exp.date) continue;
+      const v = metricValue(c, metric);
+      if (v !== undefined) cellMap.set(c.strike, v);
     }
 
     // Per-strip color normalization — same "2nd-largest abs" rule the single
@@ -103,7 +107,7 @@ function TickerStrip({ ticker }: { ticker: string }) {
     }
 
     return { exp, strikes, cellMap, maxAbsStrike, scaleMax, spotRowIdx };
-  }, [data]);
+  }, [data, metric]);
 
   const fresh = data ? freshness(now - new Date(data.capturedAt).getTime()) : null;
 
@@ -166,6 +170,8 @@ function TickerStrip({ ticker }: { ticker: string }) {
           <StripPlaceholder text="Failed to load" color={COLOR_NEG_TEXT} />
         ) : !strip ? (
           <StripPlaceholder text="No cells" subtle />
+        ) : metric === "vex" && strip.cellMap.size === 0 ? (
+          <StripPlaceholder text="VEX arrives with the next snapshot" subtle />
         ) : (
           <table
             style={{

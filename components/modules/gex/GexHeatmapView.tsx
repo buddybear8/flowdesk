@@ -10,6 +10,8 @@ import {
   cellBg,
   fmtGex,
   cellKey,
+  useHeatmapMetric,
+  metricValue,
   COLOR_POS_TEXT,
   COLOR_NEG_TEXT,
   COLOR_MAX_ABS_BG,
@@ -24,6 +26,8 @@ const TICKERS = ["SPY", "SPX", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN", "GO
 export function GexHeatmapView() {
   const { ticker, setTicker, restored: tickerRestored } = useGexTicker(TICKERS, "SPY");
   const { mode, setMode, customTickers, setCustomTickers, restored: modeRestored } = useGexHeatmapMode(TICKERS);
+  const { metric, setMetric } = useHeatmapMetric();
+  const METRIC_LABEL = metric === "vex" ? "VEX" : "GEX";
 
   // Standard mode owns its own data fetch (the existing single-ticker table
   // below). Multi modes delegate to <MultiHeatmapView/>, which fetches per-
@@ -36,9 +40,12 @@ export function GexHeatmapView() {
   const cellMap = useMemo(() => {
     const m = new Map<string, number>();
     if (!data) return m;
-    for (const c of data.cells) m.set(cellKey(c.strike, c.exp), c.netOI);
+    for (const c of data.cells) {
+      const v = metricValue(c, metric);
+      if (v !== undefined) m.set(cellKey(c.strike, c.exp), v);
+    }
     return m;
-  }, [data]);
+  }, [data, metric]);
 
   // maxAbsKeys flags the largest cell PER expiration column with the orange
   // standout — so every column shows its own gamma magnet, not just the
@@ -51,7 +58,9 @@ export function GexHeatmapView() {
     let secondMax = 0;
     if (data) {
       for (const c of data.cells) {
-        const abs = Math.abs(c.netOI);
+        const mv = metricValue(c, metric);
+        if (mv === undefined) continue;
+        const abs = Math.abs(mv);
         const key = cellKey(c.strike, c.exp);
         const cur = perExp.get(c.exp);
         if (!cur || abs > cur.abs) perExp.set(c.exp, { key, abs });
@@ -66,7 +75,7 @@ export function GexHeatmapView() {
     const maxAbsKeys = new Set<string>();
     for (const { key } of perExp.values()) maxAbsKeys.add(key);
     return { maxAbsKeys, scaleMax: secondMax > 0 ? secondMax : maxAbs };
-  }, [data]);
+  }, [data, metric]);
 
   const spotRowIdx = useMemo(() => {
     if (!data) return -1;
@@ -81,6 +90,10 @@ export function GexHeatmapView() {
     }
     return best;
   }, [data]);
+
+  // Old snapshots (pre 2026-07-09) carry no vanna — show a friendly notice
+  // instead of an all-dash grid until the next 2-min poll writes one.
+  const vexPending = metric === "vex" && !!data && data.cells.length > 0 && cellMap.size === 0;
 
   const fresh = data && mode === "standard"
     ? freshness(now - new Date(data.capturedAt).getTime())
@@ -113,9 +126,9 @@ export function GexHeatmapView() {
         <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
           <span
             style={{ fontSize: 15, fontWeight: 500, color: "var(--color-text-primary)" }}
-            title="Net dealer GEX (OI) by strike × expiration. Background saturation = magnitude. Orange = largest absolute cell in each expiration column. Green text = positive, red = negative."
+            title={`Net dealer ${METRIC_LABEL} (OI) by strike × expiration. Background saturation = magnitude. Orange = largest absolute cell in each expiration column. Green text = positive, red = negative.`}
           >
-            Net GEX heatmap — {titleSuffix}
+            Net {METRIC_LABEL} heatmap — {titleSuffix}
           </span>
           {mode === "standard" && data && (
             <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
@@ -131,7 +144,7 @@ export function GexHeatmapView() {
               padding: "1px 6px",
               cursor: "help",
             }}
-            title="Background saturation maps to |GEX| / per-view max (sqrt-scaled). Orange = largest absolute GEX in each expiration column. Green text = positive (dealer long gamma here). Red text = negative (dealer short gamma). In multi-ticker views, each strip is normalized independently."
+            title={`Background saturation maps to |${METRIC_LABEL}| / per-view max (sqrt-scaled). Orange = largest absolute ${METRIC_LABEL} in each expiration column. Green text = positive (dealer long gamma here). Red text = negative (dealer short gamma). In multi-ticker views, each strip is normalized independently.`}
           >
             ?
           </span>
@@ -182,6 +195,28 @@ export function GexHeatmapView() {
             </span>
           )}
 
+          {/* Metric toggle — GEX vs VEX (vanna) */}
+          <div className="inline-flex rounded-md bg-bg-secondary" style={{ padding: 2, gap: 1 }}>
+            {(["gex", "vex"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMetric(m)}
+                title={m === "vex" ? "Vanna exposure — dealer hedging sensitivity to implied-vol moves" : "Gamma exposure — dealer hedging sensitivity to price moves"}
+                className="text-[10px] cursor-pointer"
+                style={{
+                  padding: "3px 9px",
+                  borderRadius: 5,
+                  background: metric === m ? "var(--color-background-primary)" : "transparent",
+                  color: metric === m ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+                  border: metric === m ? "0.5px solid var(--color-border-tertiary)" : "0.5px solid transparent",
+                  fontWeight: metric === m ? 600 : 400,
+                }}
+              >
+                {m.toUpperCase()}
+              </button>
+            ))}
+          </div>
+
           {/* Mode toggle — always visible */}
           <HeatmapModeToggle mode={mode} onChange={setMode} />
 
@@ -229,7 +264,7 @@ export function GexHeatmapView() {
         }}
       >
         {mode !== "standard" ? (
-          <MultiHeatmapView tickers={multiTickers} />
+          <MultiHeatmapView tickers={multiTickers} metric={metric} />
         ) : loading && !data ? (
           <div className="flex flex-1 items-center justify-center text-text-tertiary text-[12px]">
             Loading heatmap…
@@ -260,7 +295,18 @@ export function GexHeatmapView() {
               <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{error}</div>
             </div>
           </div>
-        ) : !data ? null : (
+        ) : !data ? null : vexPending ? (
+          <div className="flex flex-1 items-center justify-center text-center" style={{ padding: 24 }}>
+            <div>
+              <div style={{ fontSize: 14, color: "var(--color-text-secondary)", marginBottom: 4 }}>
+                VEX data for {ticker} arrives with the next snapshot
+              </div>
+              <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
+                Vanna collection started 2026-07-09; snapshots refresh every ~2 minutes during market hours.
+              </div>
+            </div>
+          </div>
+        ) : (
           <table
             style={{
               width: "100%",

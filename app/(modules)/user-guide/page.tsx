@@ -113,7 +113,8 @@ export default function UserGuidePage() {
               positive-gamma strikes act as magnets; watch the flip as a regime line.</li>
             <li><B>Heatmap</B> — a strike × expiration grid; scan across expirations to see where positioning concentrates.
               Top GEX nodes are highlighted in yellow and often act as major magnets when far away, and support/resistance
-              when price reaches the node.</li>
+              when price reaches the node. A <B>GEX / VEX</B> toggle switches the grid to vanna exposure — where dealer
+              hedging shifts when implied volatility moves.</li>
             <li>Enter any ticker in the ticker box.</li>
           </Ul>
           <H4>Good to know</H4>

@@ -227,6 +227,8 @@ export interface HeatmapCell {
   exp: string;        // matches HeatmapExpiration.date
   netOI: number;      // $ gamma per 1% move, OI-based
   netDV: number;      // $ gamma per 1% move, directionalized volume
+  vOI?: number;       // net vanna (VEX), OI-based — absent on pre-2026-07-09 snapshots
+  vDV?: number;       // net vanna, directionalized volume
 }
 
 export interface HeatmapPayload {

@@ -720,7 +720,7 @@ export async function pollGex(): Promise<void> {
       }
 
       if (allRows.length > 0) {
-        const byStrike = new Map<number, Record<string, { netOI: number; netDV: number }>>();
+        const byStrike = new Map<number, Record<string, { netOI: number; netDV: number; vOI: number; vDV: number }>>();
         const seenExpiries = new Set<string>();
         for (const r of allRows) {
           const strike = Number(r.strike);
@@ -733,10 +733,20 @@ export async function pollGex(): Promise<void> {
           const callAsk = Number(r.call_gamma_ask ?? 0);
           const putBid = Number(r.put_gamma_bid ?? 0);
           const putAsk = Number(r.put_gamma_ask ?? 0);
+          // Vanna (VEX) — same response rows carry the full vanna family;
+          // stored beside gamma so the Heatmap tab's GEX/VEX toggle is free
+          // (no extra UW calls). Snapshots before 2026-07-09 lack these keys.
+          const callVannaOI = Number(r.call_vanna_oi ?? 0);
+          const putVannaOI = Number(r.put_vanna_oi ?? 0);
+          const vannaDV =
+            Number(r.call_vanna_bid ?? 0) + Number(r.call_vanna_ask ?? 0) +
+            Number(r.put_vanna_bid ?? 0) + Number(r.put_vanna_ask ?? 0);
           if (!byStrike.has(strike)) byStrike.set(strike, {});
           byStrike.get(strike)![expiry] = {
             netOI: callOI + putOI,
             netDV: callBid + callAsk + putBid + putAsk,
+            vOI: callVannaOI + putVannaOI,
+            vDV: vannaDV,
           };
         }
 

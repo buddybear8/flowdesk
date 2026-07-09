@@ -6,7 +6,7 @@
 // imported from either.
 
 import { useEffect, useState } from "react";
-import type { HeatmapPayload } from "@/lib/types";
+import type { HeatmapCell, HeatmapPayload } from "@/lib/types";
 
 // ─── Visual constants ─────────────────────────────────────────────────────
 export const COLOR_POS_TEXT = "#A6E07A";
@@ -138,4 +138,31 @@ export function pickCenteredStrikes(strikes: number[], spot: number, n: number):
     .slice(0, n)
     .map((x) => x.s)
     .sort((a, b) => b - a);
+}
+
+// ── Heatmap metric (GEX | VEX) ───────────────────────────────────────────────
+// VEX = net dealer vanna exposure — how dealer hedging shifts as implied vol
+// moves. Same grid/pipeline as GEX; snapshots before 2026-07-09 lack vanna.
+
+export type HeatmapMetric = "gex" | "vex";
+const METRIC_KEY = "gex-heatmap-metric";
+
+export function useHeatmapMetric(): { metric: HeatmapMetric; setMetric: (m: HeatmapMetric) => void } {
+  const [metric, setMetricState] = useState<HeatmapMetric>("gex");
+  useEffect(() => {
+    try {
+      const m = localStorage.getItem(METRIC_KEY);
+      if (m === "vex" || m === "gex") setMetricState(m);
+    } catch { /* defaults */ }
+  }, []);
+  const setMetric = (m: HeatmapMetric) => {
+    setMetricState(m);
+    try { localStorage.setItem(METRIC_KEY, m); } catch { /* non-fatal */ }
+  };
+  return { metric, setMetric };
+}
+
+// Value accessor — undefined when the snapshot predates vanna collection.
+export function metricValue(c: HeatmapCell, metric: HeatmapMetric): number | undefined {
+  return metric === "vex" ? c.vOI : c.netOI;
 }
