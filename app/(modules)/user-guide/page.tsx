@@ -185,8 +185,10 @@ export default function UserGuidePage() {
 
         <Mod icon="📈" title="Charts" route="/charts" one="Interactive charting with embedded TradingView charts.">
           <H4>What it does</H4>
-          <P>Interactive charting with embedded TradingView charts showing ranked dark pool trades. GEX levels and other
-            info coming soon.</P>
+          <P>Interactive charting with embedded TradingView charts showing ranked dark pool trades. Overlay toggles let
+            you layer on <B>ranked trades</B> (numbered bubbles and horizontal levels), <B>GEX levels</B> (call wall,
+            put wall, gamma flip, and the top GEX nodes), and <B>Watch targets</B> — the Target 1 / 2 / 3 ladder from
+            the ticker&apos;s most recent Daily Watches appearance.</P>
         </Mod>
 
         <Mod icon="🏆" title="Community gains" route="/community-gains" one="Group performance over time.">

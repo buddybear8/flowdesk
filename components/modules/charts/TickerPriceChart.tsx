@@ -20,6 +20,15 @@ import {
 } from "lightweight-charts";
 import type { Candle, RankedTrade } from "@/lib/candles";
 
+// Generic horizontal level drawn by the page layer (GEX levels, Daily Watch
+// targets) — the chart just renders whatever it's handed.
+export interface ExtraLevel {
+  price: number;
+  title: string;
+  color: string;
+  style: "solid" | "dashed" | "dotted";
+}
+
 interface Props {
   candles: Candle[];
   trades: RankedTrade[];
@@ -29,6 +38,7 @@ interface Props {
   showLevels: boolean;
   levelRank: number;
   levelSince: number; // unix seconds
+  extraLevels: ExtraLevel[]; // already filtered by the page's toggles
   lastFetched: number; // ms — drives the freshness pill
 }
 
@@ -53,6 +63,7 @@ export function TickerPriceChart(props: Props) {
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const levelLinesRef = useRef<IPriceLine[]>([]);
+  const extraLinesRef = useRef<IPriceLine[]>([]);
   const bubblesRef = useRef<{ el: HTMLDivElement; price: number; barTime: number }[]>([]);
 
   // Latest props/data, mirrored into refs so the imperative helpers (and the
@@ -200,6 +211,7 @@ export function TickerPriceChart(props: Props) {
       candleSeriesRef.current = null;
       volSeriesRef.current = null;
       levelLinesRef.current = [];
+      extraLinesRef.current = [];
       bubblesRef.current = [];
     };
   }, []);
@@ -225,8 +237,28 @@ export function TickerPriceChart(props: Props) {
     updateReadout(props.candles[props.candles.length - 1] ?? null);
     drawBubbles();
     drawLevels();
+    drawExtraLevels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.candles, props.intraday]);
+
+  function drawExtraLevels() {
+    const cs = candleSeriesRef.current;
+    if (!cs) return;
+    for (const l of extraLinesRef.current) cs.removePriceLine(l);
+    extraLinesRef.current = [];
+    for (const lv of propsRef.current.extraLevels) {
+      extraLinesRef.current.push(
+        cs.createPriceLine({
+          price: lv.price,
+          color: lv.color,
+          lineWidth: 1,
+          lineStyle: lv.style === "solid" ? LineStyle.Solid : lv.style === "dashed" ? LineStyle.Dashed : LineStyle.Dotted,
+          axisLabelVisible: true,
+          title: lv.title,
+        }),
+      );
+    }
+  }
 
   // ── overlays redraw on trade / filter changes ─────────────────────────
   useEffect(() => {
@@ -234,6 +266,12 @@ export function TickerPriceChart(props: Props) {
     drawLevels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.trades, props.showBubbles, props.bubbleRank, props.showLevels, props.levelRank, props.levelSince]);
+
+  // ── GEX / watch-target levels ─────────────────────────────────────────
+  useEffect(() => {
+    drawExtraLevels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.extraLevels]);
 
   // ── freshness pill ────────────────────────────────────────────────────
   useEffect(() => {

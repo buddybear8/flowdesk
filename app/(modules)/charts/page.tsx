@@ -8,6 +8,8 @@ import {
 } from "@/lib/candles";
 import { TRACKED_TICKERS } from "@/lib/tracked-tickers";
 import { TickerSearch } from "@/components/modules/charts/TickerSearch";
+import type { ChartOverlaysPayload } from "@/app/api/chart-overlays/route";
+import type { ExtraLevel } from "@/components/modules/charts/TickerPriceChart";
 
 // Chart wraps the imperative Lightweight Charts lib — client-only, no SSR.
 const TickerPriceChart = dynamic(
@@ -30,6 +32,7 @@ const NAMES: Record<string, string> = {
 };
 
 const GREEN = "#7FBF52", RED = "#E76A6A", GOLD = "#E2BF73";
+const BLUE = "#6AA8E7", PURPLE = "#B48EE0";
 
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -68,12 +71,15 @@ export default function ChartsPage() {
   const [bubbleRank, setBubbleRank] = useState(20);
   const [showLevels, setShowLevels] = useState(false);
   const [levelRank, setLevelRank] = useState(10);
+  const [showGex, setShowGex] = useState(false);
+  const [showWatch, setShowWatch] = useState(false);
   const [levelSinceStr, setLevelSinceStr] = useState(
     () => new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10),
   );
 
   const candlesState = usePolled<CandlesResult>(`/api/candles/${ticker}?tf=${tf}`);
   const tradesState = usePolled<RankedTradesResult>(`/api/ranked-trades/${ticker}`);
+  const overlaysState = usePolled<ChartOverlaysPayload>(`/api/chart-overlays?ticker=${ticker}`);
 
   const candles = candlesState.data?.candles ?? [];
   const trades = tradesState.data?.trades ?? [];
@@ -89,6 +95,31 @@ export default function ChartsPage() {
 
   const hasData = candles.length > 0;
   const loadError = candlesState.error && !candlesState.data;
+
+  // GEX levels + Daily Watch targets → generic price lines for the chart.
+  const gex = overlaysState.data?.gex ?? null;
+  const watch = overlaysState.data?.watch ?? null;
+  const extraLevels: ExtraLevel[] = [];
+  if (showGex && gex) {
+    extraLevels.push(
+      { price: gex.callWall, title: "Call wall", color: GREEN, style: "solid" },
+      { price: gex.putWall, title: "Put wall", color: RED, style: "solid" },
+      { price: gex.gammaFlip, title: "Gamma flip", color: GOLD, style: "dashed" },
+      ...gex.nodes.map((n) => ({
+        price: n.price, title: `GEX #${n.rank}`, color: BLUE, style: "dotted" as const,
+      })),
+    );
+  }
+  if (showWatch && watch) {
+    extraLevels.push(
+      ...watch.targets.map((t) => ({
+        price: t.price,
+        title: `Target ${t.n} · ${watch.dateLabel}`,
+        color: PURPLE,
+        style: "dashed" as const,
+      })),
+    );
+  }
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden" style={{ background: "var(--color-background-tertiary)" }}>
@@ -148,7 +179,7 @@ export default function ChartsPage() {
         style={{ margin: "0 14px 8px", padding: "8px 12px", background: "var(--color-background-primary)",
                  border: "0.5px solid var(--color-border-tertiary)", borderRadius: 9 }}>
         <span style={{ fontSize: 9.5, textTransform: "uppercase", letterSpacing: ".07em", color: "var(--color-text-tertiary)" }}>
-          Ranked trades
+          Overlays
         </span>
         <div className="flex items-center gap-[9px]">
           <Toggle on={showBubbles} label="Trade bubbles" onClick={() => setShowBubbles((v) => !v)} />
@@ -167,6 +198,28 @@ export default function ChartsPage() {
                        background: "var(--color-background-tertiary)", color: "var(--color-text-primary)",
                        border: "0.5px solid var(--color-border-secondary)", borderRadius: 5, outline: "none" }} />
           </Filter>
+        </div>
+        <span style={{ width: ".5px", height: 20, background: "var(--color-border-tertiary)" }} />
+        <div className="flex items-center gap-[9px]">
+          <Toggle on={showGex} label="GEX levels" onClick={() => setShowGex((v) => !v)} />
+          {showGex && !gex && (
+            <span style={{ fontSize: 10.5, color: "var(--color-text-tertiary)" }}>
+              no GEX data for {ticker}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-[9px]">
+          <Toggle on={showWatch} label="Watch targets" onClick={() => setShowWatch((v) => !v)} />
+          {showWatch && !watch && (
+            <span style={{ fontSize: 10.5, color: "var(--color-text-tertiary)" }}>
+              {ticker} hasn't appeared in Daily Watches
+            </span>
+          )}
+          {showWatch && watch && (
+            <span style={{ fontSize: 10.5, color: "var(--color-text-tertiary)" }}>
+              {watch.contract} · alerted {watch.dateLabel}
+            </span>
+          )}
         </div>
       </div>
 
@@ -204,6 +257,7 @@ export default function ChartsPage() {
             showLevels={showLevels}
             levelRank={levelRank}
             levelSince={levelSince}
+            extraLevels={extraLevels}
             lastFetched={candlesState.lastFetched}
           />
         )}
