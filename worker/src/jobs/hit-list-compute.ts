@@ -758,7 +758,11 @@ function etMidnightUTC(dateStrET: string): Date {
     }).formatToParts(candidate);
     const get = (t: string) => parts.find((p) => p.type === t)?.value;
     const etDate = `${get("year")}-${get("month")}-${get("day")}`;
-    const etTime = `${get("hour")}:${get("minute")}`;
+    // Some ICU/Node versions format midnight as "24:00" under hour12:false —
+    // normalize before comparing (2026-07-09 incident: the 07:30 cron threw
+    // here on a rebuilt container and no hit list was written).
+    const hh = get("hour") === "24" ? "00" : get("hour");
+    const etTime = `${hh}:${get("minute")}`;
     if (etDate === dateStrET && etTime === "00:00") {
       return candidate;
     }

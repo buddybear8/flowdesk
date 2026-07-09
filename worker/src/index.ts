@@ -94,28 +94,39 @@ cron.schedule("0 0 7 * * 1-5", safe("ai-summarizer-gex", runAiSummarizerGex));
 cron.schedule("0 30 7 * * 1-5", safe("hit-list-compute", computeHitList));
 cron.schedule("0 45 7 * * 1-5", safe("ai-summarizer-watches", runAiSummarizerWatches));
 
-// Boot-time catch-up: node-cron one-shot schedules are missed if the process
-// was down/restarting at fire time (2026-07-08: worker down over the 7:00-7:45
-// ET window → no hit list that morning). If we boot on a weekday after 07:30
-// ET and today's hit list is missing, run compute + briefs immediately.
-void (async () => {
+// Daily-watches watchdog — recurring self-heal (replaces the boot-only
+// catch-up). Two incidents motivated this: 2026-07-08 (worker down over the
+// 07:00-07:45 window, cron skipped) and 2026-07-09 (cron fired but the job
+// threw on an ICU "24:00" midnight-format quirk — a one-shot cron gets no
+// retry). Every 5 minutes on weekdays after 07:35 ET: if today's hit list is
+// missing, run compute + briefs. Idempotent; in-flight guard prevents overlap.
+let watchesWatchdogInFlight = false;
+async function watchesWatchdogTick(): Promise<void> {
+  if (watchesWatchdogInFlight) return;
   try {
     const now = new Date();
-    const et = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now);
-    const get = (t: string) => et.find((x) => x.type === t)?.value ?? "";
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now);
+    const get = (t: string) => parts.find((x) => x.type === t)?.value ?? "";
     const dow = get("weekday");
-    const minutes = Number(get("hour")) * 60 + Number(get("minute"));
-    if (dow === "Sat" || dow === "Sun" || minutes < 7 * 60 + 30) return;
+    if (dow === "Sat" || dow === "Sun") return;
+    const hRaw = get("hour");
+    const minutes = (hRaw === "24" ? 0 : Number(hRaw)) * 60 + Number(get("minute"));
+    if (minutes < 7 * 60 + 35) return;
     const todayET = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(now);
     const existing = await prisma.hitListDaily.count({ where: { date: new Date(`${todayET}T00:00:00.000Z`) } });
     if (existing > 0) return;
-    console.log(`[${ts()}] [worker] catch-up: no hit list for ${todayET} after 07:30 ET — running compute + briefs`);
-    await safe("hit-list-compute-catchup", computeHitList)();
-    await safe("ai-summarizer-watches-catchup", runAiSummarizerWatches)();
+    watchesWatchdogInFlight = true;
+    console.log(`[${ts()}] [worker] watches watchdog: no hit list for ${todayET} after 07:35 ET — running compute + briefs`);
+    await safe("hit-list-compute-watchdog", computeHitList)();
+    await safe("ai-summarizer-watches-watchdog", runAiSummarizerWatches)();
   } catch (err) {
-    console.error(`[${ts()}] [worker] catch-up check failed:`, err instanceof Error ? err.message : err);
+    console.error(`[${ts()}] [worker] watches watchdog failed:`, err instanceof Error ? err.message : err);
+  } finally {
+    watchesWatchdogInFlight = false;
   }
-})();
+}
+setInterval(() => { void watchesWatchdogTick(); }, 5 * 60 * 1000);
+void watchesWatchdogTick(); // also check immediately on boot
 // S3 training-data archive (jobs/archive.ts) — 02:00 ET daily, one hour BEFORE
 // the retention sweeps delete anything. Copies each complete UTC day of
 // flow_alerts / flow_sentiment_days / gex(+heatmap) / dark_pool_prints to
