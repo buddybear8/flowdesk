@@ -661,8 +661,12 @@ export async function pollGex(): Promise<void> {
 
       const fetchPaged = async (suffix: string, tag: string): Promise<any[]> => {
         const rows: any[] = [];
-        for (let page = 1; page <= MAX_PAGES; page++) {
-          if (page > 1) await sleep(TICKER_DELAY_MS);
+        // UW pagination is ZERO-indexed (confirmed by UW support 2026-07-08):
+        // page=0 holds the first 500 rows. Starting at page=1 skipped the
+        // entire chain for tickers with <=500 rows (NVDA/NFLX/AMZN "empty"
+        // heatmaps) and silently dropped the first 500 rows for larger ones.
+        for (let page = 0; page < MAX_PAGES; page++) {
+          if (page > 0) await sleep(TICKER_DELAY_MS);
           const j = await uwFetch(
             `/api/stock/${ticker}/spot-exposures/expiry-strike?${suffix}&limit=${PAGE_LIMIT}&page=${page}`,
             `gex-heatmap:${ticker}:${tag}p${page}`,
