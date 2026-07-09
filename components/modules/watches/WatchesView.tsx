@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { clsx } from "clsx";
 import type { HitListItem, HitListPayload } from "@/lib/types";
+import { WatchChartPane } from "./WatchChartPane";
 
 function fmtP(v: number): string {
   const a = Math.abs(v);
@@ -40,6 +41,7 @@ export function WatchesView() {
   const [selRow, setSelRow] = useState<number | null>(0);
   const [selContract, setSelContract] = useState(0);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [chartOpen, setChartOpen] = useState(false);
   // null = latest session; a YYYY-MM-DD selects a prior day's hit list (30-day history).
   const [date, setDate] = useState<string | null>(null);
 
@@ -66,10 +68,12 @@ export function WatchesView() {
   const sfMax = Math.max(...payload.sectorFlow.map(s => Math.abs(s.netPremium)));
   const selected = selRow !== null ? hits[selRow] : null;
   const showPanel = !!selected && panelOpen;
+  const showChart = showPanel && chartOpen && !!selected;
 
   return (
     <div className="flex flex-1 overflow-hidden">
-      {/* LEFT PANEL — half the screen while the detail pane is open */}
+      {/* LEFT PANEL — half the screen while the detail pane is open; swaps to
+          the price chart when the deep dive's Chart button is active */}
       <div
         className={clsx(
           "flex flex-col overflow-hidden",
@@ -77,6 +81,10 @@ export function WatchesView() {
         )}
         style={{ borderRight: showPanel ? "0.5px solid var(--color-border-tertiary)" : "none" }}
       >
+        {showChart && selected ? (
+          <WatchChartPane hit={selected} onBack={() => setChartOpen(false)} />
+        ) : (
+          <>
         {/* Session header */}
         <div
           className="px-[14px] py-[9px] bg-bg-primary flex-shrink-0"
@@ -268,6 +276,8 @@ export function WatchesView() {
             </div>
           ))}
         </div>
+          </>
+        )}
       </div>
 
       {/* RIGHT DETAIL PANEL (minimizable) */}
@@ -276,8 +286,10 @@ export function WatchesView() {
           hit={selected}
           selectedContractIdx={selContract}
           onSelectContract={setSelContract}
-          onReturn={() => setSelRow(null)}
+          onReturn={() => { setSelRow(null); setChartOpen(false); }}
           onMinimize={() => setPanelOpen(false)}
+          chartOpen={chartOpen}
+          onToggleChart={() => setChartOpen(v => !v)}
         />
       )}
       {selected && !panelOpen && (
@@ -301,12 +313,16 @@ function DetailPanel({
   onSelectContract,
   onReturn,
   onMinimize,
+  chartOpen,
+  onToggleChart,
 }: {
   hit: HitListItem;
   selectedContractIdx: number;
   onSelectContract: (i: number) => void;
   onReturn: () => void;
   onMinimize: () => void;
+  chartOpen: boolean;
+  onToggleChart: () => void;
 }) {
   const router = useRouter();
   return (
@@ -340,19 +356,34 @@ function DetailPanel({
           </div>
           <span className="text-[20px] font-medium text-text-primary">${hit.price.toFixed(2)}</span>
         </div>
-        <div
-          className="inline-flex items-center gap-[5px] font-medium rounded-md"
-          style={{
-            marginTop: 9,
-            marginBottom: 10,
-            fontSize: 12,
-            padding: "5px 14px",
-            background: hit.direction === "UP" ? "rgba(127, 191, 82, 0.14)" : "rgba(231, 106, 106, 0.14)",
-            color: hit.direction === "UP" ? "#7FBF52" : "#E76A6A",
-            border: `0.5px solid ${hit.direction === "UP" ? "#7FBF52" : "#E76A6A"}`,
-          }}
-        >
-          {hit.direction === "UP" ? "▲ Bullish" : "▼ Bearish"}
+        <div className="flex items-center justify-between" style={{ marginTop: 9, marginBottom: 10 }}>
+          <div
+            className="inline-flex items-center gap-[5px] font-medium rounded-md"
+            style={{
+              fontSize: 12,
+              padding: "5px 14px",
+              background: hit.direction === "UP" ? "rgba(127, 191, 82, 0.14)" : "rgba(231, 106, 106, 0.14)",
+              color: hit.direction === "UP" ? "#7FBF52" : "#E76A6A",
+              border: `0.5px solid ${hit.direction === "UP" ? "#7FBF52" : "#E76A6A"}`,
+            }}
+          >
+            {hit.direction === "UP" ? "▲ Bullish" : "▼ Bearish"}
+          </div>
+          <button
+            onClick={onToggleChart}
+            title={chartOpen ? "Return to the hit list" : "Open the price chart with the target ladder in the left pane"}
+            className="inline-flex items-center gap-[6px] font-medium rounded-md cursor-pointer"
+            style={{
+              fontSize: 12.5,
+              padding: "6px 18px",
+              fontFamily: "inherit",
+              background: chartOpen ? "rgba(226,191,115,.22)" : "rgba(226,191,115,.12)",
+              color: "#E2BF73",
+              border: `0.5px solid ${chartOpen ? "#E2BF73" : "rgba(226,191,115,.5)"}`,
+            }}
+          >
+            📈 {chartOpen ? "Hide chart" : "Chart"}
+          </button>
         </div>
         <div
           className="grid overflow-hidden"

@@ -85,6 +85,9 @@ export default function UserGuidePage() {
             <li>Click a row for the detail panel: the <B>confluence score breakdown</B>, a suggested <B>contract to
               watch</B> (expiry within 3 months, matching the signal direction), and <B>move targets</B> — Target 1 / 2 / 3 in the
               signal&rsquo;s direction (upside for bullish picks, downside for bearish).</li>
+            <li>The <B>Chart</B> button in the detail panel swaps the hit list for a price chart of the ticker — an
+              hourly view zoomed to the last week with the Target 1 / 2 / 3 ladder drawn on it. Switch timeframes in
+              the chart header, or hit <B>« Hit list</B> to bring the list back.</li>
             <li>This is a screening list, not trade advice — validate each name yourself; the targets frame the size of
               move that would be normal vs outsized.</li>
           </Ul>

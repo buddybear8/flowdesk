@@ -39,6 +39,11 @@ interface Props {
   levelRank: number;
   levelSince: number; // unix seconds
   extraLevels: ExtraLevel[]; // already filtered by the page's toggles
+  // Expand the price autoscale so every extraLevel stays on screen (used by
+  // the Watches chart so the full target ladder is visible).
+  scaleToExtraLevels?: boolean;
+  // Initial zoom: show only the last N bars instead of fitting all candles.
+  fitBars?: number;
   lastFetched: number; // ms — drives the freshness pill
 }
 
@@ -184,6 +189,17 @@ export function TickerPriceChart(props: Props) {
       borderUpColor: UP, borderDownColor: DOWN,
       wickUpColor: UP, wickDownColor: DOWN,
       priceLineColor: GOLD, priceLineStyle: LineStyle.Dashed, priceLineWidth: 1,
+      autoscaleInfoProvider: (original: () => { priceRange: { minValue: number; maxValue: number } } | null) => {
+        const res = original();
+        const p = propsRef.current;
+        if (!res?.priceRange || !p.scaleToExtraLevels || p.extraLevels.length === 0) return res;
+        let { minValue, maxValue } = res.priceRange;
+        for (const l of p.extraLevels) {
+          if (l.price < minValue) minValue = l.price;
+          if (l.price > maxValue) maxValue = l.price;
+        }
+        return { ...res, priceRange: { minValue, maxValue } };
+      },
     });
     candleSeries.priceScale().applyOptions({ scaleMargins: { top: 0.08, bottom: 0.27 } });
     const volSeries = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "" });
@@ -233,7 +249,14 @@ export function TickerPriceChart(props: Props) {
       })),
     );
     chart.applyOptions({ timeScale: { timeVisible: props.intraday } });
-    chart.timeScale().fitContent();
+    if (props.fitBars && props.candles.length > props.fitBars) {
+      chart.timeScale().setVisibleLogicalRange({
+        from: props.candles.length - props.fitBars,
+        to: props.candles.length + 2,
+      });
+    } else {
+      chart.timeScale().fitContent();
+    }
     updateReadout(props.candles[props.candles.length - 1] ?? null);
     drawBubbles();
     drawLevels();
