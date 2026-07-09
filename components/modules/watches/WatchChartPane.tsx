@@ -26,8 +26,7 @@ const TickerPriceChart = dynamic(
 );
 
 const GOLD = "#E2BF73", PURPLE = "#B48EE0", GREEN = "#7FBF52", RED = "#E76A6A", BLUE = "#6AA8E7";
-// Hourly bars ≈ 7 per session — 30 bars ≈ the last week of trading.
-const HOURLY_ZOOM_BARS = 30;
+const WEEK_SEC = 7 * 86_400;
 
 export function WatchChartPane({ hit, onBack }: { hit: HitListItem; onBack: () => void }) {
   const [tf, setTf] = useState<Timeframe>("1H");
@@ -83,6 +82,11 @@ export function WatchChartPane({ hit, onBack }: { hit: HitListItem; onBack: () =
   }, [hit.ticker, tf]);
 
   const candles = state.data?.candles ?? [];
+
+  // Default hourly zoom: exactly one week of candles, counted from the data
+  // itself so holidays/half-days don't skew the window.
+  const lastTime = candles.length > 0 ? candles[candles.length - 1]!.time : 0;
+  const weekBars = candles.reduce((n, c) => n + (c.time >= lastTime - WEEK_SEC ? 1 : 0), 0);
 
   // Direction-matched target ladder, same side the detail panel shows.
   const extraLevels: ExtraLevel[] = [];
@@ -177,7 +181,7 @@ export function WatchChartPane({ hit, onBack }: { hit: HitListItem; onBack: () =
             levelSince={0}
             extraLevels={extraLevels}
             scaleToExtraLevels
-            fitBars={tf === "1H" ? HOURLY_ZOOM_BARS : undefined}
+            fitBars={tf === "1H" && weekBars > 0 ? weekBars : undefined}
             lastFetched={state.lastFetched}
           />
         )}
