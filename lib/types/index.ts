@@ -165,6 +165,9 @@ export interface MarketSentimentTicker {
   cpRatio: number;             // callVol / putVol (capped at RATIO_CAP)
   callBuyRatio: number;        // call bought-at-ask / sold-at-bid
   putBuyRatio: number;         // put bought-at-ask / sold-at-bid
+  // Raw side components so the client can recompute C/P per accounting mode
+  // (all / ask-only / net) without a refetch.
+  cA: number; cB: number; pA: number; pB: number;
 }
 
 export interface MarketSentimentPayload {
@@ -173,8 +176,9 @@ export interface MarketSentimentPayload {
   minVolume: number;           // contract floor applied to the bull/bear lists
   indices: MarketSentimentTicker[];   // SPY/SPX/QQQ/IWM/DIA, fixed order
   megaCaps: MarketSentimentTicker[];  // mega-cap set, fixed order
-  topBullish: MarketSentimentTicker[]; // cpRatio > 1.75, desc
-  topBearish: MarketSentimentTicker[]; // cpRatio < 0.5, asc
+  // Full liquid pool (≥ minVolume contracts) — the client builds the bullish/
+  // bearish leaderboards from this per the selected accounting mode.
+  liquid: MarketSentimentTicker[];
 }
 
 // ---------- 3d. Trade Alerts (Discord alert tracking) ----------

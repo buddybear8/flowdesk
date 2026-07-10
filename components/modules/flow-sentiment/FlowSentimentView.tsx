@@ -35,12 +35,30 @@ const SPOT_LINE_COLOR = "#22D3EE";
 
 type StrikeCount = "10" | "15" | "20" | "25" | "40";
 
-// Side-accounting mode for the charts/cards:
+// Side-accounting mode for the C/P calculations (shared with the Market
+// dashboard via the same localStorage key):
 //   all — bought-at-ask + sold-at-bid, both segments (the original view)
 //   ask — bought-at-ask only; bid-side trades ignored entirely
 //   net — ask minus bid per side; net buying renders green, net selling red
-type SideMode = "all" | "ask" | "net";
+// NOTE: within-side buy/sell ratios (CALL B/S, PUT B/S, summary boxes) are
+// deliberately mode-INDEPENDENT — they always compare raw ask vs bid volume.
+export type SideMode = "all" | "ask" | "net";
 const SIDE_MODE_KEY = "cs-sent-side-mode";
+
+export function useSideMode(): { sideMode: SideMode; setSideMode: (m: SideMode) => void } {
+  const [sideMode, setState] = useState<SideMode>("all");
+  useEffect(() => {
+    try {
+      const m = localStorage.getItem(SIDE_MODE_KEY);
+      if (m === "ask" || m === "net" || m === "all") setState(m);
+    } catch { /* default */ }
+  }, []);
+  const setSideMode = (m: SideMode) => {
+    setState(m);
+    try { localStorage.setItem(SIDE_MODE_KEY, m); } catch { /* non-fatal */ }
+  };
+  return { sideMode, setSideMode };
+}
 
 function applySideMode(strikes: SentimentStrike[], mode: SideMode): SentimentStrike[] {
   if (mode === "all") return strikes;
@@ -270,17 +288,7 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
   }, [fixedTicker]);
   const [date, setDate] = useState(liveDate);
   const [strikeCount, setStrikeCount] = useState<StrikeCount>("20");
-  const [sideMode, setSideMode] = useState<SideMode>("all");
-  useEffect(() => {
-    try {
-      const m = localStorage.getItem(SIDE_MODE_KEY);
-      if (m === "ask" || m === "net" || m === "all") setSideMode(m);
-    } catch { /* default */ }
-  }, []);
-  const changeSideMode = (m: SideMode) => {
-    setSideMode(m);
-    try { localStorage.setItem(SIDE_MODE_KEY, m); } catch { /* non-fatal */ }
-  };
+  const { sideMode, setSideMode } = useSideMode();
   const [data, setData] = useState<FlowSentimentPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [minuteIdx, setMinuteIdx] = useState(0);
@@ -329,13 +337,14 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
   const current: SentimentMinute | null = minutes[minuteIdx] ?? minutes[minutes.length - 1] ?? null;
   const spot = data?.spot ?? 0;
 
-  const displayed = useMemo(
-    () =>
-      current
-        ? applySideMode(pickCentered(current.strikes, spot, parseInt(strikeCount, 10)), sideMode).sort((a, b) => b.k - a.k)
-        : [],
-    [current, spot, strikeCount, sideMode],
+  // Raw picked strikes (ask AND bid) — the within-side B/S ratios and the
+  // CALLS/PUTS summary boxes always read these, independent of the mode.
+  const displayedRaw = useMemo(
+    () => (current ? pickCentered(current.strikes, spot, parseInt(strikeCount, 10)).sort((a, b) => b.k - a.k) : []),
+    [current, spot, strikeCount],
   );
+  // Mode-transformed copy drives the bars only (same strikes, same order).
+  const displayed = useMemo(() => applySideMode(displayedRaw, sideMode), [displayedRaw, sideMode]);
 
   // Whole-chain totals for the stat cards, in the selected mode. Net mode can
   // go negative on either side (net selling), so the ratio only renders when
@@ -352,7 +361,7 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
   // Summary boxes — sum across the displayed strikes for the selected minute.
   const summary = useMemo(() => {
     let cBuy = 0, cSell = 0, pBuy = 0, pSell = 0;
-    for (const s of displayed) {
+    for (const s of displayedRaw) {
       cBuy += s.cA; cSell += s.cB; pBuy += s.pA; pSell += s.pB;
     }
     return {
@@ -360,7 +369,7 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
       cRatio: cSell > 0 ? cBuy / cSell : 0,
       pRatio: pSell > 0 ? pBuy / pSell : 0,
     };
-  }, [displayed]);
+  }, [displayedRaw]);
 
   function onScrub(idx: number) {
     setMinuteIdx(idx);
@@ -464,12 +473,12 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
                 </div>
                 <div className="flex flex-wrap items-center gap-[10px]">
                   <Legend />
-                  <SideModeToggle value={sideMode} onChange={changeSideMode} />
+                  <SideModeToggle value={sideMode} onChange={setSideMode} />
                   <StrikeCountToggle value={strikeCount} onChange={setStrikeCount} />
                 </div>
               </div>
               <div style={{ position: "relative", width: "100%", height: Math.max(320, displayed.length * 26) }}>
-                <SentimentBarChart strikes={displayed} spot={spot} mode={sideMode} />
+                <SentimentBarChart strikes={displayed} spot={spot} ratioStrikes={displayedRaw} />
               </div>
             </Card>
 
@@ -477,8 +486,8 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
               className={compact ? "grid gap-[10px]" : "flex flex-col gap-[10px]"}
               style={compact ? { gridTemplateColumns: "1fr 1fr" } : undefined}
             >
-              <SummaryBox title="CALLS" buy={summary.cBuy} sell={summary.cSell} ratio={summary.cRatio} count={displayed.length} mode={sideMode} />
-              <SummaryBox title="PUTS" buy={summary.pBuy} sell={summary.pSell} ratio={summary.pRatio} count={displayed.length} mode={sideMode} />
+              <SummaryBox title="CALLS" buy={summary.cBuy} sell={summary.cSell} ratio={summary.cRatio} count={displayedRaw.length} />
+              <SummaryBox title="PUTS" buy={summary.pBuy} sell={summary.pSell} ratio={summary.pRatio} count={displayedRaw.length} />
             </div>
           </div>
         </>
@@ -489,7 +498,7 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
 
 // ── chart ────────────────────────────────────────────────────────────────────
 
-function SentimentBarChart({ strikes, spot, mode }: { strikes: SentimentStrike[]; spot: number; mode: SideMode }) {
+function SentimentBarChart({ strikes, spot, ratioStrikes }: { strikes: SentimentStrike[]; spot: number; ratioStrikes: SentimentStrike[] }) {
   const { chartData, options } = useMemo(() => {
     // Plain strike numbers — rendered as centered pills by centerLabelPlugin.
     const labels = strikes.map((s) => s.k.toLocaleString());
@@ -520,10 +529,9 @@ function SentimentBarChart({ strikes, spot, mode }: { strikes: SentimentStrike[]
     const chartData: ChartData<"bar"> = { labels, datasets };
     const sortedStrikes = strikes.map((s) => s.k);
     // Buy/sell ratio per strike, aligned to row order, for the margin labels.
-    // Buy/sell ratios are only meaningful when both sides are present — in
-    // ask-only and net modes the divisor is zeroed by construction, so the
-    // margin labels are suppressed instead of printing a wall of infinities.
-    const ratios = mode === "all" ? strikes.map((s) => ({ c: bsRatio(s.cA, s.cB), p: bsRatio(s.pA, s.pB) })) : [];
+    // Margin B/S ratios always come from the RAW strikes (ask vs bid) — the
+    // accounting mode reshapes the bars, never the within-side ratios.
+    const ratios = ratioStrikes.map((s) => ({ c: bsRatio(s.cA, s.cB), p: bsRatio(s.pA, s.pB) }));
     const options: ChartOptions<"bar"> = {
       indexAxis: "y",
       responsive: true,
@@ -565,38 +573,22 @@ function SentimentBarChart({ strikes, spot, mode }: { strikes: SentimentStrike[]
       },
     };
     return { chartData, options };
-  }, [strikes, spot, mode]);
+  }, [strikes, spot, ratioStrikes]);
 
   return <Bar data={chartData} options={options} plugins={[spotLinePlugin, centerLabelPlugin, marginRatioPlugin]} />;
 }
 
 // ── small components (match GexView styling) ─────────────────────────────────
 
-function SummaryBox({ title, buy, sell, ratio, count, mode }: { title: string; buy: number; sell: number; ratio: number; count: number; mode: SideMode }) {
+function SummaryBox({ title, buy, sell, ratio, count }: { title: string; buy: number; sell: number; ratio: number; count: number }) {
   return (
     <div className="rounded-[12px] bg-bg-primary" style={{ border: "0.5px solid var(--color-border-tertiary)", padding: "0.85rem" }}>
       <div style={{ fontSize: 10, color: "var(--color-text-tertiary)", marginBottom: 2 }}>All {count} strikes</div>
       <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 8 }}>{title}</div>
-      {mode === "ask" ? (
-        <>
-          <Row label="Bought at ask" value={fmt(buy)} color={BUY_COLOR} />
-          <Row label="Sold at bid" value="ignored" />
-        </>
-      ) : mode === "net" ? (
-        <>
-          <Row label="Net buying" value={fmt(buy)} color={BUY_COLOR} />
-          <Row label="Net selling" value={fmt(sell)} color={SELL_COLOR} />
-          <div style={{ height: 1, background: "var(--color-border-tertiary)", margin: "7px 0" }} />
-          <Row label="Ratio" value={sell > 0 ? ratio.toFixed(2) : "—"} color={ratio >= 1 ? BUY_COLOR : SELL_COLOR} bold />
-        </>
-      ) : (
-        <>
-          <Row label="Buy" value={fmt(buy)} color={BUY_COLOR} />
-          <Row label="Sell" value={fmt(sell)} color={SELL_COLOR} />
-          <div style={{ height: 1, background: "var(--color-border-tertiary)", margin: "7px 0" }} />
-          <Row label="Ratio" value={sell > 0 ? ratio.toFixed(2) : "∞"} color={ratio >= 1 ? BUY_COLOR : SELL_COLOR} bold />
-        </>
-      )}
+      <Row label="Buy" value={fmt(buy)} color={BUY_COLOR} />
+      <Row label="Sell" value={fmt(sell)} color={SELL_COLOR} />
+      <div style={{ height: 1, background: "var(--color-border-tertiary)", margin: "7px 0" }} />
+      <Row label="Ratio" value={sell > 0 ? ratio.toFixed(2) : "∞"} color={ratio >= 1 ? BUY_COLOR : SELL_COLOR} bold />
     </div>
   );
 }
@@ -623,7 +615,7 @@ function Legend() {
   );
 }
 
-function SideModeToggle({ value, onChange }: { value: SideMode; onChange: (m: SideMode) => void }) {
+export function SideModeToggle({ value, onChange }: { value: SideMode; onChange: (m: SideMode) => void }) {
   const OPTS: { id: SideMode; label: string; title: string }[] = [
     { id: "all", label: "All", title: "Bought at ask + sold at bid (everything traded)" },
     { id: "ask", label: "Ask-only", title: "Bought-at-ask only — bid-side trades ignored" },

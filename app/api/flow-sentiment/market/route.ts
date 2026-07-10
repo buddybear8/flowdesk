@@ -8,12 +8,10 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const INDICES = ["SPY", "SPX", "QQQ", "IWM", "DIA"];
 const MEGA_CAPS = ["TSLA", "SPCX", "AMZN", "AMD", "NVDA", "GOOGL", "MU", "MSFT", "NFLX", "AAPL"];
 
-// Bull/bear thresholds (per the spec) + a liquidity floor so a thin name with a
-// handful of contracts can't dominate a list on a meaningless ratio.
-const BULLISH_CP = 2.0;
-const BEARISH_CP = 0.5;
+// Liquidity floor so a thin name with a handful of contracts can't dominate a
+// leaderboard on a meaningless ratio. The bull/bear thresholds themselves live
+// client-side (MarketDashboardView) — the lists re-rank per accounting mode.
 const MIN_VOLUME = 5_000; // Σ(call+put) near-the-money contracts
-const LIST_LIMIT = 20;
 const RATIO_CAP = 99; // keep ratios finite for JSON (no Infinity / divide-by-zero)
 
 const ratio = (num: number, den: number): number =>
@@ -22,7 +20,7 @@ const ratio = (num: number, den: number): number =>
 // Collapse a ticker's latest cumulative snapshot into a single summary row.
 function summarize(ticker: string, last: SentimentMinute | null): MarketSentimentTicker {
   if (!last || !Array.isArray(last.strikes)) {
-    return { ticker, hasData: false, callVol: 0, putVol: 0, cpRatio: 0, callBuyRatio: 0, putBuyRatio: 0 };
+    return { ticker, hasData: false, callVol: 0, putVol: 0, cpRatio: 0, callBuyRatio: 0, putBuyRatio: 0, cA: 0, cB: 0, pA: 0, pB: 0 };
   }
   let cA = 0, cB = 0, pA = 0, pB = 0;
   for (const s of last.strikes) {
@@ -38,6 +36,7 @@ function summarize(ticker: string, last: SentimentMinute | null): MarketSentimen
     cpRatio: ratio(callVol, putVol),
     callBuyRatio: ratio(cA, cB),
     putBuyRatio: ratio(pA, pB),
+    cA, cB, pA, pB,
   };
 }
 
@@ -87,23 +86,13 @@ export async function GET(req: NextRequest) {
   const all = rows.map((r) => summarize(r.ticker, r.last));
   const liquid = all.filter((t) => t.hasData && t.callVol + t.putVol >= MIN_VOLUME);
 
-  const topBullish = liquid
-    .filter((t) => t.cpRatio > BULLISH_CP)
-    .sort((a, b) => b.cpRatio - a.cpRatio)
-    .slice(0, LIST_LIMIT);
-  const topBearish = liquid
-    .filter((t) => t.cpRatio < BEARISH_CP)
-    .sort((a, b) => a.cpRatio - b.cpRatio)
-    .slice(0, LIST_LIMIT);
-
   const payload: MarketSentimentPayload = {
     tradingDate: dateStr,
     capturedAt: capturedAt.toISOString(),
     minVolume: MIN_VOLUME,
     indices: INDICES.map(rowFor),
     megaCaps: MEGA_CAPS.map(rowFor),
-    topBullish,
-    topBearish,
+    liquid,
   };
 
   return NextResponse.json(payload, { headers: { "Cache-Control": "no-store" } });

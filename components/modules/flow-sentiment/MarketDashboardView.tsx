@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { MarketSentimentPayload, MarketSentimentTicker } from "@/lib/types";
+import { SideModeToggle, useSideMode, type SideMode } from "./FlowSentimentView";
 
 const BULL = "#3FB950";
 const BEAR = "#E5534B";
@@ -10,6 +11,28 @@ const NEUTRAL = "var(--color-text-secondary)";
 
 const fmtVol = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(0)}K` : String(Math.round(n)));
 const fmtRatio = (n: number) => (n >= 99 ? "99+" : n.toFixed(2));
+
+const BULLISH_CP = 2.0;
+const BEARISH_CP = 0.5;
+const LIST_LIMIT = 20;
+const RATIO_CAP = 99;
+
+// Recompute the total-C/P ratio under the selected accounting mode. Net mode
+// clamps each side at zero (a net-sold side contributes nothing); a ticker
+// net-sold on BOTH sides has no C/P signal → null. The within-side buy/sell
+// ratios are never touched by the mode.
+function modeCpRatio(t: MarketSentimentTicker, mode: SideMode): number | null {
+  const c = mode === "all" ? t.cA + t.cB : mode === "ask" ? t.cA : Math.max(t.cA - t.cB, 0);
+  const p = mode === "all" ? t.pA + t.pB : mode === "ask" ? t.pA : Math.max(t.pA - t.pB, 0);
+  if (c <= 0 && p <= 0) return null;
+  return p > 0 ? Math.min(c / p, RATIO_CAP) : RATIO_CAP;
+}
+
+// Row with the C/P swapped for the mode-computed value (sorting + display).
+function withModeCp(t: MarketSentimentTicker, mode: SideMode): MarketSentimentTicker & { cpNull: boolean } {
+  const r = modeCpRatio(t, mode);
+  return { ...t, cpRatio: r ?? 0, cpNull: r === null };
+}
 
 // C/P ratio: bullish (>1) green, bearish (<1) red.
 const cpColor = (v: number) => (v >= 1 ? BULL : BEAR);
@@ -21,6 +44,7 @@ const putColor = (v: number) => (v >= 1 ? BEAR : NEUTRAL);
 export function MarketDashboardView() {
   const [data, setData] = useState<MarketSentimentPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { sideMode, setSideMode } = useSideMode();
 
   useEffect(() => {
     let cancelled = false;
@@ -39,6 +63,13 @@ export function MarketDashboardView() {
 
   const captured = new Date(data.capturedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
 
+  const indices = data.indices.map((t) => withModeCp(t, sideMode));
+  const megaCaps = data.megaCaps.map((t) => withModeCp(t, sideMode));
+  // Leaderboards re-rank under the selected mode from the full liquid pool.
+  const pool = data.liquid.map((t) => withModeCp(t, sideMode)).filter((t) => !t.cpNull);
+  const topBullish = pool.filter((t) => t.cpRatio > BULLISH_CP).sort((a, b) => b.cpRatio - a.cpRatio).slice(0, LIST_LIMIT);
+  const topBearish = pool.filter((t) => t.cpRatio < BEARISH_CP).sort((a, b) => a.cpRatio - b.cpRatio).slice(0, LIST_LIMIT);
+
   return (
     <div className="flex-1 overflow-y-auto p-[14px]" style={{ background: "var(--color-background-tertiary)" }}>
       {/* Title */}
@@ -51,40 +82,44 @@ export function MarketDashboardView() {
             Call/put + buy-vs-sell pressure across the tracked universe · {data.tradingDate} · updated {captured} ET
           </div>
         </div>
-        <Key />
+        <div className="flex items-center gap-[12px]">
+          <SideModeToggle value={sideMode} onChange={setSideMode} />
+          <Key />
+        </div>
       </div>
 
       {/* Indices + mega caps */}
       <div className="grid gap-[12px]" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", marginBottom: 12 }}>
         <Card>
           <SectionTitle>Major indices</SectionTitle>
-          <SummaryTable rows={data.indices} />
+          <SummaryTable rows={indices} />
         </Card>
         <Card>
           <SectionTitle>Mega caps</SectionTitle>
-          <SummaryTable rows={data.megaCaps} />
+          <SummaryTable rows={megaCaps} />
         </Card>
       </div>
 
       {/* Bullish / bearish leaders */}
       <div className="grid gap-[12px]" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))" }}>
         <Card>
-          <SectionTitle count={data.topBullish.length} accent={BULL}>
-            Top bullish sentiment <Thin>C/P &gt; {2.0}</Thin>
+          <SectionTitle count={topBullish.length} accent={BULL}>
+            Top bullish sentiment <Thin>C/P &gt; {BULLISH_CP}</Thin>
           </SectionTitle>
-          <LeaderTable rows={data.topBullish} empty="No tickers above 2.0 C/P right now." />
+          <LeaderTable rows={topBullish} empty={`No tickers above ${BULLISH_CP} C/P right now.`} />
         </Card>
         <Card>
-          <SectionTitle count={data.topBearish.length} accent={BEAR}>
-            Top bearish sentiment <Thin>C/P &lt; {0.5}</Thin>
+          <SectionTitle count={topBearish.length} accent={BEAR}>
+            Top bearish sentiment <Thin>C/P &lt; {BEARISH_CP}</Thin>
           </SectionTitle>
-          <LeaderTable rows={data.topBearish} empty="No tickers below 0.5 C/P right now." />
+          <LeaderTable rows={topBearish} empty={`No tickers below ${BEARISH_CP} C/P right now.`} />
         </Card>
       </div>
 
       <div style={{ fontSize: 10, color: "var(--color-text-tertiary)", marginTop: 10, lineHeight: 1.6 }}>
         Leaderboards require ≥ {data.minVolume.toLocaleString("en-US")} near-the-money contracts so thin names don’t skew on a
-        meaningless ratio. C/P = call ÷ put volume; B/S = bought-at-ask ÷ sold-at-bid.
+        meaningless ratio. C/P = call ÷ put volume under the selected mode (All = everything traded · Ask-only = bought at
+        ask · Net = ask − bid, clamped at 0); B/S = bought-at-ask ÷ sold-at-bid, always side-complete.
       </div>
     </div>
   );
@@ -170,7 +205,9 @@ function SummaryTable({ rows }: { rows: MarketSentimentTicker[] }) {
               <TickerCell ticker={r.ticker} />
               {r.hasData ? (
                 <>
-                  <Td bold color={cpColor(r.cpRatio)}>{fmtRatio(r.cpRatio)}</Td>
+                  <Td bold color={(r as { cpNull?: boolean }).cpNull ? "var(--color-text-tertiary)" : cpColor(r.cpRatio)}>
+                    {(r as { cpNull?: boolean }).cpNull ? "—" : fmtRatio(r.cpRatio)}
+                  </Td>
                   <Td color="var(--color-text-secondary)">{fmtVol(r.callVol)}</Td>
                   <Td color="var(--color-text-secondary)">{fmtVol(r.putVol)}</Td>
                   <Td color={callColor(r.callBuyRatio)}>{fmtRatio(r.callBuyRatio)}</Td>

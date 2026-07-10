@@ -138,14 +138,16 @@ export default function UserGuidePage() {
           <Ul>
             <li><B>Market dashboard</B> (the default landing tab) — a market-wide scan: Call/Put and Buy/Sell ratios for the
               major indices and mega caps, plus <B>Top bullish</B> (C/P &gt; 2.0) and <B>Top bearish</B> (C/P &lt; 0.5)
-              leaderboards, filtered to liquid names. Every table is sortable; <B>click any ticker</B> to jump straight to
-              its Ticker view.</li>
+              leaderboards, filtered to liquid names. The <B>All / Ask-only / Net</B> toggle recomputes every C/P ratio and
+              re-ranks both leaderboards under the selected accounting; the within-side B/S ratios never change. Every
+              table is sortable; <B>click any ticker</B> to jump straight to its Ticker view.</li>
             <li><B>Ticker view</B> — per-strike bars with calls to the left, puts to the right, green (buy) vs red (sell).
               The dashed cyan line marks spot; the margins show each strike’s <B>buy/sell ratio</B>. Drag the{" "}
               <B>replay slider</B> to watch the session build minute-by-minute, and toggle how many strikes (10–40) to show.
-              An <B>All / Ask-only / Net</B> toggle controls the accounting: everything traded, bought-at-ask only, or the
-              per-side net (ask minus bid) — in Net mode green means net buying and red means net selling, and the C/P
-              ratio follows the selected mode.</li>
+              An <B>All / Ask-only / Net</B> toggle controls the accounting for the bars and the total C/P ratio:
+              everything traded, bought-at-ask only, or the per-side net (ask minus bid) — in Net mode green means net
+              buying and red means net selling. The per-strike and summary <B>buy/sell ratios always compare raw ask vs
+              bid</B>, regardless of the toggle.</li>
           </Ul>
         </Mod>
 
