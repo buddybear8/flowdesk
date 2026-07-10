@@ -43,7 +43,11 @@ RUN cd worker && npm ci --omit=dev
 COPY prisma ./prisma
 RUN echo '{"name":"flowdesk-monorepo","private":true,"devDependencies":{"prisma":"5.22.0","@prisma/client":"5.22.0"}}' > /app/package.json
 ENV CI=true
-RUN cd worker && npx --no-install prisma generate --schema=../prisma/schema.prisma
+# --generator worker: generate ONLY the worker client. The schema's second
+# generator (nextjs) outputs to /app/node_modules, which doesn't exist in
+# this image — running it makes Prisma attempt a doomed self-install on the
+# builder (the 2026-07-10 build failures).
+RUN cd worker && npx --no-install prisma generate --schema=../prisma/schema.prisma --generator worker
 
 # Copy worker source last so source-only edits don't bust the deps cache.
 COPY worker/tsconfig.json ./worker/
