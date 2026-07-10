@@ -637,6 +637,13 @@ export async function pollGex(): Promise<void> {
       const fridays = candidatesAll.filter((e: { date: string }) => isFriday(e.date)).slice(0, 5);
       const byDate = new Map<string, { date: string; dte: number }>();
       for (const e of [...nearest, ...fridays]) byDate.set(e.date, e);
+      // UW drops the 0DTE expiry from /greek-exposure/expiry INTRADAY on
+      // expiration day (verified 2026-07-10: the listing started at dte 3
+      // while the strike endpoint still served 298 rows for today). Always
+      // request today's date too — it rides the same batched call, and the
+      // presence filter below discards it on non-expiration days.
+      const todayIso = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+      if (!byDate.has(todayIso)) byDate.set(todayIso, { date: todayIso, dte: 0 });
       const selected = [...byDate.values()].sort((a, b) => a.dte - b.dte);
 
       if (selected.length === 0) {
