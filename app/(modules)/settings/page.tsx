@@ -1,5 +1,6 @@
 import { auth, signOut } from "@/lib/auth";
 import { AppearancePicker } from "@/components/settings/AppearancePicker";
+import { TimezonePicker } from "@/components/settings/TimezonePicker";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -55,6 +56,16 @@ export default async function SettingsPage() {
             Appearance
           </div>
           <AppearancePicker />
+        </div>
+
+        <div
+          className="bg-bg-primary rounded-[12px]"
+          style={{ border: "0.5px solid var(--color-border-tertiary)", padding: 16, marginBottom: 12 }}
+        >
+          <div style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 10 }}>
+            Display timezone
+          </div>
+          <TimezonePicker />
         </div>
 
         <div

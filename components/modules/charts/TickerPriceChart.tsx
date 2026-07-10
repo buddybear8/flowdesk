@@ -7,7 +7,7 @@
 // crosshair OHLC readout, a freshness pill, and the required TradingView
 // attribution.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   createChart,
   CrosshairMode,
@@ -19,6 +19,7 @@ import {
   type MouseEventParams,
 } from "lightweight-charts";
 import type { Candle, RankedTrade } from "@/lib/candles";
+import { useTimeZone, tzOffsetSec } from "@/lib/timezone";
 
 // Generic horizontal level drawn by the page layer (GEX levels, Daily Watch
 // targets) — the chart just renders whatever it's handed.
@@ -76,8 +77,23 @@ export function TickerPriceChart(props: Props) {
   const propsRef = useRef(props);
   propsRef.current = props;
 
+  // Lightweight-charts renders timestamps as UTC wall time, so shift each
+  // bar by the display zone's offset — the axis then reads in the user's
+  // selected timezone. Offset is per-bar (DST changes across the history).
+  const { tz } = useTimeZone();
+  const dispCandles = useMemo(
+    () => props.candles.map((c) => ({ ...c, time: c.time + tzOffsetSec(tz, new Date(c.time * 1000)) })),
+    [props.candles, tz],
+  );
+  const dispTrades = useMemo(
+    () => props.trades.map((t) => ({ ...t, time: t.time + tzOffsetSec(tz, new Date(t.time * 1000)) })),
+    [props.trades, tz],
+  );
+  const dispRef = useRef({ candles: dispCandles, trades: dispTrades });
+  dispRef.current = { candles: dispCandles, trades: dispTrades };
+
   function nearestBarTime(time: number): number | null {
-    const bars = propsRef.current.candles;
+    const bars = dispRef.current.candles;
     if (bars.length === 0) return null;
     let best = bars[0]!.time, bd = Infinity;
     for (const b of bars) {
@@ -118,9 +134,10 @@ export function TickerPriceChart(props: Props) {
     layer.innerHTML = "";
     bubblesRef.current = [];
     const p = propsRef.current;
-    if (!p.showBubbles || p.candles.length === 0) return;
-    const first = p.candles[0]!.time, last = p.candles[p.candles.length - 1]!.time;
-    for (const t of p.trades) {
+    const d = dispRef.current;
+    if (!p.showBubbles || d.candles.length === 0) return;
+    const first = d.candles[0]!.time, last = d.candles[d.candles.length - 1]!.time;
+    for (const t of d.trades) {
       if (t.rank > p.bubbleRank) continue;
       if (t.time < first || t.time > last) continue; // outside this timeframe's window
       const barTime = nearestBarTime(t.time);
@@ -210,7 +227,7 @@ export function TickerPriceChart(props: Props) {
     volSeriesRef.current = volSeries;
 
     chart.subscribeCrosshairMove((param: MouseEventParams) => {
-      const bars = propsRef.current.candles;
+      const bars = dispRef.current.candles;
       if (!param.time) { updateReadout(bars[bars.length - 1] ?? null); return; }
       const hit = bars.find((b) => b.time === (param.time as unknown as number));
       if (hit) updateReadout(hit);
@@ -237,32 +254,32 @@ export function TickerPriceChart(props: Props) {
     const cs = candleSeriesRef.current, vs = volSeriesRef.current, chart = chartRef.current;
     if (!cs || !vs || !chart) return;
     cs.setData(
-      props.candles.map((c) => ({
+      dispCandles.map((c) => ({
         time: c.time as UTCTimestamp, open: c.open, high: c.high, low: c.low, close: c.close,
       })),
     );
     vs.setData(
-      props.candles.map((c) => ({
+      dispCandles.map((c) => ({
         time: c.time as UTCTimestamp,
         value: c.volume,
         color: c.close >= c.open ? "rgba(127,191,82,.32)" : "rgba(231,106,106,.32)",
       })),
     );
     chart.applyOptions({ timeScale: { timeVisible: props.intraday } });
-    if (props.fitBars && props.candles.length > props.fitBars) {
+    if (props.fitBars && dispCandles.length > props.fitBars) {
       chart.timeScale().setVisibleLogicalRange({
-        from: props.candles.length - props.fitBars,
-        to: props.candles.length + 2,
+        from: dispCandles.length - props.fitBars,
+        to: dispCandles.length + 2,
       });
     } else {
       chart.timeScale().fitContent();
     }
-    updateReadout(props.candles[props.candles.length - 1] ?? null);
+    updateReadout(dispCandles[dispCandles.length - 1] ?? null);
     drawBubbles();
     drawLevels();
     drawExtraLevels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.candles, props.intraday]);
+  }, [dispCandles, props.intraday]);
 
   function drawExtraLevels() {
     const cs = candleSeriesRef.current;
@@ -288,7 +305,7 @@ export function TickerPriceChart(props: Props) {
     drawBubbles();
     drawLevels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.trades, props.showBubbles, props.bubbleRank, props.showLevels, props.levelRank, props.levelSince]);
+  }, [dispTrades, props.showBubbles, props.bubbleRank, props.showLevels, props.levelRank, props.levelSince]);
 
   // ── GEX / watch-target levels ─────────────────────────────────────────
   useEffect(() => {

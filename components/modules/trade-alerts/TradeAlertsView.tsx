@@ -14,6 +14,7 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 import type { TradeAlertsPayload, TradeAlertRow } from "@/lib/types";
+import { useTimeZone } from "@/lib/timezone";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler);
 
@@ -21,7 +22,7 @@ const GAIN = "#3FB950";
 const LOSS = "#E5534B";
 const pct = (v: number | null, dp = 1) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(dp)}%`);
 const col = (v: number | null) => (v == null ? "var(--color-text-tertiary)" : v >= 0 ? GAIN : LOSS);
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const fmtDate = (iso: string, tz: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: tz });
 
 function contractLabel(r: TradeAlertRow): string {
   if (r.assetType === "equity") return `${r.ticker}`;
@@ -136,6 +137,7 @@ function buildCols(live: boolean): AlertCol[] {
 }
 
 function AlertsTable({ rows, live }: { rows: TradeAlertRow[]; live: boolean }) {
+  const { tz } = useTimeZone();
   const cols = useMemo(() => buildCols(live), [live]);
   // Own sort state per table instance — sorting Open Now never touches Track
   // record, and vice versa. `null` keeps the server order (entry, most recent).
@@ -189,7 +191,7 @@ function AlertsTable({ rows, live }: { rows: TradeAlertRow[]; live: boolean }) {
             return (
               <tr key={r.id} style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
                 <Td left><span style={{ color: r.side === "PUT" ? LOSS : GAIN, fontWeight: 600 }}>{contractLabel(r)}</span></Td>
-                <Td>{fmtDate(r.entryAt)}</Td>
+                <Td>{fmtDate(r.entryAt, tz)}</Td>
                 <Td>{r.expiryLabel ? `${r.expiryLabel}${r.dte != null ? ` · ${r.dte}d` : ""}` : "—"}</Td>
                 <Td><SizePill size={r.sizeLabel} /></Td>
                 <Td><Remaining frac={r.remainingFrac} /></Td>

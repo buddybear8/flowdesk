@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { FlowAlert } from "@/lib/types";
+import { useTimeZone, fmtClock, fmtDateShort } from "@/lib/timezone";
 import { buildLottoMock } from "@/lib/mock/lotto-alerts";
 import { Badge, fmtP, SL, StatGroup, SV, Td, Th } from "./shared";
 
@@ -12,6 +13,7 @@ const ET_DATE_FMT = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_Yo
 const todayET = () => ET_DATE_FMT.format(new Date());
 
 export function LottosView() {
+  const { tz } = useTimeZone();
   // ?mock=1 — opt-in preview mode for layout work without a live DB. Read once
   // on render; toggling the URL switches data source without a hard reload.
   const useMock = useSearchParams().get("mock") === "1";
@@ -277,8 +279,8 @@ export function LottosView() {
                       cursor: "pointer",
                     }}
                   >
-                    <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{r.date}</Td>
-                    <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{r.time}</Td>
+                    <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{r.at ? fmtDateShort(new Date(r.at), tz) : r.date}</Td>
+                    <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{r.at ? fmtClock(new Date(r.at), tz) : r.time}</Td>
                     <Td style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-primary)" }}>
                       {r.ticker}
                     </Td>

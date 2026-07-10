@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { MarketSentimentPayload, MarketSentimentTicker } from "@/lib/types";
 import { SideModeToggle, useSideMode, modeCp, type SideMode } from "./FlowSentimentView";
+import { useTimeZone } from "@/lib/timezone";
 
 const BULL = "#3FB950";
 const BEAR = "#E5534B";
@@ -39,6 +40,7 @@ export function MarketDashboardView() {
   const [data, setData] = useState<MarketSentimentPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { sideMode, setSideMode } = useSideMode();
+  const { tz, abbr: tzLabel } = useTimeZone();
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +57,7 @@ export function MarketDashboardView() {
   if (error) return <Centered>{error}</Centered>;
   if (!data) return <Centered>Loading…</Centered>;
 
-  const captured = new Date(data.capturedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
+  const captured = new Date(data.capturedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
 
   const indices = data.indices.map((t) => withModeCp(t, sideMode));
   const megaCaps = data.megaCaps.map((t) => withModeCp(t, sideMode));
@@ -73,7 +75,7 @@ export function MarketDashboardView() {
             Market sentiment dashboard
           </div>
           <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
-            Call/put + buy-vs-sell pressure across the tracked universe · {data.tradingDate} · updated {captured} ET
+            Call/put + buy-vs-sell pressure across the tracked universe · {data.tradingDate} · updated {captured} {tzLabel}
           </div>
         </div>
         <div className="flex items-center gap-[12px]">

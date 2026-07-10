@@ -20,6 +20,13 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineEleme
 
 type Payload = { tide: MarketTideSnapshot; netImpact: NetImpactSnapshot };
 
+import { useTimeZone, wallToDate } from "@/lib/timezone";
+
+const ET_DAY_FMT = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" });
+// 24h clock in the display zone, for compact chart axis labels.
+const axisClock = (etDay: string, hhmm: string, tz: string) =>
+  wallToDate(etDay, hhmm).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz });
+
 const HEADER_DATE_FMT = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/New_York",
   month: "short",
@@ -58,7 +65,10 @@ export function MarketTideView() {
   }
 
   const noTide = data.tide.series.length === 0;
+  const { tz, abbr: tzLabel } = useTimeZone();
+  const etDay = ET_DAY_FMT.format(new Date(data.tide.asOf));
   const headerDate = HEADER_DATE_FMT.format(new Date(data.tide.asOf));
+  const asOfLocal = new Date(data.tide.asOf).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
 
   return (
     <div
@@ -71,7 +81,7 @@ export function MarketTideView() {
           Market Pulse
         </h1>
         <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
-          {headerDate} · {data.tide.asOfLabel} · SPY price vs net call/put premium flow, updated every 5 minutes
+          {headerDate} · {asOfLocal} {tzLabel} · SPY price vs net call/put premium flow, updated every 5 minutes
         </p>
       </div>
 
@@ -103,7 +113,7 @@ export function MarketTideView() {
               No market-tide data yet · check worker status
             </div>
           ) : (
-            <TideChart snapshot={data.tide} />
+            <TideChart snapshot={data.tide} etDay={etDay} tz={tz} />
           )}
         </div>
       </Card>
@@ -134,9 +144,9 @@ export function MarketTideView() {
 // Market Tide line chart (dual Y-axis)
 // =====================================================
 
-function TideChart({ snapshot }: { snapshot: MarketTideSnapshot }) {
+function TideChart({ snapshot, etDay, tz }: { snapshot: MarketTideSnapshot; etDay: string; tz: string }) {
   const { chartData, options } = useMemo(() => {
-    const labels = snapshot.series.map(p => p.time);
+    const labels = snapshot.series.map(p => axisClock(etDay, p.time, tz));
     const chartData: ChartData<"line"> = {
       labels,
       datasets: [
@@ -201,7 +211,7 @@ function TideChart({ snapshot }: { snapshot: MarketTideSnapshot }) {
     };
 
     return { chartData, options };
-  }, [snapshot]);
+  }, [snapshot, etDay, tz]);
 
   return <Line data={chartData} options={options} />;
 }

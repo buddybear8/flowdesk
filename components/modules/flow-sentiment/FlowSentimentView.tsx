@@ -15,6 +15,7 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import type { FlowSentimentPayload, SentimentMinute, SentimentStrike, SentimentLabel } from "@/lib/types";
+import { useTimeZone, wallToDate, fmtClock } from "@/lib/timezone";
 import { TRACKED_TICKERS } from "@/lib/tracked-tickers";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
@@ -307,6 +308,10 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
   const [date, setDate] = useState(liveDate);
   const [strikeCount, setStrikeCount] = useState<StrikeCount>("20");
   const { sideMode, setSideMode } = useSideMode();
+  const { tz, abbr: tzLabel } = useTimeZone();
+  // Minute stamps ("HH:MM") are ET wall times on the viewed session date —
+  // re-render them in the selected display zone.
+  const clock = (hhmm: string) => fmtClock(wallToDate(date, hhmm), tz);
   const [data, setData] = useState<FlowSentimentPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [minuteIdx, setMinuteIdx] = useState(0);
@@ -474,7 +479,7 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
             <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
               <SectionLabel>{isLive ? "Replay — drag to scrub the session" : "Replay"}</SectionLabel>
               <div style={{ fontSize: 16, fontWeight: 600, color: "var(--color-text-primary)" }}>
-                {to12h(current.t)} ET
+                {clock(current.t)} {tzLabel}
               </div>
             </div>
             <input
@@ -486,9 +491,9 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
               style={{ width: "100%", accentColor: "#C9A55A", cursor: "pointer" }}
             />
             <div className="flex justify-between" style={{ fontSize: 10, color: "var(--color-text-tertiary)", marginTop: 2 }}>
-              <span>{minutes[0] ? to12h(minutes[0].t) : ""}</span>
+              <span>{minutes[0] ? clock(minutes[0].t) : ""}</span>
               <span>{minutes.length} snapshots</span>
-              <span>{minutes[minutes.length - 1] ? to12h(minutes[minutes.length - 1]!.t) : ""}</span>
+              <span>{minutes[minutes.length - 1] ? clock(minutes[minutes.length - 1]!.t) : ""}</span>
             </div>
           </Card>
 

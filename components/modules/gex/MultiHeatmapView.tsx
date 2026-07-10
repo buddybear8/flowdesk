@@ -22,6 +22,7 @@ import {
   COLOR_MAX_ABS_TEXT,
   COLOR_SPOT,
 } from "./heatmap-shared";
+import { useTimeZone } from "@/lib/timezone";
 
 const STRIKES_PER_STRIP = 25;
 
@@ -60,6 +61,7 @@ export function MultiHeatmapView({ tickers, metric = "gex", horizon = "near" }: 
 
 function TickerStrip({ ticker, metric, horizon }: { ticker: string; metric: HeatmapMetric; horizon: HeatmapHorizon }) {
   const { data, error, notFound, loading } = useHeatmapData(ticker, true, horizon);
+  const { tz, abbr: tzLabel } = useTimeZone();
   const now = useNow();
 
   const strip = useMemo(() => {
@@ -142,7 +144,7 @@ function TickerStrip({ ticker, metric, horizon }: { ticker: string; metric: Heat
               title={
                 fresh.label +
                 (data
-                  ? ` · captured ${new Date(data.capturedAt).toLocaleTimeString("en-US", { timeZone: "America/New_York" })} ET`
+                  ? ` · captured ${new Date(data.capturedAt).toLocaleTimeString("en-US", { timeZone: tz })} ${tzLabel}`
                   : "")
               }
             >

@@ -21,6 +21,7 @@ import {
 } from "./heatmap-shared";
 import { HeatmapModeToggle, CustomTickerPicker } from "./HeatmapModeControls";
 import { MultiHeatmapView } from "./MultiHeatmapView";
+import { useTimeZone } from "@/lib/timezone";
 
 const TICKERS = ["SPY", "SPX", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT", "AAPL", "MU", "DRAM", "SPCX", "ORCL", "MRVL", "BABA", "APP", "HOOD", "ASTS", "ENPH"];
 
@@ -28,6 +29,7 @@ export function GexHeatmapView() {
   const { ticker, setTicker, restored: tickerRestored } = useGexTicker(TICKERS, "SPY");
   const { mode, setMode, customTickers, setCustomTickers, restored: modeRestored } = useGexHeatmapMode(TICKERS);
   const { metric, setMetric } = useHeatmapMetric();
+  const { tz, abbr: tzLabel } = useTimeZone();
   const { horizon, setHorizon } = useHeatmapHorizon();
   const METRIC_LABEL = metric === "vex" ? "VEX" : "GEX";
 
@@ -185,7 +187,7 @@ export function GexHeatmapView() {
             <span
               className="inline-flex items-center gap-[5px]"
               style={{ fontSize: 10, color: fresh.color }}
-              title={data ? `Snapshot captured ${new Date(data.capturedAt).toLocaleTimeString("en-US", { timeZone: "America/New_York" })} ET` : undefined}
+              title={data ? `Snapshot captured ${new Date(data.capturedAt).toLocaleTimeString("en-US", { timeZone: tz })} ${tzLabel}` : undefined}
             >
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: fresh.color }} />
               {fresh.label}

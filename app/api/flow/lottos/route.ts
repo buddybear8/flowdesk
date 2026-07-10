@@ -173,6 +173,7 @@ export async function GET(req: NextRequest) {
     id: r.id,
     date: DATE_LABEL_FMT.format(r.time),
     time: TIME_LABEL_FMT.format(r.time),
+    at: r.time.toISOString(),
     ticker: r.ticker,
     type: r.type as OptionType,
     side: r.side as Side,

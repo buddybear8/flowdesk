@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { clsx } from "clsx";
 import type { FlowAlert } from "@/lib/types";
+import { useTimeZone, fmtClock, fmtDateShort } from "@/lib/timezone";
 
 type FilterState = {
   type: "ALL" | "CALL" | "PUT";
@@ -74,6 +75,7 @@ function dteOf(expiryIso: string, tradingDayIso: string): number {
 }
 
 export function FlowView() {
+  const { tz } = useTimeZone();
   const [alerts, setAlerts] = useState<FlowAlert[]>([]);
   const [filter, setFilter] = useState<FilterState>(() => ({ ...INITIAL_FILTER, date: todayET() }));
   const [sortKey, setSortKey] = useState<SortKey>("time");
@@ -204,8 +206,8 @@ export function FlowView() {
                     cursor: "pointer",
                   }}
                 >
-                  <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{r.date}</Td>
-                  <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{r.time}</Td>
+                  <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{r.at ? fmtDateShort(new Date(r.at), tz) : r.date}</Td>
+                  <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{r.at ? fmtClock(new Date(r.at), tz) : r.time}</Td>
                   <Td style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-primary)" }}>{r.ticker}</Td>
                   <Td><Badge type={r.type === "CALL" ? "call" : "put"}>{r.type}</Badge></Td>
                   <Td><Badge type={r.side === "BUY" ? "buy" : "sell"}>{r.side}</Badge></Td>

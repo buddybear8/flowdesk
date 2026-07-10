@@ -39,8 +39,9 @@ export type Sector =
 
 export interface FlowAlert {
   id: string;
-  date: string;           // display-ready "MMM d" (ET, e.g. "May 4")
-  time: string;           // display-ready "HH:MM AM/PM"
+  date: string;           // display-ready "MMM d" (ET, e.g. "May 4") — fallback
+  time: string;           // display-ready "HH:MM AM/PM" (ET) — fallback
+  at?: string;            // ISO instant; clients format in the display timezone
   ticker: string;
   type: OptionType;
   side: Side;

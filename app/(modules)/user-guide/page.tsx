@@ -49,6 +49,8 @@ export default function UserGuidePage() {
               <li>Modules with <B>sub-tabs</B> show them along the top; the breadcrumb (top-left) tracks where you are.</li>
               <li>The tab you’re on is saved in the URL (<Kbd>?tab=1</Kbd>), so views are shareable/bookmarkable.</li>
               <li>The top-right pill shows <B>Market open / closed</B>.</li>
+              <li>Pick your <B>display timezone</B> in Settings (US zones) — charts, flow alerts, replay clocks, and
+                freshness stamps all render in it. Market hours and session dates stay on Eastern (exchange) time.</li>
               <li>Anywhere you see a ticker box, type any symbol (1–5 letters) and press Enter.</li>
             </Ul>
           </Card>
