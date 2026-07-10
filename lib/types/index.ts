@@ -133,6 +133,8 @@ export interface SentimentStrike {
   pB: number;  // put volume, bid side (sold)
   cP: number;  // net call premium ($)
   pP: number;  // net put premium ($)
+  // Side-split premium ($) — recorded from 2026-07-10; absent in older days.
+  cPA?: number; cPB?: number; pPA?: number; pPB?: number;
 }
 
 export type SentimentLabel = "BULLISH" | "BEARISH" | "NEUTRAL";
@@ -166,8 +168,12 @@ export interface MarketSentimentTicker {
   callBuyRatio: number;        // call bought-at-ask / sold-at-bid
   putBuyRatio: number;         // put bought-at-ask / sold-at-bid
   // Raw side components so the client can recompute C/P per accounting mode
-  // (all / ask-only / net) without a refetch.
+  // (all / ask-only / net) without a refetch. Volume sides always present;
+  // premium sides ($) are zero with hasPrem=false on days recorded before
+  // the side-split premium fields existed (client falls back to volume).
   cA: number; cB: number; pA: number; pB: number;
+  cPA: number; cPB: number; pPA: number; pPB: number;
+  hasPrem: boolean;
 }
 
 export interface MarketSentimentPayload {

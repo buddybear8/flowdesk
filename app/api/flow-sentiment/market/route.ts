@@ -20,11 +20,17 @@ const ratio = (num: number, den: number): number =>
 // Collapse a ticker's latest cumulative snapshot into a single summary row.
 function summarize(ticker: string, last: SentimentMinute | null): MarketSentimentTicker {
   if (!last || !Array.isArray(last.strikes)) {
-    return { ticker, hasData: false, callVol: 0, putVol: 0, cpRatio: 0, callBuyRatio: 0, putBuyRatio: 0, cA: 0, cB: 0, pA: 0, pB: 0 };
+    return { ticker, hasData: false, callVol: 0, putVol: 0, cpRatio: 0, callBuyRatio: 0, putBuyRatio: 0, cA: 0, cB: 0, pA: 0, pB: 0, cPA: 0, cPB: 0, pPA: 0, pPB: 0, hasPrem: false };
   }
   let cA = 0, cB = 0, pA = 0, pB = 0;
+  let cPA = 0, cPB = 0, pPA = 0, pPB = 0;
+  let hasPrem = false;
   for (const s of last.strikes) {
     cA += s.cA; cB += s.cB; pA += s.pA; pB += s.pB;
+    if (s.cPA !== undefined) {
+      hasPrem = true;
+      cPA += s.cPA; cPB += s.cPB ?? 0; pPA += s.pPA ?? 0; pPB += s.pPB ?? 0;
+    }
   }
   const callVol = cA + cB;
   const putVol = pA + pB;
@@ -34,9 +40,13 @@ function summarize(ticker: string, last: SentimentMinute | null): MarketSentimen
     callVol,
     putVol,
     cpRatio: ratio(callVol, putVol),
-    callBuyRatio: ratio(cA, cB),
-    putBuyRatio: ratio(pA, pB),
+    // B/S ratios compare ask vs bid within a side — premium-based when the
+    // side-split premium exists (days from 2026-07-10), volume otherwise.
+    callBuyRatio: hasPrem ? ratio(cPA, cPB) : ratio(cA, cB),
+    putBuyRatio: hasPrem ? ratio(pPA, pPB) : ratio(pA, pB),
     cA, cB, pA, pB,
+    cPA, cPB, pPA, pPB,
+    hasPrem,
   };
 }
 

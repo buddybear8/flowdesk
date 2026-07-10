@@ -45,6 +45,24 @@ type StrikeCount = "10" | "15" | "20" | "25" | "40";
 export type SideMode = "all" | "ask" | "net";
 const SIDE_MODE_KEY = "cs-sent-side-mode";
 
+// Total C/P ratio under an accounting mode, per the locked spec:
+//   all — (ask + bid calls) / (ask + bid puts)
+//   ask — ask calls / ask puts
+//   net — (ask − bid calls) / (ask − bid puts), SIGNED (no clamping — a
+//         net-sold side is real information, not a zero)
+// Works on premium or volume sides alike. null when the denominator is 0.
+// Result clamped to ±99 for display sanity only.
+export function modeCp(
+  c: { ask: number; bid: number },
+  p: { ask: number; bid: number },
+  mode: SideMode,
+): number | null {
+  const num = mode === "all" ? c.ask + c.bid : mode === "ask" ? c.ask : c.ask - c.bid;
+  const den = mode === "all" ? p.ask + p.bid : mode === "ask" ? p.ask : p.ask - p.bid;
+  if (den === 0) return null;
+  return Math.max(-99, Math.min(num / den, 99));
+}
+
 export function useSideMode(): { sideMode: SideMode; setSideMode: (m: SideMode) => void } {
   const [sideMode, setState] = useState<SideMode>("all");
   useEffect(() => {
@@ -346,16 +364,27 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
   // Mode-transformed copy drives the bars only (same strikes, same order).
   const displayed = useMemo(() => applySideMode(displayedRaw, sideMode), [displayedRaw, sideMode]);
 
-  // Whole-chain totals for the stat cards, in the selected mode. Net mode can
-  // go negative on either side (net selling), so the ratio only renders when
-  // both sides are net-bought.
+  // Whole-chain totals for the stat cards. Volume cards follow the mode
+  // (signed in net mode); the C/P ratio is PREMIUM-based per the locked spec,
+  // falling back to volume on days recorded before the side-split premium
+  // fields existed (pre 2026-07-10).
   const chainTotals = useMemo(() => {
-    let c = 0, p = 0;
+    let cVA = 0, cVB = 0, pVA = 0, pVB = 0;
+    let cPA = 0, cPB = 0, pPA = 0, pPB = 0;
+    let hasPrem = false;
     for (const st of current?.strikes ?? []) {
-      c += sideMode === "all" ? st.cA + st.cB : sideMode === "ask" ? st.cA : st.cA - st.cB;
-      p += sideMode === "all" ? st.pA + st.pB : sideMode === "ask" ? st.pA : st.pA - st.pB;
+      cVA += st.cA; cVB += st.cB; pVA += st.pA; pVB += st.pB;
+      if (st.cPA !== undefined) {
+        hasPrem = true;
+        cPA += st.cPA; cPB += st.cPB ?? 0; pPA += st.pPA ?? 0; pPB += st.pPB ?? 0;
+      }
     }
-    return { c, p, ratio: c > 0 && p > 0 ? c / p : null };
+    const ratio = hasPrem
+      ? modeCp({ ask: cPA, bid: cPB }, { ask: pPA, bid: pPB }, sideMode)
+      : modeCp({ ask: cVA, bid: cVB }, { ask: pVA, bid: pVB }, sideMode);
+    const c = sideMode === "all" ? cVA + cVB : sideMode === "ask" ? cVA : cVA - cVB;
+    const p = sideMode === "all" ? pVA + pVB : sideMode === "ask" ? pVA : pVA - pVB;
+    return { c, p, ratio };
   }, [current, sideMode]);
 
   // Summary boxes — sum across the displayed strikes for the selected minute.

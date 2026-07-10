@@ -68,6 +68,11 @@ interface SentimentStrike {
   pB: number;
   cP: number;
   pP: number;
+  // Side-split premium ($), recorded from 2026-07-10.
+  cPA: number;
+  cPB: number;
+  pPA: number;
+  pPB: number;
 }
 
 interface SentimentMinute {
@@ -210,6 +215,13 @@ function mapStrikes(rows: UwStrikeRow[]): SentimentStrike[] {
       // Net premium per strike: ask-side (buying) minus bid-side (selling).
       cP: num(r.call_premium_ask_side) - num(r.call_premium_bid_side),
       pP: num(r.put_premium_ask_side) - num(r.put_premium_bid_side),
+      // Side-split premium (added 2026-07-10) — feeds the premium-based C/P
+      // and B/S ratios. Older stored minutes lack these; readers fall back
+      // to volume-based ratios for those days.
+      cPA: num(r.call_premium_ask_side),
+      cPB: num(r.call_premium_bid_side),
+      pPA: num(r.put_premium_ask_side),
+      pPB: num(r.put_premium_bid_side),
     }))
     .filter((s) => s.k > 0);
 }

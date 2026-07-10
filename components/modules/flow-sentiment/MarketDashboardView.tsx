@@ -3,34 +3,28 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { MarketSentimentPayload, MarketSentimentTicker } from "@/lib/types";
-import { SideModeToggle, useSideMode, type SideMode } from "./FlowSentimentView";
+import { SideModeToggle, useSideMode, modeCp, type SideMode } from "./FlowSentimentView";
 
 const BULL = "#3FB950";
 const BEAR = "#E5534B";
 const NEUTRAL = "var(--color-text-secondary)";
 
 const fmtVol = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(0)}K` : String(Math.round(n)));
-const fmtRatio = (n: number) => (n >= 99 ? "99+" : n.toFixed(2));
+const fmtRatio = (n: number) => (n >= 99 ? "99+" : n <= -99 ? "-99+" : n.toFixed(2));
 
 const BULLISH_CP = 2.0;
 const BEARISH_CP = 0.5;
 const LIST_LIMIT = 20;
-const RATIO_CAP = 99;
-
-// Recompute the total-C/P ratio under the selected accounting mode. Net mode
-// clamps each side at zero (a net-sold side contributes nothing); a ticker
-// net-sold on BOTH sides has no C/P signal → null. The within-side buy/sell
-// ratios are never touched by the mode.
-function modeCpRatio(t: MarketSentimentTicker, mode: SideMode): number | null {
-  const c = mode === "all" ? t.cA + t.cB : mode === "ask" ? t.cA : Math.max(t.cA - t.cB, 0);
-  const p = mode === "all" ? t.pA + t.pB : mode === "ask" ? t.pA : Math.max(t.pA - t.pB, 0);
-  if (c <= 0 && p <= 0) return null;
-  return p > 0 ? Math.min(c / p, RATIO_CAP) : RATIO_CAP;
-}
 
 // Row with the C/P swapped for the mode-computed value (sorting + display).
+// Premium-based when the side-split premium exists (recorded from
+// 2026-07-10); volume-based fallback for older sessions. Net mode is a
+// SIGNED ratio — no clamping. null (denominator 0) renders as a dash and is
+// excluded from the leaderboards.
 function withModeCp(t: MarketSentimentTicker, mode: SideMode): MarketSentimentTicker & { cpNull: boolean } {
-  const r = modeCpRatio(t, mode);
+  const r = t.hasPrem
+    ? modeCp({ ask: t.cPA, bid: t.cPB }, { ask: t.pPA, bid: t.pPB }, mode)
+    : modeCp({ ask: t.cA, bid: t.cB }, { ask: t.pA, bid: t.pB }, mode);
   return { ...t, cpRatio: r ?? 0, cpNull: r === null };
 }
 
@@ -118,8 +112,9 @@ export function MarketDashboardView() {
 
       <div style={{ fontSize: 10, color: "var(--color-text-tertiary)", marginTop: 10, lineHeight: 1.6 }}>
         Leaderboards require ≥ {data.minVolume.toLocaleString("en-US")} near-the-money contracts so thin names don’t skew on a
-        meaningless ratio. C/P = call ÷ put volume under the selected mode (All = everything traded · Ask-only = bought at
-        ask · Net = ask − bid, clamped at 0); B/S = bought-at-ask ÷ sold-at-bid, always side-complete.
+        meaningless ratio. C/P = call ÷ put premium under the selected mode (All = ask + bid · Ask-only = ask only ·
+        Net = ask − bid, signed — negative means the sides net in opposite directions); B/S = ask ÷ bid premium within a
+        side, never affected by the toggle.
       </div>
     </div>
   );
