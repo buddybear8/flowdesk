@@ -469,7 +469,7 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
                 </div>
               </div>
               <div style={{ position: "relative", width: "100%", height: Math.max(320, displayed.length * 26) }}>
-                <SentimentBarChart strikes={displayed} spot={spot} />
+                <SentimentBarChart strikes={displayed} spot={spot} mode={sideMode} />
               </div>
             </Card>
 
@@ -477,8 +477,8 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
               className={compact ? "grid gap-[10px]" : "flex flex-col gap-[10px]"}
               style={compact ? { gridTemplateColumns: "1fr 1fr" } : undefined}
             >
-              <SummaryBox title="CALLS" buy={summary.cBuy} sell={summary.cSell} ratio={summary.cRatio} count={displayed.length} />
-              <SummaryBox title="PUTS" buy={summary.pBuy} sell={summary.pSell} ratio={summary.pRatio} count={displayed.length} />
+              <SummaryBox title="CALLS" buy={summary.cBuy} sell={summary.cSell} ratio={summary.cRatio} count={displayed.length} mode={sideMode} />
+              <SummaryBox title="PUTS" buy={summary.pBuy} sell={summary.pSell} ratio={summary.pRatio} count={displayed.length} mode={sideMode} />
             </div>
           </div>
         </>
@@ -489,7 +489,7 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
 
 // ── chart ────────────────────────────────────────────────────────────────────
 
-function SentimentBarChart({ strikes, spot }: { strikes: SentimentStrike[]; spot: number }) {
+function SentimentBarChart({ strikes, spot, mode }: { strikes: SentimentStrike[]; spot: number; mode: SideMode }) {
   const { chartData, options } = useMemo(() => {
     // Plain strike numbers — rendered as centered pills by centerLabelPlugin.
     const labels = strikes.map((s) => s.k.toLocaleString());
@@ -520,7 +520,10 @@ function SentimentBarChart({ strikes, spot }: { strikes: SentimentStrike[]; spot
     const chartData: ChartData<"bar"> = { labels, datasets };
     const sortedStrikes = strikes.map((s) => s.k);
     // Buy/sell ratio per strike, aligned to row order, for the margin labels.
-    const ratios = strikes.map((s) => ({ c: bsRatio(s.cA, s.cB), p: bsRatio(s.pA, s.pB) }));
+    // Buy/sell ratios are only meaningful when both sides are present — in
+    // ask-only and net modes the divisor is zeroed by construction, so the
+    // margin labels are suppressed instead of printing a wall of infinities.
+    const ratios = mode === "all" ? strikes.map((s) => ({ c: bsRatio(s.cA, s.cB), p: bsRatio(s.pA, s.pB) })) : [];
     const options: ChartOptions<"bar"> = {
       indexAxis: "y",
       responsive: true,
@@ -562,22 +565,38 @@ function SentimentBarChart({ strikes, spot }: { strikes: SentimentStrike[]; spot
       },
     };
     return { chartData, options };
-  }, [strikes, spot]);
+  }, [strikes, spot, mode]);
 
   return <Bar data={chartData} options={options} plugins={[spotLinePlugin, centerLabelPlugin, marginRatioPlugin]} />;
 }
 
 // ── small components (match GexView styling) ─────────────────────────────────
 
-function SummaryBox({ title, buy, sell, ratio, count }: { title: string; buy: number; sell: number; ratio: number; count: number }) {
+function SummaryBox({ title, buy, sell, ratio, count, mode }: { title: string; buy: number; sell: number; ratio: number; count: number; mode: SideMode }) {
   return (
     <div className="rounded-[12px] bg-bg-primary" style={{ border: "0.5px solid var(--color-border-tertiary)", padding: "0.85rem" }}>
       <div style={{ fontSize: 10, color: "var(--color-text-tertiary)", marginBottom: 2 }}>All {count} strikes</div>
       <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 8 }}>{title}</div>
-      <Row label="Buy" value={fmt(buy)} color={BUY_COLOR} />
-      <Row label="Sell" value={fmt(sell)} color={SELL_COLOR} />
-      <div style={{ height: 1, background: "var(--color-border-tertiary)", margin: "7px 0" }} />
-      <Row label="Ratio" value={sell > 0 ? ratio.toFixed(2) : "∞"} color={ratio >= 1 ? BUY_COLOR : SELL_COLOR} bold />
+      {mode === "ask" ? (
+        <>
+          <Row label="Bought at ask" value={fmt(buy)} color={BUY_COLOR} />
+          <Row label="Sold at bid" value="ignored" />
+        </>
+      ) : mode === "net" ? (
+        <>
+          <Row label="Net buying" value={fmt(buy)} color={BUY_COLOR} />
+          <Row label="Net selling" value={fmt(sell)} color={SELL_COLOR} />
+          <div style={{ height: 1, background: "var(--color-border-tertiary)", margin: "7px 0" }} />
+          <Row label="Ratio" value={sell > 0 ? ratio.toFixed(2) : "—"} color={ratio >= 1 ? BUY_COLOR : SELL_COLOR} bold />
+        </>
+      ) : (
+        <>
+          <Row label="Buy" value={fmt(buy)} color={BUY_COLOR} />
+          <Row label="Sell" value={fmt(sell)} color={SELL_COLOR} />
+          <div style={{ height: 1, background: "var(--color-border-tertiary)", margin: "7px 0" }} />
+          <Row label="Ratio" value={sell > 0 ? ratio.toFixed(2) : "∞"} color={ratio >= 1 ? BUY_COLOR : SELL_COLOR} bold />
+        </>
+      )}
     </div>
   );
 }
