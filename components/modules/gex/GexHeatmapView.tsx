@@ -22,7 +22,7 @@ import {
 import { HeatmapModeToggle, CustomTickerPicker } from "./HeatmapModeControls";
 import { MultiHeatmapView } from "./MultiHeatmapView";
 
-const TICKERS = ["SPY", "SPX", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT", "AAPL", "MU", "DRAM", "SPCX"];
+const TICKERS = ["SPY", "SPX", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT", "AAPL", "MU", "DRAM", "SPCX", "ORCL", "MRVL", "BABA", "APP", "HOOD", "ASTS", "ENPH"];
 
 export function GexHeatmapView() {
   const { ticker, setTicker, restored: tickerRestored } = useGexTicker(TICKERS, "SPY");

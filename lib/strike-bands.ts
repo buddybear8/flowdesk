@@ -28,6 +28,13 @@ const BAND: Record<string, number> = {
   NVDA: 0.25,
   NFLX: 0.25,
   AMD: 0.20,
+  ORCL: 0.15,
+  BABA: 0.15,
+  MRVL: 0.20,
+  ENPH: 0.20,
+  APP: 0.25,
+  HOOD: 0.25,
+  ASTS: 0.30,
 };
 
 const DEFAULT_BAND = 0.15;
