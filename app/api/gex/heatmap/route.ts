@@ -9,6 +9,7 @@ const VALID_TICKERS = new Set([
   "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT", "AAPL",
   "MU", "DRAM", "SPCX",
   "ORCL", "MRVL", "BABA", "APP", "HOOD", "ASTS", "ENPH",
+  "SOXX", "SMH", "NBIS", "SNOW", "PLTR", "NOW", "SNDK", "QCOM", "COIN",
 ]);
 
 // DB cells JSON shape — written by pollGex in worker/src/jobs/uw.ts.

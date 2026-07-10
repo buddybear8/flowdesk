@@ -35,6 +35,15 @@ const BAND: Record<string, number> = {
   APP: 0.25,
   HOOD: 0.25,
   ASTS: 0.30,
+  SOXX: 0.15,
+  SMH: 0.15,
+  QCOM: 0.15,
+  NOW: 0.15,
+  SNOW: 0.20,
+  PLTR: 0.20,
+  COIN: 0.25,
+  SNDK: 0.25,
+  NBIS: 0.30,
 };
 
 const DEFAULT_BAND = 0.15;

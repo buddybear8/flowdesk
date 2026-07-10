@@ -37,6 +37,15 @@ const TICKER_PATTERNS: Record<string, ExpiryPattern> = {
   HOOD: "FRIDAY",
   ASTS: "FRIDAY",
   ENPH: "FRIDAY",
+  SOXX: "FRIDAY",
+  SMH: "FRIDAY",
+  NBIS: "FRIDAY",
+  SNOW: "FRIDAY",
+  PLTR: "FRIDAY",
+  NOW: "FRIDAY",
+  SNDK: "FRIDAY",
+  QCOM: "FRIDAY",
+  COIN: "FRIDAY",
 };
 
 function isExpirationDay(date: Date, pattern: ExpiryPattern): boolean {

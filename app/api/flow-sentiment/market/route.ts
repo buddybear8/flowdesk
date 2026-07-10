@@ -6,7 +6,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Fixed display sets (order preserved in the UI).
 const INDICES = ["SPY", "SPX", "QQQ", "IWM", "DIA"];
-const MEGA_CAPS = ["TSLA", "SPCX", "AMZN", "AMD", "NVDA", "GOOGL", "MU", "MSFT", "NFLX", "AAPL"];
+const MEGA_CAPS = ["TSLA", "SPCX", "META", "AMZN", "AMD", "NVDA", "GOOGL", "MU", "MSFT", "NFLX", "AAPL"];
 
 // Liquidity floor so a thin name with a handful of contracts can't dominate a
 // leaderboard on a meaningless ratio. The bull/bear thresholds themselves live

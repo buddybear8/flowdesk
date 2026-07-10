@@ -31,6 +31,15 @@ export const WATCHED_TICKERS = [
   "HOOD",
   "ASTS",
   "ENPH",
+  "SOXX",
+  "SMH",
+  "NBIS",
+  "SNOW",
+  "PLTR",
+  "NOW",
+  "SNDK",
+  "QCOM",
+  "COIN",
 ] as const;
 
 export type WatchedTicker = (typeof WATCHED_TICKERS)[number];

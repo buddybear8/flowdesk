@@ -23,7 +23,7 @@ import { HeatmapModeToggle, CustomTickerPicker } from "./HeatmapModeControls";
 import { MultiHeatmapView } from "./MultiHeatmapView";
 import { useTimeZone } from "@/lib/timezone";
 
-const TICKERS = ["SPY", "SPX", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT", "AAPL", "MU", "DRAM", "SPCX", "ORCL", "MRVL", "BABA", "APP", "HOOD", "ASTS", "ENPH"];
+const TICKERS = ["SPY", "SPX", "QQQ", "SOXX", "SMH", "TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT", "AAPL", "MU", "DRAM", "SPCX", "ORCL", "MRVL", "BABA", "APP", "HOOD", "ASTS", "ENPH", "NBIS", "SNOW", "PLTR", "NOW", "SNDK", "QCOM", "COIN"];
 
 export function GexHeatmapView() {
   const { ticker, setTicker, restored: tickerRestored } = useGexTicker(TICKERS, "SPY");
