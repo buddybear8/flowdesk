@@ -142,7 +142,10 @@ export default function UserGuidePage() {
               its Ticker view.</li>
             <li><B>Ticker view</B> — per-strike bars with calls to the left, puts to the right, green (buy) vs red (sell).
               The dashed cyan line marks spot; the margins show each strike’s <B>buy/sell ratio</B>. Drag the{" "}
-              <B>replay slider</B> to watch the session build minute-by-minute, and toggle how many strikes (10–40) to show.</li>
+              <B>replay slider</B> to watch the session build minute-by-minute, and toggle how many strikes (10–40) to show.
+              An <B>All / Ask-only / Net</B> toggle controls the accounting: everything traded, bought-at-ask only, or the
+              per-side net (ask minus bid) — in Net mode green means net buying and red means net selling, and the C/P
+              ratio follows the selected mode.</li>
           </Ul>
         </Mod>
 

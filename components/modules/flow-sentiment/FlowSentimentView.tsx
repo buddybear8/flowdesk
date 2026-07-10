@@ -35,6 +35,22 @@ const SPOT_LINE_COLOR = "#22D3EE";
 
 type StrikeCount = "10" | "15" | "20" | "25" | "40";
 
+// Side-accounting mode for the charts/cards:
+//   all — bought-at-ask + sold-at-bid, both segments (the original view)
+//   ask — bought-at-ask only; bid-side trades ignored entirely
+//   net — ask minus bid per side; net buying renders green, net selling red
+type SideMode = "all" | "ask" | "net";
+const SIDE_MODE_KEY = "cs-sent-side-mode";
+
+function applySideMode(strikes: SentimentStrike[], mode: SideMode): SentimentStrike[] {
+  if (mode === "all") return strikes;
+  if (mode === "ask") return strikes.map((s) => ({ ...s, cB: 0, pB: 0 }));
+  return strikes.map((s) => {
+    const cn = s.cA - s.cB, pn = s.pA - s.pB;
+    return { ...s, cA: Math.max(cn, 0), cB: Math.max(-cn, 0), pA: Math.max(pn, 0), pB: Math.max(-pn, 0) };
+  });
+}
+
 // Per-strike buy/sell ratio shown in the chart margins (call side left, put
 // side right). NaN = no flow at that strike (label hidden).
 const bsRatio = (buy: number, sell: number): number => (sell > 0 ? buy / sell : buy > 0 ? Infinity : NaN);
@@ -254,6 +270,17 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
   }, [fixedTicker]);
   const [date, setDate] = useState(liveDate);
   const [strikeCount, setStrikeCount] = useState<StrikeCount>("20");
+  const [sideMode, setSideMode] = useState<SideMode>("all");
+  useEffect(() => {
+    try {
+      const m = localStorage.getItem(SIDE_MODE_KEY);
+      if (m === "ask" || m === "net" || m === "all") setSideMode(m);
+    } catch { /* default */ }
+  }, []);
+  const changeSideMode = (m: SideMode) => {
+    setSideMode(m);
+    try { localStorage.setItem(SIDE_MODE_KEY, m); } catch { /* non-fatal */ }
+  };
   const [data, setData] = useState<FlowSentimentPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [minuteIdx, setMinuteIdx] = useState(0);
@@ -303,9 +330,24 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
   const spot = data?.spot ?? 0;
 
   const displayed = useMemo(
-    () => (current ? pickCentered(current.strikes, spot, parseInt(strikeCount, 10)).sort((a, b) => b.k - a.k) : []),
-    [current, spot, strikeCount],
+    () =>
+      current
+        ? applySideMode(pickCentered(current.strikes, spot, parseInt(strikeCount, 10)), sideMode).sort((a, b) => b.k - a.k)
+        : [],
+    [current, spot, strikeCount, sideMode],
   );
+
+  // Whole-chain totals for the stat cards, in the selected mode. Net mode can
+  // go negative on either side (net selling), so the ratio only renders when
+  // both sides are net-bought.
+  const chainTotals = useMemo(() => {
+    let c = 0, p = 0;
+    for (const st of current?.strikes ?? []) {
+      c += sideMode === "all" ? st.cA + st.cB : sideMode === "ask" ? st.cA : st.cA - st.cB;
+      p += sideMode === "all" ? st.pA + st.pB : sideMode === "ask" ? st.pA : st.pA - st.pB;
+    }
+    return { c, p, ratio: c > 0 && p > 0 ? c / p : null };
+  }, [current, sideMode]);
 
   // Summary boxes — sum across the displayed strikes for the selected minute.
   const summary = useMemo(() => {
@@ -383,9 +425,9 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
         <>
           {/* Stat cards */}
           <div className="grid gap-[8px]" style={{ gridTemplateColumns: `repeat(${compact ? 2 : 4}, minmax(0, 1fr))`, marginBottom: 12 }}>
-            <Mc label="CALL VOL" value={fmt(current.callVol)} valueColor="#5AA9E6" />
-            <Mc label="PUT VOL" value={fmt(current.putVol)} valueColor="#B98AE6" />
-            <Mc label="C/P RATIO" value={current.cpRatio.toFixed(2)} valueColor="#E2BF73" />
+            <Mc label={sideMode === "net" ? "NET CALL VOL" : "CALL VOL"} value={fmt(chainTotals.c)} valueColor="#5AA9E6" />
+            <Mc label={sideMode === "net" ? "NET PUT VOL" : "PUT VOL"} value={fmt(chainTotals.p)} valueColor="#B98AE6" />
+            <Mc label="C/P RATIO" value={chainTotals.ratio !== null ? chainTotals.ratio.toFixed(2) : "—"} valueColor="#E2BF73" />
             <Mc label="SENTIMENT" value={SENTIMENT_STYLE[current.sentiment].label} valueColor={SENTIMENT_STYLE[current.sentiment].color} />
           </div>
 
@@ -420,8 +462,9 @@ export function FlowSentimentView({ compact = false, fixedTicker }: { compact?: 
                 <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>
                   {ticker} — CALLS&nbsp;←&nbsp;&nbsp;→&nbsp;PUTS
                 </div>
-                <div className="flex items-center gap-[10px]">
+                <div className="flex flex-wrap items-center gap-[10px]">
                   <Legend />
+                  <SideModeToggle value={sideMode} onChange={changeSideMode} />
                   <StrikeCountToggle value={strikeCount} onChange={setStrikeCount} />
                 </div>
               </div>
@@ -557,6 +600,37 @@ function Legend() {
       <span className="inline-flex items-center gap-[4px]">
         <span style={{ width: 9, height: 9, borderRadius: 2, background: SELL_COLOR, display: "inline-block" }} /> Sell
       </span>
+    </div>
+  );
+}
+
+function SideModeToggle({ value, onChange }: { value: SideMode; onChange: (m: SideMode) => void }) {
+  const OPTS: { id: SideMode; label: string; title: string }[] = [
+    { id: "all", label: "All", title: "Bought at ask + sold at bid (everything traded)" },
+    { id: "ask", label: "Ask-only", title: "Bought-at-ask only — bid-side trades ignored" },
+    { id: "net", label: "Net", title: "Ask minus bid per side — green = net buying, red = net selling" },
+  ];
+  return (
+    <div className="inline-flex rounded-md bg-bg-secondary" style={{ padding: 2, gap: 1 }}>
+      {OPTS.map((o) => (
+        <button
+          key={o.id}
+          onClick={() => onChange(o.id)}
+          title={o.title}
+          className="text-[10px]"
+          style={{
+            padding: "3px 8px",
+            borderRadius: 5,
+            background: value === o.id ? "var(--color-background-primary)" : "transparent",
+            color: value === o.id ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+            border: value === o.id ? "0.5px solid var(--color-border-tertiary)" : "0.5px solid transparent",
+            fontWeight: value === o.id ? 600 : 400,
+            cursor: "pointer",
+          }}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }
