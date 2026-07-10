@@ -89,7 +89,7 @@ type StrikeCount = "5" | "10" | "15" | "20" | "25" | "40" | "50";
 // back, restore the explainer map (see git history) once data is wired.
 const GEX_EXPLAINER = "Gamma Exposure (GEX) shows dealer hedging pressure per 1% move. Positive = dealers long gamma (vol suppressor). Negative = dealers short gamma (vol amplifier).";
 
-const TICKERS = ["SPY", "SPX", "QQQ", "SOXX", "SMH", "TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT", "AAPL", "MU", "DRAM", "SPCX", "ORCL", "MRVL", "BABA", "APP", "HOOD", "ASTS", "ENPH", "NBIS", "SNOW", "PLTR", "NOW", "SNDK", "QCOM", "COIN"];
+const TICKERS = ["AAPL", "AMD", "AMZN", "APP", "ASTS", "BABA", "COIN", "DRAM", "ENPH", "GOOGL", "HOOD", "META", "MRVL", "MSFT", "MU", "NBIS", "NFLX", "NOW", "NVDA", "ORCL", "PLTR", "QCOM", "QQQ", "SMH", "SNDK", "SNOW", "SOXX", "SPCX", "SPX", "SPY", "TSLA"];
 
 // Pick the actual strike nearest to spot from the API's strike array.
 // Falls back to rounded spot when no strikes were returned (e.g. UW gave
