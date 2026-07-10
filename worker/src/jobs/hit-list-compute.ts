@@ -22,9 +22,11 @@
 // Idempotent — re-running for the same day deletes and re-inserts.
 
 import { Prisma } from "@prisma/client";
+import { buildOcc, optionMark } from "../lib/option-price.js";
 import { prisma } from "../lib/prisma.js";
 
 const ts = () => new Date().toISOString();
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // PRD §6 defaults — used when no WatchesCriteria row exists yet.
 // Schema field defaults match these, but the row may not exist on first run.
@@ -237,6 +239,20 @@ export async function computeHitList(): Promise<void> {
     const newRows: Prisma.HitListDailyCreateManyInput[] = top.map((entry, i) =>
       buildHitListRow(entry, i + 1, todayDate, allBySector, entry.dp, entry.signals, atrByTicker.get(entry.ticker) ?? null)
     );
+
+    // "Price at Entry" — the suggested contract's mark at compute time
+    // (premarket → effectively the prior close mid). Static thereafter; the
+    // 15-minute pricer keeps contractLastPrice current through the session.
+    for (const row of newRows) {
+      if (!row.contractOcc) continue;
+      const mark = await optionMark(row.contractOcc);
+      if (mark != null) {
+        row.contractEntryPrice = new Prisma.Decimal(mark.toFixed(4));
+        row.contractLastPrice = new Prisma.Decimal(mark.toFixed(4));
+        row.contractMarkedAt = new Date();
+      }
+      await sleep(150);
+    }
 
     await prisma.$transaction([
       prisma.hitListDaily.deleteMany({ where: { date: todayDate } }),
@@ -554,16 +570,19 @@ async function weeklyAtrTargets(ticker: string, spot: number): Promise<AtrTarget
 // matches the confluence direction (calls for UP, puts for DOWN); falls back
 // to any side ≤3 months, then to the raw top alert's contract label.
 
-function pickWatchContract(agg: TickerAgg): string {
+function pickWatchContract(agg: TickerAgg): { label: string; occ: string | null } {
   const now = Date.now();
   const maxExp = now + CONTRACT_MAX_DTE * 24 * 60 * 60 * 1000;
   const inWindow = agg.contracts.filter((c) => c.expiry.getTime() > now && c.expiry.getTime() <= maxExp);
   const wantType = agg.direction === "UP" ? "CALL" : "PUT";
   const directional = inWindow.filter((c) => c.type === wantType);
   const pool = directional.length ? directional : inWindow;
-  if (!pool.length) return agg.topAlert!.contract;
+  if (!pool.length) return { label: agg.topAlert!.contract, occ: null };
   const best = pool.reduce((a, b) => (b.wPremium > a.wPremium ? b : a));
-  return `$${best.strike}${best.type === "CALL" ? "C" : "P"} ${shortDateLabel(best.expiry)}`;
+  return {
+    label: `$${best.strike}${best.type === "CALL" ? "C" : "P"} ${shortDateLabel(best.expiry)}`,
+    occ: buildOcc(agg.ticker, best.expiry, best.type === "PUT" ? "PUT" : "CALL", best.strike),
+  };
 }
 
 // ─── DP age classifier ───────────────────────────────────────────────────────
@@ -585,6 +604,7 @@ function buildHitListRow(
   signals: SignalsJson | null = null,
   atrTargets: AtrTargets | null = null
 ): Prisma.HitListDailyCreateManyInput {
+  const pick = pickWatchContract(entry);
   const top = entry.topAlert!;
   const contracts = entry.contracts.map((c) => ({
     strikeLabel: `$${c.strike}${c.type === "CALL" ? "C" : "P"}`,
@@ -623,7 +643,8 @@ function buildHitListRow(
     direction: entry.direction,
     confidence: entry.bestConfidence,
     premium: new Prisma.Decimal(entry.totalPremium.toFixed(2)),
-    contract: pickWatchContract(entry),
+    contract: pick.label,
+    contractOcc: pick.occ,
     dpConf: !!dp,
     dpRank: dp?.rank ?? null,
     dpAge: dp?.age ?? null,
@@ -755,4 +776,57 @@ function etMidnightUTC(dateStrET: string): Date {
     }
   }
   throw new Error(`Could not compute ET midnight UTC for ${dateStrET}`);
+}
+
+
+// ─── Suggested-contract live pricing (every 15 min, market hours) ────────────
+//
+// Refreshes contractLastPrice for today's watches. Rows written before the
+// OCC column existed (or whose pick fell back to a raw alert label) get their
+// OCC derived from the "$202.5C Jul 20" label on first touch; a row whose
+// entry price is still null (compute predates this feature) also gets its
+// entry backfilled from the first live mark.
+
+const MONTHS: Record<string, number> = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+
+function occFromLabel(ticker: string, label: string): string | null {
+  const m = label.match(/^\$([\d.]+)([CP])\s+([A-Z][a-z]{2})\s+(\d{1,2})$/);
+  if (!m) return null;
+  const [, strikeStr, cp, mon, dayStr] = m;
+  const mi = MONTHS[mon!];
+  if (mi === undefined) return null;
+  const nowYear = new Date().getUTCFullYear();
+  let expiry = new Date(Date.UTC(nowYear, mi, Number(dayStr)));
+  // Labels carry no year; a date more than a week in the past must be next year.
+  if (expiry.getTime() < Date.now() - 7 * 86_400_000) expiry = new Date(Date.UTC(nowYear + 1, mi, Number(dayStr)));
+  return buildOcc(ticker, expiry, cp === "P" ? "PUT" : "CALL", Number(strikeStr));
+}
+
+export async function priceWatchContracts(): Promise<void> {
+  const todayDate = etMidnightUTC(todayDateET());
+  const rows = await prisma.hitListDaily.findMany({
+    where: { date: todayDate },
+    select: { id: true, ticker: true, contract: true, contractOcc: true, contractEntryPrice: true },
+  });
+  if (!rows.length) return;
+  let priced = 0;
+  for (const row of rows) {
+    const occ = row.contractOcc ?? occFromLabel(row.ticker, row.contract);
+    if (!occ) continue;
+    const mark = await optionMark(occ);
+    if (mark != null) {
+      await prisma.hitListDaily.update({
+        where: { id: row.id },
+        data: {
+          contractOcc: occ,
+          contractLastPrice: new Prisma.Decimal(mark.toFixed(4)),
+          contractMarkedAt: new Date(),
+          ...(row.contractEntryPrice == null ? { contractEntryPrice: new Prisma.Decimal(mark.toFixed(4)) } : {}),
+        },
+      });
+      priced++;
+    }
+    await sleep(150);
+  }
+  console.log(`[watch-contract-prices] ${ts()} priced ${priced}/${rows.length} suggested contracts`);
 }

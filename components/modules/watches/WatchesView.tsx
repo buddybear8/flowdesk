@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { clsx } from "clsx";
 import type { HitListItem, HitListPayload } from "@/lib/types";
 import { WatchChartPane } from "./WatchChartPane";
+import { useTimeZone, fmtClock } from "@/lib/timezone";
 import { WatchSentimentPane } from "./WatchSentimentPane";
 
 type PaneView = "list" | "chart" | "sentiment";
@@ -176,6 +177,7 @@ export function WatchesView() {
                 <Th w={48}>Conf.</Th>
                 <Th w={68}>Premium</Th>
                 <Th w={96}>Contract</Th>
+                <Th w={92}>Entry / Live</Th>
                 <Th w={124} center>Signals</Th>
                 <Th w={92} center>Open Trade Alert</Th>
                 <Th>Thesis</Th>
@@ -210,6 +212,20 @@ export function WatchesView() {
                   </Td>
                   <Td style={{ fontSize: 12, fontWeight: 500, color: contractType(h.contract) === "P" ? "#E76A6A" : contractType(h.contract) === "C" ? "#7FBF52" : "var(--color-text-primary)" }}>{fmtP(h.premium)}</Td>
                   <Td style={{ fontSize: 11, fontWeight: 500, color: contractType(h.contract) === "P" ? "#E76A6A" : contractType(h.contract) === "C" ? "#7FBF52" : "var(--color-text-primary)" }}>{h.contract}</Td>
+                  <Td style={{ fontSize: 11 }}>
+                    {h.contractEntryPrice != null ? (
+                      <>
+                        <span style={{ color: "var(--color-text-secondary)" }}>{h.contractEntryPrice.toFixed(2)}</span>
+                        {h.contractLivePrice != null && (
+                          <span style={{ fontWeight: 600, color: h.contractLivePrice >= h.contractEntryPrice ? "#7FBF52" : "#E76A6A" }}>
+                            {" → "}{h.contractLivePrice.toFixed(2)}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>—</span>
+                    )}
+                  </Td>
                   <Td center>
                     <SignalBadges hit={h} />
                   </Td>
@@ -352,6 +368,7 @@ function DetailPanel({
   onSetPane: (v: PaneView) => void;
 }) {
   const router = useRouter();
+  const { tz, abbr: tzLabel } = useTimeZone();
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-bg-primary">
       <div
@@ -467,6 +484,46 @@ function DetailPanel({
                   <span style={{ fontSize: 9, fontWeight: 400, color: "var(--color-text-tertiary)" }}>{a.moderator} ↗</span>
                 </button>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Suggested contract pricing — entry static, live mark every ~15 min */}
+        {hit.contractEntryPrice != null && (
+          <div style={{ marginBottom: 12 }}>
+            <SectionLabel>Suggested contract · {hit.contract}</SectionLabel>
+            <div
+              className="grid overflow-hidden rounded-md"
+              style={{ gridTemplateColumns: "1fr 1fr", border: "0.5px solid var(--color-border-tertiary)" }}
+            >
+              <div style={{ padding: "8px 11px", borderRight: "0.5px solid var(--color-border-tertiary)" }}>
+                <div className="text-[9px] font-medium uppercase text-text-tertiary" style={{ letterSpacing: ".04em", marginBottom: 3 }}>
+                  Price at Entry
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                  ${hit.contractEntryPrice.toFixed(2)}
+                </div>
+              </div>
+              <div style={{ padding: "8px 11px" }}>
+                <div className="text-[9px] font-medium uppercase text-text-tertiary" style={{ letterSpacing: ".04em", marginBottom: 3 }}>
+                  Live Price
+                </div>
+                {hit.contractLivePrice != null ? (
+                  <div style={{ fontSize: 15, fontWeight: 600, color: hit.contractLivePrice >= hit.contractEntryPrice ? "#7FBF52" : "#E76A6A" }}>
+                    ${hit.contractLivePrice.toFixed(2)}
+                    <span style={{ fontSize: 11, marginLeft: 6 }}>
+                      {(() => { const pct = ((hit.contractLivePrice - hit.contractEntryPrice) / hit.contractEntryPrice) * 100; return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`; })()}
+                    </span>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>—</div>
+                )}
+                {hit.contractPriceAt && (
+                  <div style={{ fontSize: 9.5, color: "var(--color-text-tertiary)", marginTop: 2 }}>
+                    as of {fmtClock(new Date(hit.contractPriceAt), tz)} {tzLabel} · refreshes ~15 min
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

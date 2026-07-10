@@ -85,7 +85,9 @@ export default function UserGuidePage() {
             <li>The <B>Signals</B> column shows which categories fired: <B>F</B> flow, <B>S</B> sentiment (green/red by
               side), <B>DP</B> dark pool, <B>×N</B> signaled N of the last 5 sessions.</li>
             <li>Click a row for the detail panel: the <B>confluence score breakdown</B>, a suggested <B>contract to
-              watch</B> (expiry within 3 months, matching the signal direction), and <B>move targets</B> — Target 1 / 2 / 3 in the
+              watch</B> (expiry within 3 months, matching the signal direction) with its <B>Price at Entry</B> (the
+              contract&rsquo;s mark when the list was computed, static all day) and a <B>live price</B> refreshed about
+              every 15 minutes, and <B>move targets</B> — Target 1 / 2 / 3 in the
               signal&rsquo;s direction (upside for bullish picks, downside for bearish).</li>
             <li>The <B>Chart</B> button in the detail panel swaps the hit list for a price chart of the ticker — an
               hourly view zoomed to the last week with the Target 1 / 2 / 3 ladder drawn on it, plus toggles for GEX

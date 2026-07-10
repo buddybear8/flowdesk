@@ -320,7 +320,11 @@ export interface HitListItem {
   theme: HitListTheme;
   signals?: HitListSignals;
   atrTargets?: HitListAtrTargets;
-  score?: number;               // confluence score (actionabilityScore)
+  score?: number;
+  // Suggested-contract pricing (from 2026-07-10): static entry + 15-min mark.
+  contractEntryPrice?: number;
+  contractLivePrice?: number;
+  contractPriceAt?: string;               // confluence score (actionabilityScore)
   aiSummary?: string;           // Claude-generated news/signals/price brief
   openAlerts?: HitListOpenAlert[];
 }

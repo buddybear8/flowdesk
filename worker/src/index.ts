@@ -21,7 +21,7 @@ import { HOT_TICKERS, TAIL_TICKERS } from "./lib/sentiment-tickers.js";
 import { refreshTickerMetadata } from "./jobs/refresh-ticker-metadata.js";
 import { runAiSummarizerGex } from "./jobs/ai-summarizer-gex.js";
 import { runAiSummarizerWatches } from "./jobs/ai-summarizer-watches.js";
-import { computeHitList } from "./jobs/hit-list-compute.js";
+import { computeHitList, priceWatchContracts } from "./jobs/hit-list-compute.js";
 import { importPolygonDailyFlatFile } from "./jobs/polygon-daily-flatfile.js";
 import { pollPolygonIntraday } from "./jobs/polygon-hourly-intraday.js";
 import { pollCandles } from "./jobs/candles.js";
@@ -92,6 +92,8 @@ cron.schedule("0 */10 8-20 * * 1-5", safe("candles-poll", pollCandles));
 cron.schedule("0 30 5 * * 1-5", safe("refresh-ticker-metadata", refreshTickerMetadata));
 cron.schedule("0 0 7 * * 1-5", safe("ai-summarizer-gex", runAiSummarizerGex));
 cron.schedule("0 30 7 * * 1-5", safe("hit-list-compute", computeHitList));
+// Suggested-contract live marks for today's watches — every 15 min in session.
+cron.schedule("0 */15 9-16 * * 1-5", safe("watch-contract-prices", priceWatchContracts));
 cron.schedule("0 45 7 * * 1-5", safe("ai-summarizer-watches", runAiSummarizerWatches));
 
 // Daily-watches watchdog — recurring self-heal (replaces the boot-only
@@ -152,4 +154,4 @@ const shutdown = async (signal: string) => {
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
-console.log(`[${ts()}] [worker] started — 18 schedules registered (Polygon dark-pool ingest live; Options Sentiment hot+tail live; S3 archive live; Trade Alerts live)`);
+console.log(`[${ts()}] [worker] started — 19 schedules registered (Polygon dark-pool ingest live; Options Sentiment hot+tail live; S3 archive live; Trade Alerts live)`);

@@ -343,6 +343,12 @@ model HitListDaily {
   signals            Json?
   // Weekly-ATR trade targets: { atrW, up05, up1, up2, dn05, dn1, dn2 }
   atrTargets         Json?    @map("atr_targets")
+  // Suggested-contract pricing: OCC symbol + price when the list was computed
+  // ("Price at Entry", static) + latest 15-min mark.
+  contractOcc        String?   @map("contract_occ") @db.VarChar(24)
+  contractEntryPrice Decimal?  @map("contract_entry_price") @db.Decimal(12, 4)
+  contractLastPrice  Decimal?  @map("contract_last_price") @db.Decimal(12, 4)
+  contractMarkedAt   DateTime? @map("contract_marked_at")
 
   @@unique([date, rank])
   @@index([date(sort: Desc)])
