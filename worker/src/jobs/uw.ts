@@ -736,6 +736,25 @@ export async function pollGex(): Promise<void> {
         console.log(`[uw:gex-heatmap:${ticker}] used ${usedFallback} fallback (${allRows.length} rows, ${distinctExp(allRows)} exps)`);
       }
 
+      // Tier 4 — 0DTE top-up. On wide chains (SPX: 10 expirations) the
+      // batched form exhausts the page cap before today's rows arrive, so
+      // expiration-day data goes missing while every other expiry is rich
+      // (2026-07-10: 9/10 exps at exactly 2500 rows = the cap). One targeted
+      // single-expiry call recovers it; skipped whenever the batch already
+      // carried today (or today isn't an expiration for this ticker).
+      if (
+        expirySet.has(todayIso) &&
+        allRows.length > 0 &&
+        !allRows.some((r: any) => String(r.expiry) === todayIso)
+      ) {
+        await sleep(TICKER_DELAY_MS);
+        const zeroRows = await fetchPaged(`expirations[]=${todayIso}`, "0dte");
+        if (zeroRows.length > 0) {
+          allRows = allRows.concat(zeroRows);
+          console.log(`[uw:gex-heatmap:${ticker}] 0DTE top-up added ${zeroRows.length} rows for ${todayIso}`);
+        }
+      }
+
       if (allRows.length > 0) {
         const byStrike = new Map<number, Record<string, { netOI: number; netDV: number; vOI: number; vDV: number }>>();
         const seenExpiries = new Set<string>();
