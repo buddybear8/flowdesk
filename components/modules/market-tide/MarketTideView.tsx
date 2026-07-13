@@ -51,6 +51,7 @@ function fmtVol(v: number): string {
 
 export function MarketTideView() {
   const [data, setData] = useState<Payload | null>(null);
+  const { tz, abbr: tzLabel } = useTimeZone();
 
   useEffect(() => {
     fetch("/api/market-tide").then(r => r.json()).then(setData);
@@ -65,7 +66,6 @@ export function MarketTideView() {
   }
 
   const noTide = data.tide.series.length === 0;
-  const { tz, abbr: tzLabel } = useTimeZone();
   const etDay = ET_DAY_FMT.format(new Date(data.tide.asOf));
   const headerDate = HEADER_DATE_FMT.format(new Date(data.tide.asOf));
   const asOfLocal = new Date(data.tide.asOf).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
