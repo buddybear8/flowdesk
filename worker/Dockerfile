@@ -15,8 +15,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Prisma's native query engine on Alpine needs OpenSSL at runtime.
-RUN apk add --no-cache openssl
+# Prisma's native query engine on Alpine needs OpenSSL at runtime;
+# ttf-dejavu supplies fonts for the Daily Watches Discord card renderer.
+RUN apk add --no-cache openssl ttf-dejavu
 
 # Install runtime deps inside /app/worker/node_modules/. This layer is cached
 # until package.json/lock changes. `npm ci` (not `install`) so the install is

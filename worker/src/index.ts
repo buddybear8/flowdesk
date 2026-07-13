@@ -24,6 +24,7 @@ import { runAiSummarizerGex } from "./jobs/ai-summarizer-gex.js";
 import { runAiSummarizerWatches } from "./jobs/ai-summarizer-watches.js";
 import { computeHitList, priceWatchContracts } from "./jobs/hit-list-compute.js";
 import { syncEarningsCalendar, backfillEarningsHistory, runEarningsAiBriefs } from "./jobs/earnings.js";
+import { postWatchesToDiscord } from "./jobs/watches-discord.js";
 import { importPolygonDailyFlatFile } from "./jobs/polygon-daily-flatfile.js";
 import { pollPolygonIntraday } from "./jobs/polygon-hourly-intraday.js";
 import { pollCandles } from "./jobs/candles.js";
@@ -109,6 +110,10 @@ cron.schedule("0 55 5 * * 1-5", safe("earnings-history", backfillEarningsHistory
 cron.schedule("0 40 6 * * 1-5", safe("earnings-briefs", runEarningsAiBriefs));
 cron.schedule("0 5 8-17 * * 1-5", safe("earnings-refresh", syncEarningsCalendar));
 cron.schedule("0 45 7 * * 1-5", safe("ai-summarizer-watches", runAiSummarizerWatches));
+// Daily Watches → Discord card (no-op until DISCORD_WATCHES_* env is set);
+// 8:10 retry covers a slow/watchdog-recovered compute. Dedupes per day.
+cron.schedule("0 50 7 * * 1-5", safe("watches-discord", postWatchesToDiscord));
+cron.schedule("0 10 8 * * 1-5", safe("watches-discord-retry", postWatchesToDiscord));
 
 // Daily-watches watchdog — recurring self-heal (replaces the boot-only
 // catch-up). Two incidents motivated this: 2026-07-08 (worker down over the
@@ -168,4 +173,4 @@ const shutdown = async (signal: string) => {
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
-console.log(`[${ts()}] [worker] started — 24 schedules registered (tiered GEX cadence) (Polygon dark-pool ingest live; Options Sentiment hot+tail live; S3 archive live; Trade Alerts live)`);
+console.log(`[${ts()}] [worker] started — 26 schedules registered (tiered GEX cadence; watches Discord card) (Polygon dark-pool ingest live; Options Sentiment hot+tail live; S3 archive live; Trade Alerts live)`);
