@@ -475,7 +475,8 @@ function DeepDive({ events, initialTicker, watch }: { events: EarningsEventRow[]
                   </>
                 ) : (
                   <div style={{ fontSize: 11.5, color: "var(--color-text-tertiary)" }}>
-                    Briefs generate the morning of the report (and the day before) for names in the window. Nothing yet for {ticker}.
+                    Briefs generate when a name enters the 3-week window, then refresh the week of, the day before,
+                    and the morning of the report. Nothing yet for {ticker}.
                   </div>
                 )}
               </div>

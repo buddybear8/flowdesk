@@ -34,10 +34,11 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const UW_BASE = "https://api.unusualwhales.com";
 
 const TRACKED_SET = new Set(Object.keys(thresholds as Record<string, number>));
-const WINDOW_DAYS = 13; // forward window; sweep also covers yesterday for actuals
+const WINDOW_DAYS = 21; // forward window (3 weeks); sweep also covers yesterday for actuals
 const HISTORY_TICKERS_PER_RUN = 80;
 const ROLLUP_QUARTERS = 12;
-const BRIEF_CAP_PER_RUN = 40;
+const BRIEF_CAP_PER_RUN = 60;
+const BRIEF_CONCURRENCY = 4;
 
 async function uwGet(path: string): Promise<unknown | null> {
   const token = process.env.UW_API_TOKEN;
@@ -211,7 +212,14 @@ export async function backfillEarningsHistory(): Promise<void> {
   console.log(`[earnings-history] ${ts()} backfilled ${tickers.length} tickers (${rows} rows, ${rolled} rollups)`);
 }
 
-// ─── 3. AI briefs for imminent reports ───────────────────────────────────────
+// ─── 3. AI briefs ────────────────────────────────────────────────────────────
+//
+// Every covered name gets a brief as soon as it enters the 3-week window,
+// then refreshes on a fixed cadence (ai_summaries keeps every version; the
+// API serves the newest):
+//   • week-of    — regenerated once the report's calendar week begins
+//   • day-before — regenerated the day before (Friday covers a Monday report)
+//   • morning-of — regenerated the morning of the report
 
 const MODEL = "claude-opus-4-8";
 const MAX_TOKENS = 1200;
@@ -230,28 +238,59 @@ Risk: 1-2 sentences on what would most likely produce the downside scenario for 
 
 Rules: under 180 words total. No preamble, no narration of your search process, no investment advice, no disclaimers, nothing after the three sections. Plain text only.`;
 
-export async function runEarningsAiBriefs(): Promise<void> {
+// Monday (ET) of the week containing the given YYYY-MM-DD.
+function weekStart(iso: string): string {
+  const d = new Date(`${iso}T00:00:00.000Z`);
+  const dow = d.getUTCDay(); // 0=Sun..6=Sat
+  d.setUTCDate(d.getUTCDate() - (dow === 0 ? 6 : dow - 1));
+  return d.toISOString().slice(0, 10);
+}
+
+export async function runEarningsAiBriefs(cap: number = BRIEF_CAP_PER_RUN): Promise<void> {
   if (!process.env.ANTHROPIC_API_KEY) {
     console.warn(`[earnings-briefs] ${ts()} ANTHROPIC_API_KEY not set — skipping.`);
     return;
   }
   const client = new Anthropic();
-  const d0 = new Date(`${etDateStr(0)}T00:00:00.000Z`);
-  const d2 = new Date(`${etDateStr(2)}T00:00:00.000Z`);
+  const todayIso = etDateStr(0);
+  const d0 = new Date(`${todayIso}T00:00:00.000Z`);
+  const dEnd = new Date(`${etDateStr(WINDOW_DAYS)}T00:00:00.000Z`);
   const events = await prisma.earningsEvent.findMany({
-    where: { reportDate: { gte: d0, lte: d2 } },
-    orderBy: [{ marketcap: "desc" }],
-    take: BRIEF_CAP_PER_RUN,
+    where: { reportDate: { gte: d0, lte: dEnd } },
+    orderBy: [{ reportDate: "asc" }, { marketcap: "desc" }],
   });
+  const isFriday = new Date(`${todayIso}T12:00:00Z`).getUTCDay() === 5;
 
-  let generated = 0, skipped = 0, failed = 0;
+  // Decide which briefs are due under the cadence policy.
+  const due: typeof events = [];
+  let skipped = 0;
   for (const e of events) {
     const dateKey = e.reportDate.toISOString().slice(0, 10);
     const kind = `earnings-${e.ticker}-${dateKey}`;
-    try {
-      const existing = await prisma.aiSummary.findFirst({ where: { kind }, select: { id: true } });
-      if (existing) { skipped++; continue; }
+    const latest = await prisma.aiSummary.findFirst({
+      where: { kind }, orderBy: { generatedAt: "desc" }, select: { generatedAt: true },
+    });
+    let need = false;
+    if (!latest) {
+      need = true; // first sight inside the window
+    } else {
+      const genIso = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(latest.generatedAt);
+      const daysUntil = Math.round((e.reportDate.getTime() - d0.getTime()) / 86_400_000);
+      const dayBefore = daysUntil <= 1 || (isFriday && daysUntil <= 3); // Friday covers a Monday report
+      const weekOf = weekStart(dateKey) === weekStart(todayIso);
+      if (dayBefore && genIso < todayIso) need = true;
+      else if (weekOf && genIso < weekStart(todayIso)) need = true;
+    }
+    if (need) due.push(e); else skipped++;
+    if (due.length >= cap) break;
+  }
 
+  let generated = 0, failed = 0;
+  const work = [...due];
+  const runOne = async (e: (typeof events)[number]) => {
+    const dateKey = e.reportDate.toISOString().slice(0, 10);
+    const kind = `earnings-${e.ticker}-${dateKey}`;
+    try {
       const userPrompt = `Company: ${e.fullName ?? e.ticker} (${e.ticker})
 Sector: ${e.sector ?? "n/a"}
 Reports: ${dateKey} ${e.reportTime === "premarket" ? "before the open" : e.reportTime === "postmarket" ? "after the close" : ""}
@@ -263,7 +302,7 @@ EPS beat rate: ${e.beatCount != null ? `${e.beatCount}/${e.quarterCount}` : "n/a
 Search the web for the latest ${e.ticker} earnings preview and news, then write the brief.`;
 
       const body = await runWithWebSearch(client, userPrompt);
-      if (!body) { failed++; continue; }
+      if (!body) { failed++; return; }
       await prisma.aiSummary.create({
         data: { kind, generatedAt: new Date(), body: body.text, tokensUsed: body.tokens },
       });
@@ -272,8 +311,20 @@ Search the web for the latest ${e.ticker} earnings preview and news, then write 
       failed++;
       console.error(`[earnings-briefs] ${e.ticker} failed:`, err instanceof Error ? err.message : err);
     }
-  }
-  console.log(`[earnings-briefs] ${ts()} generated ${generated}, skipped ${skipped}, failed ${failed}`);
+  };
+
+  // Small worker pool — briefs are network-bound (web search), so a few in
+  // flight cuts wall time without hammering the API.
+  const workers = Array.from({ length: Math.min(BRIEF_CONCURRENCY, work.length) }, async () => {
+    for (;;) {
+      const e = work.shift();
+      if (!e) return;
+      await runOne(e);
+    }
+  });
+  await Promise.all(workers);
+
+  console.log(`[earnings-briefs] ${ts()} generated ${generated}, fresh ${skipped}, failed ${failed} (due ${due.length})`);
 }
 
 async function runWithWebSearch(
