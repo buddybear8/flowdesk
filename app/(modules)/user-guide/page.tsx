@@ -186,8 +186,8 @@ export default function UserGuidePage() {
               stock has historically moved more than options are charging now.</li>
             <li><B>Deep dive</B> — search any covered ticker: a daily chart with <B>implied-move rails</B>, the last 16
               quarters of <B>est-vs-actual EPS and next-day moves</B> against what was priced each time, and an{" "}
-              <B>AI briefing</B> (generated when the name enters the window, refreshed the week of, the day before, and
-              the morning of the report) covering the setup, what the street is watching —
+              <B>AI briefing</B> (generated once, when the name enters the 3-week window; the numbers around it stay
+              live) covering the setup, what the street is watching —
               including revenue and guidance expectations — and the downside risk.</li>
           </Ul>
         </Mod>

@@ -217,12 +217,10 @@ export async function backfillEarningsHistory(): Promise<void> {
 
 // ─── 3. AI briefs ────────────────────────────────────────────────────────────
 //
-// Every covered name gets a brief as soon as it enters the 3-week window,
-// then refreshes on a fixed cadence (ai_summaries keeps every version; the
-// API serves the newest):
-//   • week-of    — regenerated once the report's calendar week begins
-//   • day-before — regenerated the day before (Friday covers a Monday report)
-//   • morning-of — regenerated the morning of the report
+// ONE brief per ticker per report: generated when the name enters the 3-week
+// window, never refreshed (cost decision 2026-07-13 — each brief runs ~$0.28
+// of Opus + web search; the numeric data around it refreshes free via UW).
+// Failed/invalid generations store nothing, so they retry on the next run.
 
 const MODEL = "claude-opus-4-8";
 const MAX_TOKENS = 1200;
@@ -241,14 +239,6 @@ Risk: 1-2 sentences on what would most likely produce the downside scenario for 
 
 Rules: under 180 words total. No preamble, no narration of your search process, no investment advice, no disclaimers, nothing after the three sections. Plain text only.`;
 
-// Monday (ET) of the week containing the given YYYY-MM-DD.
-function weekStart(iso: string): string {
-  const d = new Date(`${iso}T00:00:00.000Z`);
-  const dow = d.getUTCDay(); // 0=Sun..6=Sat
-  d.setUTCDate(d.getUTCDate() - (dow === 0 ? 6 : dow - 1));
-  return d.toISOString().slice(0, 10);
-}
-
 export async function runEarningsAiBriefs(cap: number = BRIEF_CAP_PER_RUN): Promise<void> {
   if (!process.env.ANTHROPIC_API_KEY) {
     console.warn(`[earnings-briefs] ${ts()} ANTHROPIC_API_KEY not set — skipping.`);
@@ -262,8 +252,6 @@ export async function runEarningsAiBriefs(cap: number = BRIEF_CAP_PER_RUN): Prom
     where: { reportDate: { gte: d0, lte: dEnd } },
     orderBy: [{ reportDate: "asc" }, { marketcap: "desc" }],
   });
-  const isFriday = new Date(`${todayIso}T12:00:00Z`).getUTCDay() === 5;
-
   // Decide which briefs are due under the cadence policy.
   const due: typeof events = [];
   let skipped = 0;
@@ -273,18 +261,7 @@ export async function runEarningsAiBriefs(cap: number = BRIEF_CAP_PER_RUN): Prom
     const latest = await prisma.aiSummary.findFirst({
       where: { kind }, orderBy: { generatedAt: "desc" }, select: { generatedAt: true },
     });
-    let need = false;
-    if (!latest) {
-      need = true; // first sight inside the window
-    } else {
-      const genIso = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(latest.generatedAt);
-      const daysUntil = Math.round((e.reportDate.getTime() - d0.getTime()) / 86_400_000);
-      const dayBefore = daysUntil <= 1 || (isFriday && daysUntil <= 3); // Friday covers a Monday report
-      const weekOf = weekStart(dateKey) === weekStart(todayIso);
-      if (dayBefore && genIso < todayIso) need = true;
-      else if (weekOf && genIso < weekStart(todayIso)) need = true;
-    }
-    if (need) due.push(e); else skipped++;
+    if (!latest) due.push(e); else skipped++;
     if (due.length >= cap) break;
   }
 
