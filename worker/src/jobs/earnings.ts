@@ -38,7 +38,10 @@ const WINDOW_DAYS = 21; // forward window (3 weeks); sweep also covers yesterday
 const HISTORY_TICKERS_PER_RUN = 80;
 const ROLLUP_QUARTERS = 12;
 const BRIEF_CAP_PER_RUN = 60;
-const BRIEF_CONCURRENCY = 4;
+// 2-wide: 4 concurrent Opus calls × 3 web searches tripped the org's
+// web-search rate limit on 2026-07-13 (briefs came back as narration about
+// the rate limit instead of content — since purged).
+const BRIEF_CONCURRENCY = 2;
 
 async function uwGet(path: string): Promise<unknown | null> {
   const token = process.env.UW_API_TOKEN;
@@ -352,5 +355,9 @@ async function runWithWebSearch(
   let text = parts.join("").trim();
   const idx = text.indexOf("Setup:");
   if (idx > 0) text = text.slice(idx);
-  return text ? { text, tokens } : null;
+  // Structural validation — a brief without its sections is search-failure
+  // narration, not a brief. Return null so nothing is stored and the name
+  // stays due for the next run.
+  if (!text.includes("Setup:") || !text.includes("Watching:")) return null;
+  return { text, tokens };
 }
