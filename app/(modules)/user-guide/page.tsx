@@ -173,6 +173,24 @@ export default function UserGuidePage() {
           </Ul>
         </Mod>
 
+        <Mod icon="📅" title="Earnings Analyst" route="/earnings" one="Upcoming earnings with the move the options market is pricing." tabs={["Calendar", "Screener", "Deep dive"]}>
+          <H4>What it does</H4>
+          <P>Covers every S&amp;P 500, Nasdaq-100, Dow 30, and platform ticker reporting in the next two weeks:
+            when they report (premarket / after the close), the street&rsquo;s <B>consensus EPS</B>, and the{" "}
+            <B>implied move</B> — the % swing the options market is pricing for the report, refreshed through the day.</P>
+          <H4>How to use it</H4>
+          <Ul>
+            <li><B>Calendar</B> — the two-week grid; big names carry a gold edge. Click any ticker to jump to its deep dive.</li>
+            <li><B>Screener</B> — the same window as a sortable table (date, sector, implied move) with a per-browser{" "}
+              <B>★ watchlist</B> you can pin to the top. Compare <B>implied move</B> to <B>avg move</B>: green means the
+              stock has historically moved more than options are charging now.</li>
+            <li><B>Deep dive</B> — search any covered ticker: a daily chart with <B>implied-move rails</B>, the last 16
+              quarters of <B>est-vs-actual EPS and next-day moves</B> against what was priced each time, and an{" "}
+              <B>AI briefing</B> (generated the morning of the report) covering the setup, what the street is watching —
+              including revenue and guidance expectations — and the downside risk.</li>
+          </Ul>
+        </Mod>
+
         <Mod icon="📡" title="Flow alerts" route="/flow" one="Real-time unusual options flow as it prints." tabs={["Live feed", "Lottos", "Opening Sweeps"]}>
           <H4>What it does</H4>
           <P>Surfaces notable options orders in real time — large, aggressive, or unusual trades that can signal informed

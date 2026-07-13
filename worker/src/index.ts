@@ -22,6 +22,7 @@ import { refreshTickerMetadata } from "./jobs/refresh-ticker-metadata.js";
 import { runAiSummarizerGex } from "./jobs/ai-summarizer-gex.js";
 import { runAiSummarizerWatches } from "./jobs/ai-summarizer-watches.js";
 import { computeHitList, priceWatchContracts } from "./jobs/hit-list-compute.js";
+import { syncEarningsCalendar, backfillEarningsHistory, runEarningsAiBriefs } from "./jobs/earnings.js";
 import { importPolygonDailyFlatFile } from "./jobs/polygon-daily-flatfile.js";
 import { pollPolygonIntraday } from "./jobs/polygon-hourly-intraday.js";
 import { pollCandles } from "./jobs/candles.js";
@@ -94,6 +95,15 @@ cron.schedule("0 0 7 * * 1-5", safe("ai-summarizer-gex", runAiSummarizerGex));
 cron.schedule("0 30 7 * * 1-5", safe("hit-list-compute", computeHitList));
 // Suggested-contract live marks for today's watches — every 15 min in session.
 cron.schedule("0 */15 9-16 * * 1-5", safe("watch-contract-prices", priceWatchContracts));
+
+// ─── Earnings Analyst (jobs/earnings.ts) ─────────────────────────────────────
+// Calendar sweep doubles as the implied-move refresh (UW rows carry the
+// expected move): full daily pass premarket, then every 15 min through the
+// session; history backfill + AI briefs run before the open.
+cron.schedule("0 50 5 * * 1-5", safe("earnings-calendar", syncEarningsCalendar));
+cron.schedule("0 55 5 * * 1-5", safe("earnings-history", backfillEarningsHistory));
+cron.schedule("0 40 6 * * 1-5", safe("earnings-briefs", runEarningsAiBriefs));
+cron.schedule("0 */15 8-17 * * 1-5", safe("earnings-refresh", syncEarningsCalendar));
 cron.schedule("0 45 7 * * 1-5", safe("ai-summarizer-watches", runAiSummarizerWatches));
 
 // Daily-watches watchdog — recurring self-heal (replaces the boot-only
@@ -154,4 +164,4 @@ const shutdown = async (signal: string) => {
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
-console.log(`[${ts()}] [worker] started — 19 schedules registered (Polygon dark-pool ingest live; Options Sentiment hot+tail live; S3 archive live; Trade Alerts live)`);
+console.log(`[${ts()}] [worker] started — 23 schedules registered (Polygon dark-pool ingest live; Options Sentiment hot+tail live; S3 archive live; Trade Alerts live)`);

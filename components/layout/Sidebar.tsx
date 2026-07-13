@@ -22,6 +22,7 @@ const MODULES: NavEntry[] = [
   { href: "/gex",         label: "Options GEX",       icon: "⚡" },
   { href: "/flow-sentiment", label: "Options sentiment", icon: "🎯", badge: { text: "new", variant: "green" } },
   { href: "/trade-alerts", label: "Trade alerts",     icon: "🔔", badge: { text: "new", variant: "green" } },
+  { href: "/earnings",    label: "Earnings Analyst",  icon: "📅", badge: { text: "new", variant: "green" } },
   { href: "/charts",      label: "Charts",            icon: "📊" },
   { href: "/flow",        label: "Flow alerts",       icon: "📈",   badge: { text: "18", variant: "red" } },
   { href: "/darkpool",    label: "Dark pools",        icon: "🌊" },

@@ -355,6 +355,55 @@ model HitListDaily {
   @@map("hit_list_daily")
 }
 
+// Earnings Analyst — one row per upcoming/recent report in the coverage
+// universe (tracked tickers + S&P 500 + NDX 100 + Dow 30). Upserted by the
+// worker's calendar sweep; expected move refreshes intraday.
+model EarningsEvent {
+  id              BigInt    @id @default(autoincrement())
+  ticker          String    @db.VarChar(10)
+  reportDate      DateTime  @map("report_date") @db.Date
+  reportTime      String    @map("report_time") @db.VarChar(12) // premarket | postmarket | unknown
+  fullName        String?   @map("full_name")
+  sector          String?   @db.VarChar(40)
+  marketcap       Decimal?  @db.Decimal(20, 0)
+  isSp500         Boolean   @default(false) @map("is_sp500")
+  epsEstimate     Decimal?  @map("eps_estimate") @db.Decimal(12, 4)
+  actualEps       Decimal?  @map("actual_eps") @db.Decimal(12, 4)
+  expectedMove    Decimal?  @map("expected_move") @db.Decimal(12, 4)
+  expectedMovePct Decimal?  @map("expected_move_pct") @db.Decimal(10, 6)
+  preEarningsClose Decimal? @map("pre_earnings_close") @db.Decimal(12, 4)
+  fiscalQuarter   String?   @map("fiscal_quarter") @db.VarChar(12)
+  // Rollups computed from earnings_history at backfill time
+  avgMovePct      Decimal?  @map("avg_move_pct") @db.Decimal(10, 6) // avg |1d move|, last 12 qtrs
+  beatCount       Int?      @map("beat_count")
+  quarterCount    Int?      @map("quarter_count")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@unique([ticker, reportDate])
+  @@index([reportDate])
+  @@map("earnings_events")
+}
+
+// Per-quarter history from UW /earnings/{ticker} — estimates vs actuals,
+// what the options market priced, and what the stock actually did.
+model EarningsHistory {
+  id              BigInt   @id @default(autoincrement())
+  ticker          String   @db.VarChar(10)
+  reportDate      DateTime @map("report_date") @db.Date
+  reportTime      String?  @map("report_time") @db.VarChar(12)
+  fiscalQuarter   String?  @map("fiscal_quarter") @db.VarChar(12)
+  epsEstimate     Decimal? @map("eps_estimate") @db.Decimal(12, 4)
+  actualEps       Decimal? @map("actual_eps") @db.Decimal(12, 4)
+  expectedMovePct Decimal? @map("expected_move_pct") @db.Decimal(10, 6)
+  move1dPct       Decimal? @map("move_1d_pct") @db.Decimal(10, 6)
+  move1wPct       Decimal? @map("move_1w_pct") @db.Decimal(10, 6)
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([ticker, reportDate])
+  @@index([ticker])
+  @@map("earnings_history")
+}
+
 // AI summaries (Anthropic Haiku batch). V1 scope: per-ticker GEX explanations
 // only, written by ai-summarizer at 07:00 ET. Sentiment summary path archived
 // in v1.2.3 (PRD §3.4 / §7).

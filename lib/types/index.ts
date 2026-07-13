@@ -188,6 +188,50 @@ export interface MarketSentimentPayload {
   liquid: MarketSentimentTicker[];
 }
 
+// ---------- 3d-pre. Earnings Analyst ----------
+
+export interface EarningsEventRow {
+  ticker: string;
+  reportDate: string;          // YYYY-MM-DD
+  reportTime: "premarket" | "postmarket" | "unknown";
+  fullName: string | null;
+  sector: string | null;
+  marketcap: number | null;
+  isSp500: boolean;
+  epsEstimate: number | null;
+  actualEps: number | null;
+  expectedMovePct: number | null; // fraction, e.g. 0.068
+  preEarningsClose: number | null;
+  fiscalQuarter: string | null;
+  avgMovePct: number | null;      // avg |1d move| last 12 completed qtrs
+  beatCount: number | null;
+  quarterCount: number | null;
+}
+
+export interface EarningsCalendarPayload {
+  from: string;
+  to: string;
+  updatedAt: string | null;
+  events: EarningsEventRow[];
+}
+
+export interface EarningsHistoryRow {
+  reportDate: string;
+  fiscalQuarter: string | null;
+  epsEstimate: number | null;
+  actualEps: number | null;
+  expectedMovePct: number | null;
+  move1dPct: number | null;
+  move1wPct: number | null;
+}
+
+export interface EarningsDeepDivePayload {
+  ticker: string;
+  event: EarningsEventRow | null;  // next upcoming, else most recent
+  history: EarningsHistoryRow[];   // newest first, completed quarters
+  aiSummary: { body: string; generatedAt: string } | null;
+}
+
 // ---------- 3d. Trade Alerts (Discord alert tracking) ----------
 
 export interface TradeAlertRow {
