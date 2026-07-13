@@ -411,12 +411,12 @@ function mapDarkPoolPrint(raw: any): Prisma.DarkPoolPrintCreateManyInput | null 
 
 // ─── 3. GEX snapshots ────────────────────────────────────────────────────────
 
-export async function pollGex(): Promise<void> {
+export async function pollGex(tickers: readonly string[] = WATCHED_TICKERS): Promise<void> {
   // Space ticker requests by 200ms to stay under UW's short-window rate limit
   // (5 tickers fired serially in <1s was triggering occasional HTTP 429 on SPY).
   const TICKER_DELAY_MS = 200;
-  for (let i = 0; i < WATCHED_TICKERS.length; i++) {
-    const ticker = WATCHED_TICKERS[i];
+  for (let i = 0; i < tickers.length; i++) {
+    const ticker = tickers[i];
     if (i > 0) await sleep(TICKER_DELAY_MS);
     let json = await uwFetch(`/api/stock/${ticker}/spot-exposures/strike`, `gex:${ticker}`);
     if (!json) continue;

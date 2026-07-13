@@ -14,6 +14,7 @@ import {
   pollMarketTide,
   computeNetImpact,
 } from "./jobs/uw.js";
+import { HOT_TICKERS as GEX_HOT_TICKERS, EXTENDED_TICKERS as GEX_EXTENDED_TICKERS } from "./lib/watched-tickers.js";
 import { runFlowRetentionSweep, runDpRetentionSweep, runGexHeatmapRetentionSweep, runFlowSentimentRetentionSweep, runWatchesRetentionSweep } from "./jobs/retention.js";
 import { runArchiveSweep } from "./jobs/archive.js";
 import { pollFlowSentiment } from "./jobs/flow-sentiment.js";
@@ -57,7 +58,10 @@ cron.schedule("0 */5 0-8,16-23 * * 1-5", safe("uw-poll-off", async () => {
 // minute-to-minute; 2 min is perceptually fine and halves the dominant UW
 // consumer. Stacked with the per-cycle row-count cut, the worker should now
 // stay comfortably under UW's daily quota.
-cron.schedule("0 */2 9-15 * * 1-5", safe("gex-poll", pollGex));
+// Tiered GEX cadence (see watched-tickers.ts): hot names every 2 min,
+// extended names on a 10-min rotation offset to minute :01.
+cron.schedule("0 */2 9-15 * * 1-5", safe("gex-poll-hot", () => pollGex(GEX_HOT_TICKERS)));
+cron.schedule("0 1-59/10 9-15 * * 1-5", safe("gex-poll-extended", () => pollGex(GEX_EXTENDED_TICKERS)));
 cron.schedule("0 */5 9-15 * * 1-5", safe("market-tide", pollMarketTide));
 cron.schedule("30 */5 9-15 * * 1-5", safe("net-impact", computeNetImpact));
 
@@ -103,7 +107,7 @@ cron.schedule("0 */15 9-16 * * 1-5", safe("watch-contract-prices", priceWatchCon
 cron.schedule("0 50 5 * * 1-5", safe("earnings-calendar", syncEarningsCalendar));
 cron.schedule("0 55 5 * * 1-5", safe("earnings-history", backfillEarningsHistory));
 cron.schedule("0 40 6 * * 1-5", safe("earnings-briefs", runEarningsAiBriefs));
-cron.schedule("0 */15 8-17 * * 1-5", safe("earnings-refresh", syncEarningsCalendar));
+cron.schedule("0 5 8-17 * * 1-5", safe("earnings-refresh", syncEarningsCalendar));
 cron.schedule("0 45 7 * * 1-5", safe("ai-summarizer-watches", runAiSummarizerWatches));
 
 // Daily-watches watchdog — recurring self-heal (replaces the boot-only
@@ -164,4 +168,4 @@ const shutdown = async (signal: string) => {
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
-console.log(`[${ts()}] [worker] started — 23 schedules registered (Polygon dark-pool ingest live; Options Sentiment hot+tail live; S3 archive live; Trade Alerts live)`);
+console.log(`[${ts()}] [worker] started — 24 schedules registered (tiered GEX cadence) (Polygon dark-pool ingest live; Options Sentiment hot+tail live; S3 archive live; Trade Alerts live)`);
