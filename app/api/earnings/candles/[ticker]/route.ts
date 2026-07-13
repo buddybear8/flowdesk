@@ -9,7 +9,8 @@ import type { Candle, CandlesResult } from "@/lib/candles";
 // window regardless of viewer count.
 
 const TICKER_RE = /^[A-Z][A-Z.]{0,7}$/;
-const FALLBACK_DAYS = 190;
+const FALLBACK_DAYS_1D = 190;
+const FALLBACK_DAYS_1H = 30;
 
 export async function GET(
   req: NextRequest,
@@ -20,10 +21,11 @@ export async function GET(
   if (!TICKER_RE.test(ticker)) {
     return NextResponse.json({ error: "Invalid ticker" }, { status: 400 });
   }
+  const tf = new URL(req.url).searchParams.get("tf") === "1H" ? "1H" : "1D";
 
-  // Preferred: our own stored daily bars.
+  // Preferred: our own stored bars.
   const rows = await prisma.candleBar.findMany({
-    where: { ticker, timeframe: "1D" },
+    where: { ticker, timeframe: tf },
     orderBy: { barTime: "asc" },
     select: { barTime: true, open: true, high: true, low: true, close: true, volume: true },
   });
@@ -35,11 +37,13 @@ export async function GET(
   }));
 
   if (candles.length < 30 && process.env.POLYGON_API_KEY) {
+    const days = tf === "1H" ? FALLBACK_DAYS_1H : FALLBACK_DAYS_1D;
+    const span = tf === "1H" ? "1/hour" : "1/day";
     const to = new Date().toISOString().slice(0, 10);
-    const from = new Date(Date.now() - FALLBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
+    const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
     try {
       const r = await fetch(
-        `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/day/${from}/${to}?adjusted=true&sort=asc&limit=500&apiKey=${process.env.POLYGON_API_KEY}`,
+        `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/${span}/${from}/${to}?adjusted=true&sort=asc&limit=5000&apiKey=${process.env.POLYGON_API_KEY}`,
         { cache: "no-store" },
       );
       if (r.ok) {
@@ -56,7 +60,7 @@ export async function GET(
 
   const payload: CandlesResult = {
     ticker,
-    timeframe: "1D",
+    timeframe: tf,
     candles,
     stats: { high52w: candles.reduce<number | null>((m, c) => (m == null || c.high > m ? c.high : m), null) },
   };

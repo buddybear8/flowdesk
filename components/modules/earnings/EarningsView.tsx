@@ -308,6 +308,9 @@ function DeepDive({ events, initialTicker, watch }: { events: EarningsEventRow[]
   const [dd, setDd] = useState<EarningsDeepDivePayload | null>(null);
   const [candles, setCandles] = useState<CandlesResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tf, setTf] = useState<"1D" | "1H">("1D");
+  const [showImplied, setShowImplied] = useState(true);
+  const [showAvg, setShowAvg] = useState(true);
   const { tz, abbr } = useTimeZone();
   const lastFetched = useRef(0);
 
@@ -319,13 +322,13 @@ function DeepDive({ events, initialTicker, watch }: { events: EarningsEventRow[]
     setDd(null); setCandles(null);
     Promise.all([
       fetch(`/api/earnings/${ticker}`).then((r) => (r.ok ? r.json() : null)),
-      fetch(`/api/earnings/candles/${ticker}`).then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/earnings/candles/${ticker}?tf=${tf}`).then((r) => (r.ok ? r.json() : null)),
     ]).then(([d, c]) => {
       if (cancelled) return;
       setDd(d); setCandles(c); setLoading(false); lastFetched.current = Date.now();
     }).catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [ticker]);
+  }, [ticker, tf]);
 
   const e = dd?.event ?? null;
   const spot = candles?.candles.length ? candles.candles[candles.candles.length - 1]!.close : null;
@@ -333,18 +336,18 @@ function DeepDive({ events, initialTicker, watch }: { events: EarningsEventRow[]
   // Implied-move rails around the pre-earnings reference (spot, else UW's).
   const ref = spot ?? e?.preEarningsClose ?? null;
   const rails: ExtraLevel[] = [];
-  if (e?.expectedMovePct != null && ref != null && e.actualEps == null) {
+  if (e?.expectedMovePct != null && ref != null && e.actualEps == null && showImplied) {
     const m = e.expectedMovePct;
     rails.push(
       { price: ref * (1 + m), title: `implied +${(m * 100).toFixed(1)}%`, color: GOLD, style: "dashed" },
       { price: ref * (1 - m), title: `implied −${(m * 100).toFixed(1)}%`, color: GOLD, style: "dashed" },
     );
-    if (e.avgMovePct != null) {
-      rails.push(
-        { price: ref * (1 + e.avgMovePct), title: `avg hist +${(e.avgMovePct * 100).toFixed(1)}%`, color: "rgba(226,191,115,.45)", style: "dotted" },
-        { price: ref * (1 - e.avgMovePct), title: `avg hist −${(e.avgMovePct * 100).toFixed(1)}%`, color: "rgba(226,191,115,.45)", style: "dotted" },
-      );
-    }
+  }
+  if (e?.avgMovePct != null && ref != null && e.actualEps == null && showAvg) {
+    rails.push(
+      { price: ref * (1 + e.avgMovePct), title: `avg hist +${(e.avgMovePct * 100).toFixed(1)}%`, color: "rgba(226,191,115,.45)", style: "dotted" },
+      { price: ref * (1 - e.avgMovePct), title: `avg hist −${(e.avgMovePct * 100).toFixed(1)}%`, color: "rgba(226,191,115,.45)", style: "dotted" },
+    );
   }
 
   const history = dd?.history ?? [];
@@ -423,15 +426,35 @@ function DeepDive({ events, initialTicker, watch }: { events: EarningsEventRow[]
             <div>
               {/* price chart with rails */}
               <div className="rounded-[12px] bg-bg-primary" style={{ border: "0.5px solid var(--color-border-tertiary)", padding: 12 }}>
-                <div style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--color-text-tertiary)", marginBottom: 8 }}>
-                  Daily chart · implied-move rails for the report
+                <div className="flex flex-wrap items-center justify-between gap-[8px]" style={{ marginBottom: 8 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--color-text-tertiary)" }}>
+                    {tf === "1H" ? "Hourly" : "Daily"} chart · move rails for the report
+                  </span>
+                  <span className="flex items-center gap-[7px]">
+                    <RailToggle on={showImplied} label="Implied move" onClick={() => setShowImplied((v) => !v)} />
+                    <RailToggle on={showAvg} label="Avg hist move" onClick={() => setShowAvg((v) => !v)} />
+                    <span style={{ display: "inline-flex", border: "0.5px solid var(--color-border-secondary)", borderRadius: 6, overflow: "hidden" }}>
+                      {(["1H", "1D"] as const).map((t, i) => (
+                        <button key={t} onClick={() => setTf(t)}
+                          style={{
+                            padding: "3px 10px", fontSize: 10.5, fontFamily: "inherit", cursor: "pointer", border: "none",
+                            borderLeft: i > 0 ? "0.5px solid var(--color-border-secondary)" : "none",
+                            fontWeight: tf === t ? 600 : 400,
+                            background: tf === t ? "var(--color-background-tertiary)" : "transparent",
+                            color: tf === t ? GOLD2 : "var(--color-text-secondary)",
+                          }}>
+                          {t}
+                        </button>
+                      ))}
+                    </span>
+                  </span>
                 </div>
                 <div style={{ position: "relative", height: 380 }}>
                   {candles && candles.candles.length > 0 ? (
                     <TickerPriceChart
-                      candles={candles.candles} trades={[]} intraday={false}
+                      candles={candles.candles} trades={[]} intraday={tf === "1H"}
                       showBubbles={false} bubbleRank={0} showLevels={false} levelRank={0} levelSince={0}
-                      extraLevels={rails} scaleToExtraLevels fitBars={90} lastFetched={lastFetched.current}
+                      extraLevels={rails} scaleToExtraLevels fitBars={tf === "1H" ? 45 : 90} lastFetched={lastFetched.current}
                     />
                   ) : <ChartLoading />}
                 </div>
@@ -511,6 +534,22 @@ function DeepDive({ events, initialTicker, watch }: { events: EarningsEventRow[]
         </>
       )}
     </div>
+  );
+}
+
+function RailToggle({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 9px", fontSize: 10.5,
+        fontWeight: 500, fontFamily: "inherit", borderRadius: 999, cursor: "pointer", userSelect: "none",
+        border: `0.5px solid ${on ? "rgba(226,191,115,.5)" : "var(--color-border-secondary)"}`,
+        background: on ? "rgba(226,191,115,.15)" : "var(--color-background-tertiary)",
+        color: on ? GOLD2 : "var(--color-text-secondary)",
+      }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: on ? GOLD2 : "var(--color-text-tertiary)" }} />
+      {label}
+    </button>
   );
 }
 
