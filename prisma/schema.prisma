@@ -187,6 +187,9 @@ model TradeAlert {
   markedAt      DateTime? @map("marked_at")
   livePct       Decimal?  @map("live_pct") @db.Decimal(12, 4)
   bookDelta     Decimal   @map("book_delta") @db.Decimal(12, 6)
+  // Mod posted a manual correction (plain text, outside the parser's scope) —
+  // the re-derive loop must not overwrite this row.
+  manualOverride Boolean @default(false) @map("manual_override")
   hidden        Boolean   @default(false) // manually excluded from the track record; not touched by ingest
   updatedAt     DateTime  @updatedAt @map("updated_at")
 

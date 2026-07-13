@@ -339,6 +339,14 @@ async function upsertPosition(p: Position): Promise<void> {
   // P/L back to blank — instead we keep the prior value on the row.
   const persistMarks = p.status === "CLOSED" || p.lastMark != null;
 
+  // Manually-corrected rows are frozen — mods sometimes post corrections as
+  // plain text (outside the parser), which ops applies directly to the row.
+  const existing = await prisma.tradeAlert.findUnique({
+    where: { openMessageId: p.openMessageId },
+    select: { manualOverride: true },
+  });
+  if (existing?.manualOverride) return;
+
   await prisma.tradeAlert.upsert({
     where: { openMessageId: p.openMessageId },
     create: { openMessageId: p.openMessageId, ...core, ...markFields },
