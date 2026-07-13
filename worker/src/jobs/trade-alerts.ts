@@ -339,13 +339,30 @@ async function upsertPosition(p: Position): Promise<void> {
   // P/L back to blank — instead we keep the prior value on the row.
   const persistMarks = p.status === "CLOSED" || p.lastMark != null;
 
-  // Manually-corrected rows are frozen — mods sometimes post corrections as
-  // plain text (outside the parser), which ops applies directly to the row.
-  const existing = await prisma.tradeAlert.findUnique({
-    where: { openMessageId: p.openMessageId },
-    select: { manualOverride: true },
-  });
-  if (existing?.manualOverride) return;
+  // Manually-corrected rows are frozen against re-derivation — mods sometimes
+  // post corrections as plain text (outside the parser), which ops applies
+  // directly to the row. A frozen-but-OPEN position still gets live marks
+  // (same contract, so the derived price is valid); its bookDelta is
+  // recomputed from the STORED corrected fields, not the derived ones.
+  const existing = await prisma.tradeAlert.findUnique({ where: { openMessageId: p.openMessageId } });
+  if (existing?.manualOverride) {
+    if (existing.status === "OPEN" && p.lastMark != null && p.livePct != null) {
+      const storedRemaining = Number(existing.remainingFrac);
+      const storedFracClosed = 1 - storedRemaining;
+      const storedRealizedSum = Number(existing.realizedPct) * storedFracClosed;
+      const w = SIZE_WEIGHT[existing.sizeLabel] ?? 0.01;
+      await prisma.tradeAlert.update({
+        where: { openMessageId: p.openMessageId },
+        data: {
+          lastMark: new Prisma.Decimal(p.lastMark),
+          markedAt: new Date(),
+          livePct: new Prisma.Decimal(p.livePct),
+          bookDelta: new Prisma.Decimal(w * (storedRealizedSum + storedRemaining * p.livePct)),
+        },
+      });
+    }
+    return;
+  }
 
   await prisma.tradeAlert.upsert({
     where: { openMessageId: p.openMessageId },
