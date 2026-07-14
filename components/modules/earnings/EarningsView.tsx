@@ -52,7 +52,44 @@ function useWatchlist(): [Set<string>, (t: string) => void] {
   return [set, toggle];
 }
 
-function SessPill({ t }: { t: EarningsEventRow["reportTime"] }) {
+// Has this report already happened? Time-based (feed actuals can lag):
+// premarket names flip once the session opens, after-close names at ~4:10 PM.
+function useEtNow(): { date: string; mins: number } {
+  const [now, setNow] = useState(() => etNowParts());
+  useEffect(() => {
+    const id = setInterval(() => setNow(etNowParts()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
+function etNowParts(): { date: string; mins: number } {
+  const d = new Date();
+  const date = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(d);
+  const p = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(d);
+  const g = (t: string) => Number(p.find((x) => x.type === t)?.value ?? "0");
+  const h = g("hour") === 24 ? 0 : g("hour");
+  return { date, mins: h * 60 + g("minute") };
+}
+function isReported(e: EarningsEventRow, now: { date: string; mins: number }): boolean {
+  if (e.actualEps != null || e.reactionPct != null) return true;
+  if (e.reportDate < now.date) return true;
+  if (e.reportDate > now.date) return false;
+  if (e.reportTime === "premarket") return now.mins >= 9 * 60 + 35;
+  if (e.reportTime === "postmarket") return now.mins >= 16 * 60 + 10;
+  return false;
+}
+
+function SessPill({ t, reported }: { t: EarningsEventRow["reportTime"]; reported?: boolean }) {
+  if (reported) {
+    return (
+      <span style={{
+        fontSize: 8.5, fontWeight: 700, letterSpacing: ".05em", borderRadius: 4, padding: "1.5px 6px",
+        background: "rgba(201,165,90,.16)", color: GOLD2,
+      }}>
+        REPORTED
+      </span>
+    );
+  }
   const pre = t === "premarket";
   const unknown = t === "unknown";
   return (
@@ -117,7 +154,8 @@ function Centered({ children }: { children: React.ReactNode }) {
 
 function CalendarView({ data, onOpen }: { data: EarningsCalendarPayload; onOpen: (t: string) => void }) {
   const { tz, abbr } = useTimeZone();
-  const todayIso = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+  const now = useEtNow();
+  const todayIso = now.date;
 
   // Weekday buckets from `from`..`to`, skipping weekends.
   const days = useMemo(() => {
@@ -162,7 +200,9 @@ function CalendarView({ data, onOpen }: { data: EarningsCalendarPayload; onOpen:
             {d.events.length === 0 && (
               <div style={{ fontSize: 10.5, color: "var(--color-text-tertiary)" }}>No majors</div>
             )}
-            {d.events.slice(0, 14).map((e) => (
+            {d.events.slice(0, 14).map((e) => {
+              const rep = isReported(e, now);
+              return (
               <button key={e.ticker} onClick={() => onOpen(e.ticker)} title={`${e.fullName ?? e.ticker} — open deep dive`}
                 className="flex w-full items-center justify-between gap-[6px] rounded-[7px] cursor-pointer"
                 style={{
@@ -172,11 +212,17 @@ function CalendarView({ data, onOpen }: { data: EarningsCalendarPayload; onOpen:
                 }}>
                 <span style={{ fontSize: 12 }}>
                   <b style={{ color: GOLD2 }}>{e.ticker}</b>{" "}
-                  <span style={{ fontSize: 10.5, color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums" }}>{pct(e.expectedMovePct)}</span>
+                  <span style={{ fontSize: 10.5, color: rep ? "var(--color-text-tertiary)" : "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums" }}>{pct(e.expectedMovePct)}</span>
+                  {rep && e.reactionPct != null && (
+                    <span style={{ fontSize: 10.5, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: e.reactionPct >= 0 ? UP : DN }}>
+                      {" "}→ {spct(e.reactionPct)}
+                    </span>
+                  )}
                 </span>
-                <SessPill t={e.reportTime} />
+                <SessPill t={e.reportTime} reported={rep} />
               </button>
-            ))}
+              );
+            })}
             {d.events.length > 14 && (
               <div style={{ fontSize: 9.5, color: "var(--color-text-tertiary)" }}>+{d.events.length - 14} more in screener</div>
             )}
@@ -196,6 +242,7 @@ function Screener({ data, watch, toggleWatch, onOpen }: {
 }) {
   const [sort, setSort] = useState<SortMode>("date");
   const [addVal, setAddVal] = useState("");
+  const now = useEtNow();
 
   const rows = useMemo(() => {
     const r = [...data.events];
@@ -251,7 +298,7 @@ function Screener({ data, watch, toggleWatch, onOpen }: {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr>
-                {["", "Ticker", "Sector", "Reports", "Session", "Implied move", "Cons. EPS", "Mkt cap", "Avg move (12q)", "Beat rate"].map((h, i) => (
+                {["", "Ticker", "Sector", "Reports", "Session", "Implied move", "Reaction", "EPS est / act", "Mkt cap", "Avg move (12q)", "Beat rate"].map((h, i) => (
                   <th key={i} style={{
                     fontSize: 9.5, fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase",
                     color: "var(--color-text-tertiary)", textAlign: i <= 2 ? "left" : "right",
@@ -261,7 +308,9 @@ function Screener({ data, watch, toggleWatch, onOpen }: {
               </tr>
             </thead>
             <tbody>
-              {rows.map((e) => (
+              {rows.map((e) => {
+                const rep = isReported(e, now);
+                return (
                 <tr key={`${e.ticker}-${e.reportDate}`} onClick={() => onOpen(e.ticker)} className="cursor-pointer hover:bg-bg-secondary"
                   style={{ borderBottom: "0.5px solid var(--color-border-tertiary)", boxShadow: watch.has(e.ticker) ? `inset 2.5px 0 0 ${GOLD}` : undefined }}>
                   <td style={{ padding: "7px 4px 7px 10px", width: 26 }}>
@@ -274,14 +323,33 @@ function Screener({ data, watch, toggleWatch, onOpen }: {
                   <Td left><b style={{ color: GOLD2 }}>{e.ticker}</b> <span style={{ fontSize: 10.5, color: "var(--color-text-tertiary)" }}>{e.fullName ?? ""}</span></Td>
                   <Td left style={{ fontSize: 10.5, color: "var(--color-text-secondary)" }}>{e.sector ?? "—"}</Td>
                   <Td>{dateLabel(e.reportDate)}</Td>
-                  <Td><SessPill t={e.reportTime} /></Td>
-                  <Td style={{ fontWeight: 700, color: GOLD2 }}>{pct(e.expectedMovePct)}</Td>
-                  <Td>{e.actualEps != null ? <span title="reported"><b>{eps(e.actualEps)}</b> <span style={{ fontSize: 9, color: "var(--color-text-tertiary)" }}>act</span></span> : eps(e.epsEstimate)}</Td>
+                  <Td><SessPill t={e.reportTime} reported={rep} /></Td>
+                  <Td style={{ fontWeight: 700, color: rep ? "var(--color-text-tertiary)" : GOLD2 }}>{pct(e.expectedMovePct)}</Td>
+                  <Td>
+                    {rep && e.reactionPct != null ? (
+                      <span style={{ fontWeight: 700, color: e.reactionPct >= 0 ? UP : DN }}>{spct(e.reactionPct)}</span>
+                    ) : rep ? (
+                      <span style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>pending</span>
+                    ) : (
+                      <span style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>—</span>
+                    )}
+                  </Td>
+                  <Td>
+                    {e.actualEps != null ? (
+                      <span>
+                        <span style={{ color: "var(--color-text-tertiary)" }}>{eps(e.epsEstimate)}</span>{" / "}
+                        <b style={{ color: e.epsEstimate == null ? "var(--color-text-primary)" : e.actualEps >= e.epsEstimate ? UP : DN }}>{eps(e.actualEps)}</b>
+                      </span>
+                    ) : (
+                      <span>{eps(e.epsEstimate)}{rep && <span style={{ fontSize: 9, color: "var(--color-text-tertiary)" }}> / soon</span>}</span>
+                    )}
+                  </Td>
                   <Td style={{ color: "var(--color-text-secondary)" }}>{mcap(e.marketcap)}</Td>
                   <Td style={{ color: e.avgMovePct != null && e.expectedMovePct != null && e.avgMovePct > e.expectedMovePct ? UP : "var(--color-text-secondary)" }}>{pct(e.avgMovePct)}</Td>
                   <Td style={{ color: "var(--color-text-secondary)" }}>{e.beatCount != null ? `${e.beatCount}/${e.quarterCount}` : "—"}</Td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
