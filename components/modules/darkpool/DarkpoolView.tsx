@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTimeZone, wallToDate, tzAbbr } from "@/lib/timezone";
 import type { DarkPoolPrint } from "@/lib/types";
 import { TRACKED_TICKERS } from "@/lib/tracked-tickers";
 
@@ -42,21 +43,20 @@ function rankClass(rank: number): { bg: string; color: string; border: string } 
   return { bg: "var(--color-background-secondary)", color: "var(--color-text-secondary)", border: "var(--color-border-secondary)" };
 }
 
-function formatTime(iso: string): string {
-  // "2026-04-21T11:17:42Z" → "04/21/2026 11:17:42 AM" (12-hour clock).
-  // ISO is UTC-zulu off the wire; we preserve that — display time matches
-  // the executedAt timestamp the worker stored rather than reinterpreting
-  // it in the browser's local zone.
+function formatTime(iso: string, tz: string): string {
+  // Stored executedAt is the exchange (ET) wall time serialized with a Z —
+  // interpret it as ET, then render in the user's display timezone.
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
   if (!m) return iso;
   const [, year, month, day, hh, mm, ss] = m;
-  const h = Number(hh);
-  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  const ampm = h >= 12 ? "PM" : "AM";
-  return `${month}/${day}/${year} ${hour12}:${mm}:${ss} ${ampm}`;
+  const d = wallToDate(`${year}-${month}-${day}`, `${hh}:${mm}:${ss}`);
+  const date = d.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric", timeZone: tz });
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", timeZone: tz });
+  return `${date} ${time}`;
 }
 
 export function DarkpoolView() {
+  const { tz } = useTimeZone();
   const [prints, setPrints] = useState<DarkPoolPrint[]>([]);
   const [filter, setFilter] = useState<DPFilter>(INITIAL);
   const [sortKey, setSortKey] = useState<SortKey>("time");
@@ -129,7 +129,7 @@ export function DarkpoolView() {
             />
             <div style={{ fontSize: 10, color: "var(--color-text-tertiary)", marginTop: 6, lineHeight: 1.4 }}>
               {filter.onlyRanked
-                ? "Top-100 per ticker, all-time. Historical Polygon corpus + live UW rolling."
+                ? "Top-100 per ticker, all-time — full historical corpus plus the live rolling feed."
                 : "All dark-pool prints, most recent first."}
             </div>
           </div>
@@ -223,7 +223,7 @@ export function DarkpoolView() {
                     }}
                   >
                     <Td style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>
-                      {formatTime(r.executed_at)}
+                      {formatTime(r.executed_at, tz)}
                       {r.is_extended && (
                         <span
                           style={{
