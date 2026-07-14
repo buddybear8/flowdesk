@@ -416,6 +416,11 @@ function DeepDive({ events, initialTicker, watch }: { events: EarningsEventRow[]
                 color={e.epsEstimate != null && e.actualEps >= e.epsEstimate ? UP : DN}
                 d={e.epsEstimate != null ? (e.actualEps >= e.epsEstimate ? "beat" : "miss") : ""} />
             )}
+            {e.reactionPct != null && (
+              <Metric k="Reaction" v={spct(e.reactionPct)}
+                color={e.reactionPct >= 0 ? UP : DN}
+                d={e.expectedMovePct != null ? (Math.abs(e.reactionPct) > e.expectedMovePct ? "exceeded implied move" : "inside implied move") : ""} />
+            )}
             <Metric k="Avg move (12q)" v={pct(e.avgMovePct)}
               d={e.avgMovePct != null && e.expectedMovePct != null ? (e.avgMovePct > e.expectedMovePct ? "history runs hotter" : "options pricing rich") : ""} />
             <Metric k="Beat rate" v={e.beatCount != null ? `${e.beatCount} / ${e.quarterCount}` : "—"} color={e.beatCount != null && e.quarterCount != null && e.beatCount / e.quarterCount >= 0.7 ? UP : undefined} d="EPS beats, last 12 qtrs" />
@@ -463,9 +468,20 @@ function DeepDive({ events, initialTicker, watch }: { events: EarningsEventRow[]
                 )}
               </div>
 
+              {/* Post-earnings results */}
+              {dd?.resultsSummary && (
+                <div className="rounded-[0_12px_12px_0]" style={{ marginTop: 12, padding: "12px 14px", background: "rgba(95,210,156,.08)", borderLeft: `3px solid ${UP}` }}>
+                  <div style={{ fontSize: 12, color: UP, fontWeight: 600, marginBottom: 8 }}>✓ Earnings results — what happened and why it&rsquo;s moving</div>
+                  <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{dd.resultsSummary.body}</div>
+                  <div style={{ fontSize: 9.5, color: "var(--color-text-tertiary)", marginTop: 8 }}>
+                    Generated {fmtClock(new Date(dd.resultsSummary.generatedAt), tz)} {abbr} from results + news search · not investment advice
+                  </div>
+                </div>
+              )}
+
               {/* AI brief */}
               <div className="rounded-[0_12px_12px_0]" style={{ marginTop: 12, padding: "12px 14px", background: "rgba(201,165,90,.10)", borderLeft: `3px solid ${GOLD}` }}>
-                <div style={{ fontSize: 12, color: GOLD2, fontWeight: 600, marginBottom: 8 }}>⭑ AI briefing — what the street is watching</div>
+                <div style={{ fontSize: 12, color: GOLD2, fontWeight: 600, marginBottom: 8 }}>⭑ {dd?.resultsSummary ? "Pre-earnings briefing (archived)" : "AI briefing — what the street is watching"}</div>
                 {dd?.aiSummary ? (
                   <>
                     <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{dd.aiSummary.body}</div>

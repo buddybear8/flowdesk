@@ -202,6 +202,8 @@ export interface EarningsEventRow {
   actualEps: number | null;
   expectedMovePct: number | null; // fraction, e.g. 0.068
   preEarningsClose: number | null;
+  postEarningsClose: number | null;
+  reactionPct: number | null;     // signed close-to-close reaction fraction
   fiscalQuarter: string | null;
   avgMovePct: number | null;      // avg |1d move| last 12 completed qtrs
   beatCount: number | null;
@@ -229,7 +231,8 @@ export interface EarningsDeepDivePayload {
   ticker: string;
   event: EarningsEventRow | null;  // next upcoming, else most recent
   history: EarningsHistoryRow[];   // newest first, completed quarters
-  aiSummary: { body: string; generatedAt: string } | null;
+  aiSummary: { body: string; generatedAt: string } | null;         // pre-earnings brief
+  resultsSummary: { body: string; generatedAt: string } | null;    // post-earnings results
 }
 
 // ---------- 3d. Trade Alerts (Discord alert tracking) ----------

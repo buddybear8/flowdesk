@@ -375,6 +375,8 @@ model EarningsEvent {
   expectedMove    Decimal?  @map("expected_move") @db.Decimal(12, 4)
   expectedMovePct Decimal?  @map("expected_move_pct") @db.Decimal(10, 6)
   preEarningsClose Decimal? @map("pre_earnings_close") @db.Decimal(12, 4)
+  postEarningsClose Decimal? @map("post_earnings_close") @db.Decimal(12, 4)
+  reactionPct     Decimal?  @map("reaction_pct") @db.Decimal(10, 6) // signed close-to-close reaction
   fiscalQuarter   String?   @map("fiscal_quarter") @db.VarChar(12)
   // Rollups computed from earnings_history at backfill time
   avgMovePct      Decimal?  @map("avg_move_pct") @db.Decimal(10, 6) // avg |1d move|, last 12 qtrs

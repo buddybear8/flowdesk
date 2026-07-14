@@ -77,6 +77,8 @@ function etDateStr(offsetDays = 0): string {
 
 interface UwCalRow {
   symbol: string;
+  reaction?: string;
+  post_earnings_close?: string;
   full_name?: string;
   sector?: string;
   marketcap?: string;
@@ -126,6 +128,8 @@ export async function syncEarningsCalendar(): Promise<void> {
         expectedMove: dec(r.expected_move),
         expectedMovePct: dec(r.expected_move_perc),
         preEarningsClose: dec(r.pre_earnings_close),
+        postEarningsClose: dec(r.post_earnings_close),
+        reactionPct: dec(r.reaction),
         fiscalQuarter: r.ending_fiscal_quarter ?? null,
       };
       await prisma.earningsEvent.upsert({
@@ -143,9 +147,12 @@ export async function syncEarningsCalendar(): Promise<void> {
 // ─── 2. Per-ticker history backfill + rollups ────────────────────────────────
 
 export async function backfillEarningsHistory(): Promise<void> {
+  // Upcoming names AND last week's reporters — recent reporters need their
+  // fresh quarter (actual EPS + reaction move) folded into earnings_history.
   const today = new Date(`${etDateStr(0)}T00:00:00.000Z`);
+  const weekAgo = new Date(`${etDateStr(-7)}T00:00:00.000Z`);
   const events = await prisma.earningsEvent.findMany({
-    where: { reportDate: { gte: today } },
+    where: { reportDate: { gte: weekAgo } },
     select: { ticker: true },
     distinct: ["ticker"],
   });
@@ -305,6 +312,114 @@ Search the web for the latest ${e.ticker} earnings preview and news, then write 
   await Promise.all(workers);
 
   console.log(`[earnings-briefs] ${ts()} generated ${generated}, fresh ${skipped}, failed ${failed} (due ${due.length})`);
+}
+
+// ─── 4. Post-earnings results briefs ─────────────────────────────────────────
+//
+// After the numbers are out: reported EPS vs consensus + an AI read of
+// revenue, guidance, and what's driving the stock's reaction.
+//   • 8:00 PM ET — same-evening pass for today's after-close reporters
+//   • 9:00 AM ET — today's premarket reporters + yesterday's AMC stragglers
+// kind = earnings-results-{TICKER}-{reportDate}; one per report (idempotent,
+// invalid generations retry next run).
+
+const RESULTS_SYSTEM_PROMPT = `You are a market analyst writing post-earnings result summaries for the "Earnings Analyst" dashboard of a trading platform. The company just reported.
+
+Write exactly three sections, in this order, using these plain-text headers:
+
+Results: 2-3 bullet points with the reported numbers — EPS vs consensus, revenue vs consensus, and any guidance change. Use web search to get them. Each bullet starts with "- ".
+
+Reaction: 1-2 sentences on how the stock is trading since the report (after-hours or premarket/regular session) and how that compares to the options-implied move provided.
+
+Drivers: 2-3 sentences on WHY the stock is reacting this way — the specific line items, guidance, or commentary the market is keying on.
+
+Rules: under 180 words total. No preamble, no narration of your search process, no investment advice, nothing after the three sections. Plain text only.`;
+
+export async function runEarningsResultsBriefs(): Promise<void> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.warn(`[earnings-results] ${ts()} ANTHROPIC_API_KEY not set — skipping.`);
+    return;
+  }
+  const client = new Anthropic();
+  const todayIso = etDateStr(0);
+  const hourET = Number(
+    new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "2-digit", hour12: false }).format(new Date()),
+  );
+  const today = new Date(`${todayIso}T00:00:00.000Z`);
+  const yesterday = new Date(`${etDateStr(-1)}T00:00:00.000Z`);
+
+  // Evening run → today's AMC names. Morning run → today's premarket names +
+  // yesterday's AMC stragglers (e.g. actuals that landed late).
+  const where =
+    hourET >= 16
+      ? { reportDate: today, reportTime: "postmarket" }
+      : {
+          OR: [
+            { reportDate: today, reportTime: "premarket" },
+            { reportDate: yesterday, reportTime: "postmarket" },
+          ],
+        };
+  const events = await prisma.earningsEvent.findMany({ where, orderBy: [{ marketcap: "desc" }] });
+
+  let generated = 0, skipped = 0, failed = 0;
+  for (const e of events) {
+    const dateKey = e.reportDate.toISOString().slice(0, 10);
+    const kind = `earnings-results-${e.ticker}-${dateKey}`;
+    const existing = await prisma.aiSummary.findFirst({ where: { kind }, select: { id: true } });
+    if (existing) { skipped++; continue; }
+    try {
+      const userPrompt = `Company: ${e.fullName ?? e.ticker} (${e.ticker})
+Sector: ${e.sector ?? "n/a"}
+Reported: ${dateKey} ${e.reportTime === "premarket" ? "before the open" : "after the close"}
+Consensus EPS was: ${e.epsEstimate != null ? `$${Number(e.epsEstimate).toFixed(2)}` : "n/a"}
+Reported EPS (from our feed, may lag): ${e.actualEps != null ? `$${Number(e.actualEps).toFixed(2)}` : "not yet captured — get it from search"}
+Options-implied move was: ${e.expectedMovePct != null ? `±${(Number(e.expectedMovePct) * 100).toFixed(1)}%` : "n/a"}
+Measured reaction so far: ${e.reactionPct != null ? `${(Number(e.reactionPct) * 100).toFixed(1)}%` : "not yet measured — describe from search"}
+
+Search the web for ${e.ticker}'s earnings results and stock reaction, then write the summary.`;
+
+      const body = await runResultsWithWebSearch(client, userPrompt);
+      if (!body) { failed++; continue; }
+      await prisma.aiSummary.create({
+        data: { kind, generatedAt: new Date(), body: body.text, tokensUsed: body.tokens },
+      });
+      generated++;
+    } catch (err) {
+      failed++;
+      console.error(`[earnings-results] ${e.ticker} failed:`, err instanceof Error ? err.message : err);
+    }
+    await sleep(400);
+  }
+  console.log(`[earnings-results] ${ts()} generated ${generated}, existing ${skipped}, failed ${failed} (${events.length} reporters)`);
+}
+
+async function runResultsWithWebSearch(
+  client: Anthropic,
+  userPrompt: string,
+): Promise<{ text: string; tokens: number } | null> {
+  const tools = [{ type: "web_search_20260209", name: "web_search", max_uses: MAX_WEB_SEARCHES }] as unknown as Anthropic.Messages.Tool[];
+  let messages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: userPrompt }];
+  let tokens = 0;
+  const parts: string[] = [];
+  for (let i = 0; i <= MAX_CONTINUATIONS; i++) {
+    const response = await client.messages.create({
+      model: MODEL, max_tokens: MAX_TOKENS, system: RESULTS_SYSTEM_PROMPT, messages, tools,
+    });
+    tokens += (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0);
+    for (const b of response.content) {
+      if (b.type === "text" && b.text) parts.push(b.text);
+    }
+    if (response.stop_reason === "pause_turn" && i < MAX_CONTINUATIONS) {
+      messages = [...messages, { role: "assistant", content: response.content }];
+      continue;
+    }
+    break;
+  }
+  let text = parts.join("").trim();
+  const idx = text.indexOf("Results:");
+  if (idx > 0) text = text.slice(idx);
+  if (!text.includes("Results:") || !text.includes("Reaction:")) return null;
+  return { text, tokens };
 }
 
 async function runWithWebSearch(

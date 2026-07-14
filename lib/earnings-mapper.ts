@@ -5,6 +5,7 @@ export function eventToRow(e: {
   ticker: string; reportDate: Date; reportTime: string; fullName: string | null;
   sector: string | null; marketcap: unknown; isSp500: boolean; epsEstimate: unknown;
   actualEps: unknown; expectedMovePct: unknown; preEarningsClose: unknown;
+  postEarningsClose: unknown; reactionPct: unknown;
   fiscalQuarter: string | null; avgMovePct: unknown; beatCount: number | null; quarterCount: number | null;
 }): EarningsEventRow {
   const n = (v: unknown) => (v == null ? null : Number(v));
@@ -20,6 +21,8 @@ export function eventToRow(e: {
     actualEps: n(e.actualEps),
     expectedMovePct: n(e.expectedMovePct),
     preEarningsClose: n(e.preEarningsClose),
+    postEarningsClose: n(e.postEarningsClose),
+    reactionPct: n(e.reactionPct),
     fiscalQuarter: e.fiscalQuarter,
     avgMovePct: n(e.avgMovePct),
     beatCount: e.beatCount,

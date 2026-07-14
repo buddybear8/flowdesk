@@ -187,7 +187,9 @@ export default function UserGuidePage() {
             <li><B>Deep dive</B> — search any covered ticker: a daily chart with <B>implied-move rails</B>, the last 16
               quarters of <B>est-vs-actual EPS and next-day moves</B> against what was priced each time, and an{" "}
               <B>AI briefing</B> (generated once, when the name enters the 3-week window; the numbers around it stay
-              live) covering the setup, what the street is watching —
+              live) covering the setup, plus a <B>results summary</B> after the report — reported EPS vs consensus, the
+              measured reaction vs the implied move, and what&rsquo;s driving it (9 AM for premarket reporters, 8 PM for
+              after-close) — covering the pre-report setup, what the street is watching —
               including revenue and guidance expectations — and the downside risk.</li>
           </Ul>
         </Mod>

@@ -23,7 +23,7 @@ import { refreshTickerMetadata } from "./jobs/refresh-ticker-metadata.js";
 import { runAiSummarizerGex } from "./jobs/ai-summarizer-gex.js";
 import { runAiSummarizerWatches } from "./jobs/ai-summarizer-watches.js";
 import { computeHitList, priceWatchContracts } from "./jobs/hit-list-compute.js";
-import { syncEarningsCalendar, backfillEarningsHistory, runEarningsAiBriefs } from "./jobs/earnings.js";
+import { syncEarningsCalendar, backfillEarningsHistory, runEarningsAiBriefs, runEarningsResultsBriefs } from "./jobs/earnings.js";
 import { postWatchesToDiscord } from "./jobs/watches-discord.js";
 import { importPolygonDailyFlatFile } from "./jobs/polygon-daily-flatfile.js";
 import { pollPolygonIntraday } from "./jobs/polygon-hourly-intraday.js";
@@ -109,6 +109,10 @@ cron.schedule("0 50 5 * * 1-5", safe("earnings-calendar", syncEarningsCalendar))
 cron.schedule("0 55 5 * * 1-5", safe("earnings-history", backfillEarningsHistory));
 cron.schedule("0 40 6 * * 1-5", safe("earnings-briefs", runEarningsAiBriefs));
 cron.schedule("0 5 8-17 * * 1-5", safe("earnings-refresh", syncEarningsCalendar));
+// Post-earnings results briefs: 8 PM for tonight's AMC reporters, 9 AM for
+// premarket reporters (+ yesterday's AMC stragglers).
+cron.schedule("0 0 20 * * 1-5", safe("earnings-results-pm", runEarningsResultsBriefs));
+cron.schedule("0 0 9 * * 1-5", safe("earnings-results-am", runEarningsResultsBriefs));
 cron.schedule("0 45 7 * * 1-5", safe("ai-summarizer-watches", runAiSummarizerWatches));
 // Daily Watches → Discord card (no-op until DISCORD_WATCHES_* env is set);
 // 8:10 retry covers a slow/watchdog-recovered compute. Dedupes per day.
@@ -173,4 +177,4 @@ const shutdown = async (signal: string) => {
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
-console.log(`[${ts()}] [worker] started — 26 schedules registered (tiered GEX cadence; watches Discord card) (Polygon dark-pool ingest live; Options Sentiment hot+tail live; S3 archive live; Trade Alerts live)`);
+console.log(`[${ts()}] [worker] started — 28 schedules registered (tiered GEX cadence; watches Discord card) (Polygon dark-pool ingest live; Options Sentiment hot+tail live; S3 archive live; Trade Alerts live)`);

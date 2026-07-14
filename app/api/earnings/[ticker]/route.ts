@@ -33,12 +33,17 @@ export async function GET(
     take: 16,
   });
 
-  // Latest AI brief for this ticker's upcoming (or most recent) report date.
+  // Latest AI briefs for this report: pre-earnings preview + post-earnings results.
   let aiSummary: EarningsDeepDivePayload["aiSummary"] = null;
+  let resultsSummary: EarningsDeepDivePayload["resultsSummary"] = null;
   if (event) {
-    const kind = `earnings-${ticker}-${event.reportDate.toISOString().slice(0, 10)}`;
-    const s = await prisma.aiSummary.findFirst({ where: { kind }, orderBy: { generatedAt: "desc" } });
-    if (s) aiSummary = { body: s.body, generatedAt: s.generatedAt.toISOString() };
+    const dateKey = event.reportDate.toISOString().slice(0, 10);
+    const [pre, post] = await Promise.all([
+      prisma.aiSummary.findFirst({ where: { kind: `earnings-${ticker}-${dateKey}` }, orderBy: { generatedAt: "desc" } }),
+      prisma.aiSummary.findFirst({ where: { kind: `earnings-results-${ticker}-${dateKey}` }, orderBy: { generatedAt: "desc" } }),
+    ]);
+    if (pre) aiSummary = { body: pre.body, generatedAt: pre.generatedAt.toISOString() };
+    if (post) resultsSummary = { body: post.body, generatedAt: post.generatedAt.toISOString() };
   }
 
   const n = (v: unknown) => (v == null ? null : Number(v));
@@ -55,6 +60,7 @@ export async function GET(
       move1wPct: n(h.move1wPct),
     })),
     aiSummary,
+    resultsSummary,
   };
   return NextResponse.json(payload, { headers: { "Cache-Control": "no-store" } });
 }
