@@ -46,6 +46,7 @@ const TICKER_PATTERNS: Record<string, ExpiryPattern> = {
   SNDK: "FRIDAY",
   QCOM: "FRIDAY",
   COIN: "FRIDAY",
+  INTC: "FRIDAY",
 };
 
 function isExpirationDay(date: Date, pattern: ExpiryPattern): boolean {

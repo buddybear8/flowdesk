@@ -44,6 +44,7 @@ const BAND: Record<string, number> = {
   COIN: 0.25,
   SNDK: 0.25,
   NBIS: 0.30,
+  INTC: 0.25,
 };
 
 const DEFAULT_BAND = 0.15;

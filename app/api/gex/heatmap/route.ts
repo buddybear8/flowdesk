@@ -10,6 +10,7 @@ const VALID_TICKERS = new Set([
   "MU", "DRAM", "SPCX",
   "ORCL", "MRVL", "BABA", "APP", "HOOD", "ASTS", "ENPH",
   "SOXX", "SMH", "NBIS", "SNOW", "PLTR", "NOW", "SNDK", "QCOM", "COIN",
+  "INTC",
 ]);
 
 // DB cells JSON shape — written by pollGex in worker/src/jobs/uw.ts.

@@ -40,6 +40,7 @@ export const WATCHED_TICKERS = [
   "SNDK",
   "QCOM",
   "COIN",
+  "INTC",
 ] as const;
 
 export type WatchedTicker = (typeof WATCHED_TICKERS)[number];
