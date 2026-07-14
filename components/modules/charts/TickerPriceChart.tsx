@@ -351,7 +351,7 @@ export function TickerPriceChart(props: Props) {
         position: "absolute", bottom: 9, left: 12, zIndex: 6, fontSize: 9.5,
         color: "var(--color-text-tertiary)", pointerEvents: "none",
       }}>
-        data: Polygon · charts by{" "}
+        charts by{" "}
         <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer"
           style={{ color: "var(--color-text-tertiary)", textDecoration: "underline", pointerEvents: "auto" }}>
           TradingView Lightweight Charts
