@@ -186,10 +186,11 @@ interface Position {
 
 const keyOf = (e: Ev) => [e.moderator, e.ticker, e.side, e.strike ?? "", e.expiryLabel ?? ""].join("|");
 
-function buildPositions(events: Ev[]): Position[] {
+function buildPositions(events: Ev[]): { positions: Position[]; orphans: Ev[] } {
   events.sort((a, b) => a.at.getTime() - b.at.getTime());
   const openByKey = new Map<string, Position>();
   const all: Position[] = [];
+  const orphans: Ev[] = [];
   for (const e of events) {
     const k = keyOf(e);
     if (e.action === "open") {
@@ -206,7 +207,13 @@ function buildPositions(events: Ev[]): Position[] {
       continue;
     }
     const p = openByKey.get(k);
-    if (!p) continue; // exit/add with no matching open in window — skip (orphan)
+    if (!p) {
+      // Exit with no in-window open — the position predates the re-derive
+      // lookback. Collect it: applyOrphanExits composes it onto the stored
+      // row (HOOD 100C 2026-07-15: open 5/28 aged out, close was dropped).
+      if (e.action === "trim" || e.action === "close") orphans.push(e);
+      continue;
+    }
     if (e.action === "add") {
       p.events.push({ action: "add", price: e.price, at: e.at.toISOString(), messageId: e.messageId });
     } else if (e.action === "trim") {
@@ -225,7 +232,7 @@ function buildPositions(events: Ev[]): Position[] {
       openByKey.delete(k);
     }
   }
-  return all;
+  return { positions: all, orphans };
 }
 
 function normalizeSize(s: string | null): string {
@@ -308,6 +315,58 @@ function bookDelta(p: { sizeLabel: string; realizedSum: number; remaining: numbe
 }
 
 // ── Upsert ───────────────────────────────────────────────────────────────────
+
+// Exits whose opening alert predates the re-derive lookback: compose them
+// onto the STORED row (works for normal and manually-corrected rows alike —
+// the stored remaining fraction is the basis either way). Idempotent via the
+// event messageId already recorded on the row.
+async function applyOrphanExits(orphans: Ev[]): Promise<void> {
+  for (const e of orphans) {
+    try {
+      const row = await prisma.tradeAlert.findFirst({
+        where: {
+          ticker: e.ticker, side: e.side, status: "OPEN", assetType: e.assetType,
+          strike: e.strike != null ? new Prisma.Decimal(e.strike) : null,
+          expiry: e.expiry,
+        },
+      });
+      if (!row) continue;
+      const events = Array.isArray(row.events) ? [...(row.events as { messageId?: string }[])] : [];
+      if (events.some((ev) => ev.messageId === e.messageId)) continue; // already applied
+
+      const pct = e.pct ?? 0;
+      const storedRemaining = Number(row.remainingFrac);
+      const realizedSum = Number(row.realizedPct) * (1 - storedRemaining);
+      const frac = e.action === "close" ? storedRemaining : (e.fracHint ?? TRIM_DEFAULT_FRAC) * storedRemaining;
+      const newRemaining = e.action === "close" ? 0 : Math.max(0, storedRemaining - frac);
+      const newRealizedSum = realizedSum + frac * pct;
+      const closedNow = newRemaining < 1e-6;
+      const newRealizedPct = 1 - newRemaining > 1e-6 ? newRealizedSum / (1 - newRemaining) : 0;
+      const w = SIZE_WEIGHT[row.sizeLabel] ?? 0.01;
+      const live = closedNow ? 0 : Number(row.livePct ?? 0);
+      events.push({
+        action: e.action, price: e.price, pct, fracClosed: frac,
+        at: e.at.toISOString(), messageId: e.messageId, note: "orphan exit applied to stored position",
+      } as { messageId?: string });
+      await prisma.tradeAlert.update({
+        where: { id: row.id },
+        data: {
+          status: closedNow ? "CLOSED" : "OPEN",
+          remainingFrac: new Prisma.Decimal(newRemaining),
+          realizedPct: new Prisma.Decimal(newRealizedPct.toFixed(4)),
+          livePct: closedNow ? null : row.livePct,
+          lastMark: e.price != null ? new Prisma.Decimal(e.price) : row.lastMark,
+          markedAt: new Date(),
+          bookDelta: new Prisma.Decimal((w * (newRealizedSum + newRemaining * live)).toFixed(4)),
+          events: events as unknown as Prisma.InputJsonValue,
+        },
+      });
+      console.log(`[trade-alerts] orphan ${e.action} applied: ${e.ticker} ${e.messageId} (${pct.toFixed(1)}% on ${frac.toFixed(3)})`);
+    } catch (err) {
+      console.error(`[trade-alerts] orphan exit failed for ${e.ticker}:`, err instanceof Error ? err.message : err);
+    }
+  }
+}
 
 async function upsertPosition(p: Position): Promise<void> {
   const fracClosed = 1 - p.remaining;
@@ -436,7 +495,7 @@ export async function pollTradeAlerts(lookbackDays: number = REDERIVE_DAYS): Pro
     const msgs = await fetchRecentMessages(ch.id, sinceMs);
     if (msgs === null) { console.warn(`[trade-alerts] ${ch.assetType} channel unreachable (perms?) — skipping`); continue; }
     const events = msgs.map((m) => parseEmbed(m, ch.assetType)).filter((e): e is Ev => e !== null);
-    const positions = buildPositions(events);
+    const { positions, orphans } = buildPositions(events);
     for (const p of positions) {
       await priceAndSettle(p);
       try { await upsertPosition(p); upserts++; } catch (err) {
@@ -444,6 +503,8 @@ export async function pollTradeAlerts(lookbackDays: number = REDERIVE_DAYS): Pro
       }
       await sleep(120);
     }
+
+    await applyOrphanExits(orphans);
     console.log(`[trade-alerts] ${ch.assetType}: ${events.length} events → ${positions.length} positions`);
     await sleep(300);
   }
