@@ -346,6 +346,40 @@ async function upsertPosition(p: Position): Promise<void> {
   // recomputed from the STORED corrected fields, not the derived ones.
   const existing = await prisma.tradeAlert.findUnique({ where: { openMessageId: p.openMessageId } });
   if (existing?.manualOverride) {
+    // A derived CLOSE that postdates the correction still applies: a close
+    // liquidates whatever remains, so it composes with the corrected state
+    // regardless of how the derived/stored fractions diverge (HOOD 100C
+    // 2026-07-15: frozen at 25% remaining, mod closed at +377%).
+    if (existing.status === "OPEN" && p.status === "CLOSED") {
+      const closeEvt = [...p.events].reverse().find((e) => (e as { action?: string }).action === "close") as
+        | { price?: number; pct?: number; at?: string; messageId?: string }
+        | undefined;
+      const closePct = closeEvt?.pct ?? 0;
+      const storedRemaining = Number(existing.remainingFrac);
+      const newRealizedSum = Number(existing.realizedPct) * (1 - storedRemaining) + storedRemaining * closePct;
+      const w = SIZE_WEIGHT[existing.sizeLabel] ?? 0.01;
+      const events = Array.isArray(existing.events) ? [...(existing.events as unknown[])] : [];
+      events.push({
+        action: "close", price: closeEvt?.price ?? null, pct: closePct, fracClosed: storedRemaining,
+        at: closeEvt?.at ?? new Date().toISOString(), messageId: closeEvt?.messageId ?? null,
+        note: "applied onto manually-corrected position",
+      });
+      await prisma.tradeAlert.update({
+        where: { openMessageId: p.openMessageId },
+        data: {
+          status: "CLOSED",
+          remainingFrac: new Prisma.Decimal(0),
+          realizedPct: new Prisma.Decimal(newRealizedSum.toFixed(4)),
+          livePct: null,
+          lastMark: closeEvt?.price != null ? new Prisma.Decimal(closeEvt.price) : existing.lastMark,
+          markedAt: new Date(),
+          bookDelta: new Prisma.Decimal((w * newRealizedSum).toFixed(4)),
+          events: events as unknown as Prisma.InputJsonValue,
+        },
+      });
+      console.log(`[trade-alerts] close merged onto manual row ${p.ticker} ${p.openMessageId} (+${closePct.toFixed(1)}% on ${storedRemaining} remaining)`);
+      return;
+    }
     if (existing.status === "OPEN" && p.lastMark != null && p.livePct != null) {
       const storedRemaining = Number(existing.remainingFrac);
       const storedFracClosed = 1 - storedRemaining;
