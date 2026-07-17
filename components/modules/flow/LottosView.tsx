@@ -135,7 +135,7 @@ export function LottosView() {
             }}
           >
             <span style={{ color: "#E2BF73", fontWeight: 500 }}>
-              Custom Champagne Room Lotto Flow Filters Applied
+              Custom Champagne Sessions Flow
             </span>
           </div>
 

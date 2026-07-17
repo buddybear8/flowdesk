@@ -77,6 +77,9 @@ model FlowAlert {
   issueType    String?  @map("issue_type")     @db.VarChar(32)    // "Common Stock" | "ETF" | "ADR" | "Index" | …
   hasFloor     Boolean? @map("has_floor")      // UW.has_floor — distinct from has_sweep
   hasSingleLeg Boolean? @map("has_single_leg") // UW.has_singleleg — true single-leg vs. multi-leg
+  // Ops one-off: surface this row in the Lottos view on this ET date only,
+  // bypassing the preset filters (added 2026-07 for manual appends).
+  manualLottoDate DateTime? @map("manual_lotto_date") @db.Date
 
   @@index([capturedAt(sort: Desc)])
   @@index([ticker, capturedAt(sort: Desc)])

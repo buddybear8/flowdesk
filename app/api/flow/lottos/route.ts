@@ -151,18 +151,23 @@ export async function GET(req: NextRequest) {
       strike, expiry, size, oi, premium, spot, rule, confidence, sector
     FROM flow_alerts
     WHERE
-      type IN ('CALL', 'PUT')
-      AND issue_type = 'Common Stock'
-      AND multi_leg = FALSE
-      AND premium >= ${MIN_PREMIUM}
-      AND size > oi
-      AND ${execMatch}
-      AND (expiry - (time AT TIME ZONE 'America/New_York')::date) BETWEEN ${MIN_DTE} AND ${MAX_DTE}
-      AND expiry >= (NOW() AT TIME ZONE 'America/New_York')::date
-      AND (
-        (type = 'CALL' AND strike > spot AND (strike - spot) / spot BETWEEN ${MIN_OTM} AND ${MAX_OTM})
-        OR
-        (type = 'PUT'  AND strike < spot AND (spot - strike) / spot BETWEEN ${MIN_OTM} AND ${MAX_OTM})
+      (
+        type IN ('CALL', 'PUT')
+        AND issue_type = 'Common Stock'
+        AND multi_leg = FALSE
+        AND premium >= ${MIN_PREMIUM}
+        AND size > oi
+        AND ${execMatch}
+        AND (expiry - (time AT TIME ZONE 'America/New_York')::date) BETWEEN ${MIN_DTE} AND ${MAX_DTE}
+        AND expiry >= (NOW() AT TIME ZONE 'America/New_York')::date
+        AND (
+          (type = 'CALL' AND strike > spot AND (strike - spot) / spot BETWEEN ${MIN_OTM} AND ${MAX_OTM})
+          OR
+          (type = 'PUT'  AND strike < spot AND (spot - strike) / spot BETWEEN ${MIN_OTM} AND ${MAX_OTM})
+        )
+        -- Ops one-off appends: rows tagged for a specific ET date surface on
+        -- that date only, bypassing the preset filters above.
+        OR manual_lotto_date = (time AT TIME ZONE 'America/New_York')::date
       )
       ${timeStart && timeEnd ? Prisma.sql`AND time >= ${timeStart} AND time < ${timeEnd}` : Prisma.empty}
     ORDER BY time DESC
