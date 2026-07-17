@@ -26,7 +26,7 @@ import { useTimeZone } from "@/lib/timezone";
 
 const STRIKES_PER_STRIP = 25;
 
-export function MultiHeatmapView({ tickers, metric = "gex", horizon = "near" }: { tickers: string[]; metric?: HeatmapMetric; horizon?: HeatmapHorizon }) {
+export function MultiHeatmapView({ tickers, metric = "gex", horizon = "near", at = null }: { tickers: string[]; metric?: HeatmapMetric; horizon?: HeatmapHorizon; at?: string | null }) {
   if (tickers.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center" style={{ padding: 24 }}>
@@ -53,14 +53,14 @@ export function MultiHeatmapView({ tickers, metric = "gex", horizon = "near" }: 
       }}
     >
       {tickers.map((t) => (
-        <TickerStrip key={t} ticker={t} metric={metric} horizon={horizon} />
+        <TickerStrip key={t} ticker={t} metric={metric} horizon={horizon} at={at} />
       ))}
     </div>
   );
 }
 
-function TickerStrip({ ticker, metric, horizon }: { ticker: string; metric: HeatmapMetric; horizon: HeatmapHorizon }) {
-  const { data, error, notFound, loading } = useHeatmapData(ticker, true, horizon);
+function TickerStrip({ ticker, metric, horizon, at }: { ticker: string; metric: HeatmapMetric; horizon: HeatmapHorizon; at: string | null }) {
+  const { data, error, notFound, loading } = useHeatmapData(ticker, true, horizon, at);
   const { tz, abbr: tzLabel } = useTimeZone();
   const now = useNow();
 

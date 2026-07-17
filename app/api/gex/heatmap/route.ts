@@ -36,6 +36,14 @@ export async function GET(req: NextRequest) {
   // of the absolute nearest ones (which for daily-expiry tickers are all
   // same-week). The worker stores nearest-7 ∪ next-5-Fridays per snapshot.
   const horizon = searchParams.get("horizon") === "swing" ? "swing" : "near";
+  // Replay: ?at=ISO returns the latest good snapshot captured at or before
+  // that instant (the heatmap's scrub slider). Historical responses are
+  // immutable, so they edge-cache hard.
+  const atRaw = searchParams.get("at");
+  const at = atRaw ? new Date(atRaw) : null;
+  if (at && isNaN(at.getTime())) {
+    return NextResponse.json({ error: "Invalid at" }, { status: 400 });
+  }
   if (!VALID_TICKERS.has(ticker)) {
     return NextResponse.json({ error: "Invalid ticker" }, { status: 400 });
   }
@@ -46,16 +54,27 @@ export async function GET(req: NextRequest) {
   // single-column heatmap. Prefer the most recent GOOD snapshot (>=2
   // expirations) from the last 24h; the freshness pill (capturedAt) shows its
   // age. Fall back to the absolute latest only when no good snapshot exists.
-  const goodId = await prisma.$queryRaw<{ id: bigint }[]>`
-    SELECT id FROM gex_heatmap_snapshots
-    WHERE ticker = ${ticker}
-      AND jsonb_array_length(cells->'expirations') >= 2
-      AND captured_at > NOW() - INTERVAL '24 hours'
-    ORDER BY captured_at DESC
-    LIMIT 1`;
+  const goodId = at
+    ? await prisma.$queryRaw<{ id: bigint }[]>`
+      SELECT id FROM gex_heatmap_snapshots
+      WHERE ticker = ${ticker}
+        AND jsonb_array_length(cells->'expirations') >= 2
+        AND captured_at <= ${at}
+        AND captured_at > ${at}::timestamp - INTERVAL '6 hours'
+      ORDER BY captured_at DESC
+      LIMIT 1`
+    : await prisma.$queryRaw<{ id: bigint }[]>`
+      SELECT id FROM gex_heatmap_snapshots
+      WHERE ticker = ${ticker}
+        AND jsonb_array_length(cells->'expirations') >= 2
+        AND captured_at > NOW() - INTERVAL '24 hours'
+      ORDER BY captured_at DESC
+      LIMIT 1`;
   const snapshot = goodId.length
     ? await prisma.gexHeatmapSnapshot.findUnique({ where: { id: goodId[0]!.id } })
-    : await prisma.gexHeatmapSnapshot.findFirst({ where: { ticker }, orderBy: { capturedAt: "desc" } });
+    : at
+      ? await prisma.gexHeatmapSnapshot.findFirst({ where: { ticker, capturedAt: { lte: at } }, orderBy: { capturedAt: "desc" } })
+      : await prisma.gexHeatmapSnapshot.findFirst({ where: { ticker }, orderBy: { capturedAt: "desc" } });
   if (!snapshot) {
     return NextResponse.json(
       { error: `No heatmap data for ${ticker} — first snapshot lands within 60s of market open` },
@@ -68,7 +87,7 @@ export async function GET(req: NextRequest) {
   // provider has stopped serving this chain — surface a clean unavailable state
   // (e.g. AMZN, whose only snapshot is weeks old) rather than a stale 1-strike
   // grid.
-  const ageMs = Date.now() - snapshot.capturedAt.getTime();
+  const ageMs = (at ? at.getTime() : Date.now()) - snapshot.capturedAt.getTime();
   if (ageMs > 72 * 60 * 60 * 1000) {
     return NextResponse.json(
       { error: `${ticker} heatmap unavailable — the data provider isn't serving this chain right now` },
@@ -168,6 +187,6 @@ export async function GET(req: NextRequest) {
   };
 
   return NextResponse.json(payload, {
-    headers: { "Cache-Control": "no-store" },
+    headers: { "Cache-Control": at ? "s-maxage=3600, stale-while-revalidate=86400" : "no-store" },
   });
 }

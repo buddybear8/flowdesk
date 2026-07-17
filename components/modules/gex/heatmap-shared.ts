@@ -79,7 +79,7 @@ export function useHeatmapHorizon(): { horizon: HeatmapHorizon; setHorizon: (h: 
   return { horizon, setHorizon };
 }
 
-export function useHeatmapData(ticker: string, enabled: boolean, horizon: HeatmapHorizon = "near"): HeatmapState {
+export function useHeatmapData(ticker: string, enabled: boolean, horizon: HeatmapHorizon = "near", at: string | null = null): HeatmapState {
   const [state, setState] = useState<HeatmapState>({
     data: null,
     error: null,
@@ -94,7 +94,10 @@ export function useHeatmapData(ticker: string, enabled: boolean, horizon: Heatma
 
     const fetchOnce = async () => {
       try {
-        const r = await fetch(`/api/gex/heatmap?ticker=${ticker}&horizon=${horizon}`, { cache: "no-store" });
+        const r = await fetch(
+          `/api/gex/heatmap?ticker=${ticker}&horizon=${horizon}${at ? `&at=${encodeURIComponent(at)}` : ""}`,
+          { cache: "no-store" },
+        );
         if (r.status === 404) {
           if (!cancelled) setState({ data: null, error: null, notFound: true, loading: false });
           return;
@@ -109,6 +112,8 @@ export function useHeatmapData(ticker: string, enabled: boolean, horizon: Heatma
     };
 
     void fetchOnce();
+    // Historical scrubs are immutable — fetch once, don't poll.
+    if (at) return () => { cancelled = true; };
     const id = setInterval(() => {
       if (!document.hidden) void fetchOnce();
     }, 60_000);
@@ -121,7 +126,7 @@ export function useHeatmapData(ticker: string, enabled: boolean, horizon: Heatma
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [ticker, enabled, horizon]);
+  }, [ticker, enabled, horizon, at]);
 
   return state;
 }

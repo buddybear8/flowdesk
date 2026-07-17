@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useGexTicker } from "@/lib/use-gex-ticker";
 import { useGexHeatmapMode, INDICES_TICKERS } from "@/lib/use-gex-heatmap-mode";
 import {
@@ -21,7 +21,29 @@ import {
 } from "./heatmap-shared";
 import { HeatmapModeToggle, CustomTickerPicker } from "./HeatmapModeControls";
 import { MultiHeatmapView } from "./MultiHeatmapView";
-import { useTimeZone } from "@/lib/timezone";
+import { useTimeZone, fmtClock, wallToDate } from "@/lib/timezone";
+
+// Replay grid: one stop per 2 minutes across today's session (9:30 → now,
+// capped at 16:00 ET). The API returns the latest snapshot ≤ each stop, so
+// the grid works for every ticker regardless of its own capture cadence.
+function useReplayGrid(): string[] {
+  const [grid, setGrid] = useState<string[]>([]);
+  useEffect(() => {
+    const build = () => {
+      const todayET = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+      const open = wallToDate(todayET, "09:32");
+      const close = wallToDate(todayET, "16:00");
+      const end = Math.min(Date.now(), close.getTime());
+      const out: string[] = [];
+      for (let t = open.getTime(); t <= end; t += 2 * 60_000) out.push(new Date(t).toISOString());
+      setGrid(out);
+    };
+    build();
+    const id = setInterval(build, 2 * 60_000);
+    return () => clearInterval(id);
+  }, []);
+  return grid;
+}
 
 const TICKERS = ["AAPL", "AMD", "AMZN", "APP", "ASTS", "BABA", "COIN", "DRAM", "ENPH", "GOOGL", "HOOD", "INTC", "META", "MRVL", "MSFT", "MU", "NBIS", "NFLX", "NOW", "NVDA", "ORCL", "PLTR", "QCOM", "QQQ", "SMH", "SNDK", "SNOW", "SOXX", "SPCX", "SPX", "SPY", "TSLA"];
 
@@ -31,6 +53,10 @@ export function GexHeatmapView() {
   const { metric, setMetric } = useHeatmapMetric();
   const { tz, abbr: tzLabel } = useTimeZone();
   const { horizon, setHorizon } = useHeatmapHorizon();
+  const replayGrid = useReplayGrid();
+  // Slider index; parked at the end (or grid empty) = LIVE.
+  const [replayIdx, setReplayIdx] = useState<number | null>(null);
+  const replayAt = replayIdx != null && replayIdx < replayGrid.length - 1 ? replayGrid[replayIdx]! : null;
   const METRIC_LABEL = metric === "vex" ? "VEX" : "GEX";
 
   // Standard mode owns its own data fetch (the existing single-ticker table
@@ -38,7 +64,7 @@ export function GexHeatmapView() {
   // strip. Disabling the fetch when not in Standard mode avoids a wasted
   // request for a hidden view.
   const standardEnabled = tickerRestored && modeRestored && mode === "standard";
-  const { data, error, notFound, loading } = useHeatmapData(ticker, standardEnabled, horizon);
+  const { data, error, notFound, loading } = useHeatmapData(ticker, standardEnabled, horizon, replayAt);
   const now = useNow();
 
   const cellMap = useMemo(() => {
@@ -274,6 +300,43 @@ export function GexHeatmapView() {
         </div>
       </div>
 
+      {/* Replay scrubber — drag to any point in today's session; parked at the
+          right edge = live. */}
+      {replayGrid.length > 1 && (
+        <div
+          className="flex items-center gap-[12px] bg-bg-primary"
+          style={{ margin: "0 14px 8px", padding: "7px 12px", border: "0.5px solid var(--color-border-tertiary)", borderRadius: 9 }}
+        >
+          <span style={{ fontSize: 9.5, textTransform: "uppercase", letterSpacing: ".07em", color: replayAt ? "#C9A55A" : "var(--color-text-tertiary)", fontWeight: replayAt ? 700 : 500, flexShrink: 0 }}>
+            {replayAt ? "Replay" : "Live"}
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={replayGrid.length - 1}
+            value={replayIdx ?? replayGrid.length - 1}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setReplayIdx(v >= replayGrid.length - 1 ? null : v);
+            }}
+            style={{ flex: 1, accentColor: "#C9A55A", cursor: "pointer" }}
+            aria-label="Replay today's session"
+          />
+          <span className="num" style={{ fontSize: 12, fontWeight: 600, color: replayAt ? "#E2BF73" : "var(--color-text-secondary)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+            {replayAt ? `${fmtClock(new Date(replayAt), tz)} ${tzLabel}` : "now"}
+          </span>
+          {replayAt && (
+            <button
+              onClick={() => setReplayIdx(null)}
+              className="cursor-pointer rounded-md"
+              style={{ fontFamily: "inherit", fontSize: 10.5, padding: "3px 10px", background: "rgba(201,165,90,.14)", color: "#E2BF73", border: "0.5px solid rgba(201,165,90,.5)" }}
+            >
+              Back to live
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Body — Standard mode keeps the existing single-ticker table; multi
           modes render the side-by-side strips. */}
       <div
@@ -290,7 +353,7 @@ export function GexHeatmapView() {
         }}
       >
         {mode !== "standard" ? (
-          <MultiHeatmapView tickers={multiTickers} metric={metric} horizon={horizon} />
+          <MultiHeatmapView tickers={multiTickers} metric={metric} horizon={horizon} at={replayAt} />
         ) : loading && !data ? (
           <div className="flex flex-1 items-center justify-center text-text-tertiary text-[12px]">
             Loading heatmap…
