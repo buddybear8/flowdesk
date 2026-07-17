@@ -67,6 +67,25 @@ export function TradeAlertsView({ assetType }: { assetType: "option" | "equity" 
   const s = data.stats;
   return (
     <div className="flex-1 overflow-y-auto p-[14px]" style={{ background: "var(--color-background-tertiary)" }}>
+      {/* Disclaimer */}
+      <div
+        className="rounded-[10px]"
+        style={{
+          padding: "10px 14px",
+          marginBottom: 12,
+          background: "rgba(201, 165, 90, 0.08)",
+          border: "0.5px solid rgba(201, 165, 90, 0.35)",
+          fontSize: 11.5,
+          lineHeight: 1.6,
+          color: "var(--color-text-secondary)",
+        }}
+      >
+        Trade alerts are for educational purposes only and are not financial or trading advice. Any trades that you
+        take are at your own risk and must be based on your own diligence and decisions. Moderators of the Champagne
+        Sessions trading community and tools may or may not hold positions in the underlying securities being
+        represented here.
+      </div>
+
       {/* Title + aggregate stats */}
       <div className="flex flex-wrap items-start justify-between gap-[8px]" style={{ marginBottom: 12 }}>
         <div>
