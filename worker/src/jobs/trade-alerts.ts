@@ -439,7 +439,12 @@ async function upsertPosition(p: Position): Promise<void> {
       console.log(`[trade-alerts] close merged onto manual row ${p.ticker} ${p.openMessageId} (+${closePct.toFixed(1)}% on ${storedRemaining} remaining)`);
       return;
     }
-    if (existing.status === "OPEN" && p.lastMark != null && p.livePct != null) {
+    // Marks from the derived position are only valid if it prices the SAME
+    // contract as the corrected row (an expiry-typo correction changes the
+    // OCC — the derived position still tracks the typo'd contract).
+    const derivedOcc =
+      p.assetType === "option" && p.strike != null && p.expiry ? buildOcc(p.ticker, p.expiry, p.side, p.strike) : null;
+    if (existing.status === "OPEN" && p.lastMark != null && p.livePct != null && derivedOcc === existing.occ) {
       const storedRemaining = Number(existing.remainingFrac);
       const storedFracClosed = 1 - storedRemaining;
       const storedRealizedSum = Number(existing.realizedPct) * storedFracClosed;
@@ -467,7 +472,10 @@ async function upsertPosition(p: Position): Promise<void> {
 // Re-price standing OPEN positions older than the re-derive window.
 async function repriceStandingOpen(sinceMs: number): Promise<void> {
   const rows = await prisma.tradeAlert.findMany({
-    where: { status: "OPEN", entryAt: { lt: new Date(sinceMs) } },
+    // Standing rows past the re-derive window, plus manually-corrected OPEN
+    // rows of any age — those may reject derived marks (occ mismatch) and
+    // rely on this pass, which prices from the STORED corrected fields.
+    where: { status: "OPEN", OR: [{ entryAt: { lt: new Date(sinceMs) } }, { manualOverride: true }] },
   });
   for (const r of rows) {
     const p: Position = {
