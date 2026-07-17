@@ -125,7 +125,9 @@ export default function UserGuidePage() {
               when price reaches the node. A <B>GEX / VEX</B> toggle switches the grid to vanna exposure — where dealer
               hedging shifts when implied volatility moves. A <B>Near / Swing</B> toggle controls the columns: Near shows
               the closest expirations (including dailies on the big index names), while Swing shows the next five weekly
-              Friday expirations for a multi-week view.</li>
+              Friday expirations for a multi-week view. The <B>replay slider</B> scrubs any heatmap through today&rsquo;s
+              session in 2-minute steps — watch where positioning built and migrated intraday; park it at the right edge
+              to return to live.</li>
             <li>Enter any ticker in the ticker box.</li>
           </Ul>
           <H4>Good to know</H4>
