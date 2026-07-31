@@ -400,18 +400,39 @@ function DeepDive({ events, initialTicker, watch }: { events: EarningsEventRow[]
 
   const e = dd?.event ?? null;
   const spot = candles?.candles.length ? candles.candles[candles.candles.length - 1]!.close : null;
+  const nowEt = useEtNow();
+  const reported = e ? isReported(e, nowEt) : false;
 
-  // Implied-move rails around the pre-earnings reference (spot, else UW's).
-  const ref = spot ?? e?.preEarningsClose ?? null;
+  // Rail anchor per spec:
+  //   • not yet reported → the live price (rails track spot until the print)
+  //   • reported → FIXED at the last regular-hours close preceding the
+  //     report: prior day's close for premarket reporters, report-day close
+  //     for after-close reporters. UW's pre_earnings_close is exactly that;
+  //     fall back to deriving it from the loaded candles.
+  const candleEtDate = (t: number) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date(t * 1000));
+  let ref: number | null = spot ?? e?.preEarningsClose ?? null;
+  if (e && reported) {
+    if (e.preEarningsClose != null) {
+      ref = e.preEarningsClose;
+    } else if (candles?.candles.length) {
+      const preBar = [...candles.candles].reverse().find((c) =>
+        e.reportTime === "premarket" ? candleEtDate(c.time) < e.reportDate : candleEtDate(c.time) <= e.reportDate,
+      );
+      if (preBar) ref = preBar.close;
+    }
+  }
+
+  const anchorNote = reported ? " (pre-report close)" : "";
   const rails: ExtraLevel[] = [];
-  if (e?.expectedMovePct != null && ref != null && e.actualEps == null && showImplied) {
+  if (e?.expectedMovePct != null && ref != null && showImplied) {
     const m = e.expectedMovePct;
     rails.push(
-      { price: ref * (1 + m), title: `implied +${(m * 100).toFixed(1)}%`, color: GOLD, style: "dashed" },
-      { price: ref * (1 - m), title: `implied −${(m * 100).toFixed(1)}%`, color: GOLD, style: "dashed" },
+      { price: ref * (1 + m), title: `implied +${(m * 100).toFixed(1)}%${anchorNote}`, color: GOLD, style: "dashed" },
+      { price: ref * (1 - m), title: `implied −${(m * 100).toFixed(1)}%${anchorNote}`, color: GOLD, style: "dashed" },
     );
   }
-  if (e?.avgMovePct != null && ref != null && e.actualEps == null && showAvg) {
+  if (e?.avgMovePct != null && ref != null && showAvg) {
     rails.push(
       { price: ref * (1 + e.avgMovePct), title: `avg hist +${(e.avgMovePct * 100).toFixed(1)}%`, color: "rgba(226,191,115,.45)", style: "dotted" },
       { price: ref * (1 - e.avgMovePct), title: `avg hist −${(e.avgMovePct * 100).toFixed(1)}%`, color: "rgba(226,191,115,.45)", style: "dotted" },
@@ -531,7 +552,7 @@ function DeepDive({ events, initialTicker, watch }: { events: EarningsEventRow[]
                     />
                   ) : <ChartLoading />}
                 </div>
-                {rails.length === 0 && e.actualEps == null && (
+                {rails.length === 0 && (
                   <div style={{ fontSize: 10.5, color: "var(--color-text-tertiary)", marginTop: 6 }}>Implied-move rails appear once the expected move is published.</div>
                 )}
               </div>
