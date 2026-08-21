@@ -32,6 +32,7 @@ function contractLabel(r: TradeAlertRow): string {
 export function TradeAlertsView({ assetType }: { assetType: "option" | "equity" }) {
   const [data, setData] = useState<TradeAlertsPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [modFilter, setModFilter] = useState<string>("ALL");
 
   useEffect(() => {
     let cancelled = false;
@@ -98,6 +99,35 @@ export function TradeAlertsView({ assetType }: { assetType: "option" | "equity" 
         </div>
       </div>
 
+      {/* Alerted-by filter — moderators derived from the loaded data */}
+      {(() => {
+        const mods = [...new Set([...data.open, ...data.closed].map((r) => r.moderator))].sort();
+        if (mods.length < 2) return null;
+        return (
+          <div className="flex flex-wrap items-center gap-[7px]" style={{ marginBottom: 12 }}>
+            <span style={{ fontSize: 10, color: "var(--color-text-tertiary)", letterSpacing: ".05em", textTransform: "uppercase" }}>
+              Alerted by
+            </span>
+            {["ALL", ...mods].map((m) => (
+              <button
+                key={m}
+                onClick={() => setModFilter(m)}
+                className="rounded-full cursor-pointer"
+                style={{
+                  fontFamily: "inherit", fontSize: 11, padding: "4px 12px",
+                  background: modFilter === m ? "rgba(201,165,90,.15)" : "var(--color-background-primary)",
+                  color: modFilter === m ? "#E2BF73" : "var(--color-text-secondary)",
+                  border: `0.5px solid ${modFilter === m ? "rgba(201,165,90,.5)" : "var(--color-border-secondary)"}`,
+                  fontWeight: modFilter === m ? 600 : 400,
+                }}
+              >
+                {m === "ALL" ? "All" : m}
+              </button>
+            ))}
+          </div>
+        );
+      })()}
+
       {/* Stat cards */}
       <div className="grid gap-[8px]" style={{ gridTemplateColumns: "repeat(2, minmax(0,1fr))", marginBottom: 12 }}>
         <Mc label="OPEN NOW" value={String(s.openCount)} />
@@ -106,8 +136,8 @@ export function TradeAlertsView({ assetType }: { assetType: "option" | "equity" 
 
       {/* Open Now */}
       <Card>
-        <SectionTitle count={data.open.length} live>Open Now</SectionTitle>
-        <AlertsTable rows={data.open} live />
+        <SectionTitle count={(modFilter === "ALL" ? data.open : data.open.filter((r) => r.moderator === modFilter)).length} live>Open Now</SectionTitle>
+        <AlertsTable rows={modFilter === "ALL" ? data.open : data.open.filter((r) => r.moderator === modFilter)} live />
       </Card>
 
       {/* Equity curve */}
@@ -122,8 +152,10 @@ export function TradeAlertsView({ assetType }: { assetType: "option" | "equity" 
 
       {/* Track record (closed) */}
       <Card style={{ marginTop: 12 }}>
-        <SectionTitle count={data.closed.length}>Track record · closed</SectionTitle>
-        <AlertsTable rows={data.closed.slice(0, 100)} live={false} />
+        <SectionTitle count={(modFilter === "ALL" ? data.closed : data.closed.filter((r) => r.moderator === modFilter)).length}>
+          Track record · closed{modFilter !== "ALL" ? ` · ${modFilter}` : ""}
+        </SectionTitle>
+        <AlertsTable rows={(modFilter === "ALL" ? data.closed : data.closed.filter((r) => r.moderator === modFilter)).slice(0, 100)} live={false} />
       </Card>
     </div>
   );
