@@ -47,6 +47,13 @@ const TICKER_PATTERNS: Record<string, ExpiryPattern> = {
   QCOM: "FRIDAY",
   COIN: "FRIDAY",
   INTC: "FRIDAY",
+  VIX: "MWF", // VIX options expire Wednesdays
+  GLD: "FRIDAY",
+  GDX: "FRIDAY",
+  SLV: "FRIDAY",
+  XBI: "FRIDAY",
+  XLE: "FRIDAY",
+  XLK: "FRIDAY",
 };
 
 function isExpirationDay(date: Date, pattern: ExpiryPattern): boolean {

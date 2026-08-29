@@ -41,6 +41,13 @@ export const WATCHED_TICKERS = [
   "QCOM",
   "COIN",
   "INTC",
+  "VIX",
+  "GLD",
+  "GDX",
+  "SLV",
+  "XBI",
+  "XLE",
+  "XLK",
 ] as const;
 
 export type WatchedTicker = (typeof WATCHED_TICKERS)[number];

@@ -45,6 +45,14 @@ const BAND: Record<string, number> = {
   SNDK: 0.25,
   NBIS: 0.30,
   INTC: 0.25,
+  // Index/ETF additions (2026-08)
+  VIX: 0.35, // volatility index — wide, strikes are ~1pt on a ~15-20 base
+  GLD: 0.10,
+  SLV: 0.15,
+  GDX: 0.20,
+  XBI: 0.15,
+  XLE: 0.12,
+  XLK: 0.10,
 };
 
 const DEFAULT_BAND = 0.15;
