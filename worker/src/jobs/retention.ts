@@ -113,7 +113,10 @@ export async function runFlowSentimentRetentionSweep(): Promise<void> {
 export async function runWatchesRetentionSweep(): Promise<void> {
   try {
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const rows = await prisma.hitListDaily.deleteMany({ where: { date: { lt: cutoff } } });
+    // hit_list_daily is deliberately NOT swept: the screener's own picks +
+    // targets are the labeled evaluation set for the ML workstream (~10
+    // rows/day — negligible storage). Only the AI brief text ages out.
+    const rows = { count: 0 };
     const briefs = await prisma.aiSummary.deleteMany({
       where: { kind: { startsWith: "watch-" }, generatedAt: { lt: cutoff } },
     });
