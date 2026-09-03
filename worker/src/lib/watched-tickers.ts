@@ -56,9 +56,11 @@ export type WatchedTicker = (typeof WATCHED_TICKERS)[number];
 // the earnings sweeps exhausted UW's daily budget by early afternoon).
 // HOT keeps the original 2-minute cadence; everything else polls on a
 // 10-minute rotation.
+// TURBO: once per minute (SPX per 2026-09-03 request).
+export const TURBO_TICKERS = ["SPX"] as const;
 export const HOT_TICKERS = [
-  "SPY", "SPX", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN",
+  "SPY", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN",
   "GOOGL", "NFLX", "MSFT", "AAPL", "MU", "DRAM", "SPCX",
 ] as const;
-const HOT_SET: Set<string> = new Set(HOT_TICKERS);
-export const EXTENDED_TICKERS: string[] = WATCHED_TICKERS.filter((t) => !HOT_SET.has(t));
+const FAST_SET: Set<string> = new Set([...TURBO_TICKERS, ...HOT_TICKERS]);
+export const EXTENDED_TICKERS: string[] = WATCHED_TICKERS.filter((t) => !FAST_SET.has(t));

@@ -142,6 +142,26 @@ export function useNow(): number {
   return now;
 }
 
+// Worker polling cadence per ticker (mirror of worker/src/lib/watched-tickers
+// tiers + index.ts crons): SPX every 60s, hot names 120s, extended 600s.
+const HOT_120 = new Set(["SPY", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT", "AAPL", "MU", "DRAM", "SPCX"]);
+export function pollIntervalMs(ticker: string): number {
+  if (ticker === "SPX") return 60_000;
+  if (HOT_120.has(ticker)) return 120_000;
+  return 600_000;
+}
+
+// Countdown to the next expected snapshot. null → don't show (stale/closed:
+// more than 3 intervals overdue means the market is closed or the pipeline
+// is down — the freshness pill already tells that story).
+export function nextUpdateLabel(ticker: string, ageMs: number): string | null {
+  const interval = pollIntervalMs(ticker);
+  if (ageMs > interval * 3) return null;
+  const remain = Math.ceil((interval - ageMs) / 1000);
+  if (remain <= 0) return "next: due";
+  return remain >= 60 ? `next: ~${Math.ceil(remain / 60)}m` : `next: ~${remain}s`;
+}
+
 export function freshness(ageMs: number): { label: string; short: string; color: string } {
   const sec = Math.floor(ageMs / 1000);
   if (sec < 90) return { label: `Updated ${sec}s ago`, short: `${sec}s`, color: "#7FBF52" };

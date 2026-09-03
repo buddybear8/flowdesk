@@ -7,6 +7,8 @@ import {
   useHeatmapData,
   useNow,
   freshness,
+  nextUpdateLabel,
+  pollIntervalMs,
   cellBg,
   fmtGex,
   cellKey,
@@ -217,6 +219,11 @@ export function GexHeatmapView() {
             >
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: fresh.color }} />
               {fresh.label}
+              {data && nextUpdateLabel(ticker, now - new Date(data.capturedAt).getTime()) && (
+                <span style={{ color: "var(--color-text-tertiary)" }} title={`Polling cadence for ${ticker}: every ${Math.round(pollIntervalMs(ticker) / 60000) || 1} min`}>
+                  · {nextUpdateLabel(ticker, now - new Date(data.capturedAt).getTime())}
+                </span>
+              )}
             </span>
           )}
           {mode === "standard" && error && data && (

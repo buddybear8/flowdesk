@@ -10,6 +10,7 @@ import {
   useHeatmapData,
   useNow,
   freshness,
+  nextUpdateLabel,
   cellBg,
   fmtGex,
   pickCenteredStrikes,
@@ -150,6 +151,11 @@ function TickerStrip({ ticker, metric, horizon, at }: { ticker: string; metric: 
             >
               <span style={{ width: 5, height: 5, borderRadius: "50%", background: fresh.color }} />
               {fresh.short}
+              {data && nextUpdateLabel(ticker, now - new Date(data.capturedAt).getTime()) && (
+                <span style={{ color: "var(--color-text-tertiary)" }}>
+                  ·{nextUpdateLabel(ticker, now - new Date(data.capturedAt).getTime())!.replace("next: ~", "").replace("next: ", "")}
+                </span>
+              )}
             </span>
           )}
         </div>
