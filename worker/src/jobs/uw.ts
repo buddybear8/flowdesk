@@ -742,16 +742,24 @@ export async function pollGex(tickers: readonly string[] = WATCHED_TICKERS): Pro
       // (2026-07-10: 9/10 exps at exactly 2500 rows = the cap). One targeted
       // single-expiry call recovers it; skipped whenever the batch already
       // carried today (or today isn't an expiration for this ticker).
-      if (
-        expirySet.has(todayIso) &&
-        allRows.length > 0 &&
-        !allRows.some((r: any) => String(r.expiry) === todayIso)
-      ) {
-        await sleep(TICKER_DELAY_MS);
-        const zeroRows = await fetchPaged(`expirations[]=${todayIso}`, "0dte");
-        if (zeroRows.length > 0) {
-          allRows = allRows.concat(zeroRows);
-          console.log(`[uw:gex-heatmap:${ticker}] 0DTE top-up added ${zeroRows.length} rows for ${todayIso}`);
+      if (expirySet.has(todayIso) && allRows.length > 0) {
+        // Fire the single-expiry recovery when today's rows are missing OR
+        // one-sided. The batched form doesn't just drop 0DTE entirely (the
+        // original 2026-07-10 failure) — it also returns HALF the chain
+        // (2026-09-03: only above-spot strikes made the batch while a
+        // single-expiry call had all 24 below-spot strikes), which rendered
+        // dash cells for every below-spot strike in the 0DTE column.
+        const todayRows = allRows.filter((r: any) => String(r.expiry) === todayIso);
+        const straddles =
+          todayRows.some((r: any) => Number(r.strike) < spot * 0.995) &&
+          todayRows.some((r: any) => Number(r.strike) > spot * 1.005);
+        if (todayRows.length === 0 || !straddles) {
+          await sleep(TICKER_DELAY_MS);
+          const zeroRows = await fetchPaged(`expirations[]=${todayIso}`, "0dte");
+          if (zeroRows.length > 0) {
+            allRows = allRows.concat(zeroRows);
+            console.log(`[uw:gex-heatmap:${ticker}] 0DTE top-up added ${zeroRows.length} rows for ${todayIso} (batch had ${todayRows.length}, straddles=${straddles})`);
+          }
         }
       }
 
