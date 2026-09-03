@@ -138,9 +138,31 @@ export async function GET(req: NextRequest) {
   const MIN_CELLS_DENSE = 5;
   const MAX_EXPIRATIONS = 5;
   const isFriday = (d: string) => new Date(`${d}T12:00:00Z`).getUTCDay() === 5;
-  const expPool = horizon === "swing"
-    ? cells.expirations.filter((e) => isFriday(e.date))
-    : cells.expirations;
+  // Swing = one expiration per week. Friday-only works for equity weeklies,
+  // but some products expire mid-week (VIX: Wednesdays — its Swing view was
+  // empty). If Fridays yield <2 columns, fall back to the LAST expiration of
+  // each ISO week from the ticker's own cycle.
+  let expPool = cells.expirations;
+  if (horizon === "swing") {
+    const fridays = cells.expirations.filter((e) => isFriday(e.date));
+    if (fridays.length >= 2) {
+      expPool = fridays;
+    } else {
+      const weekKey = (d: string) => {
+        const dt = new Date(`${d}T12:00:00Z`);
+        const day = dt.getUTCDay();
+        dt.setUTCDate(dt.getUTCDate() - (day === 0 ? 6 : day - 1)); // Monday of that week
+        return dt.toISOString().slice(0, 10);
+      };
+      const lastPerWeek = new Map<string, (typeof cells.expirations)[number]>();
+      for (const e of cells.expirations) {
+        const k = weekKey(e.date);
+        const cur = lastPerWeek.get(k);
+        if (!cur || e.date > cur.date) lastPerWeek.set(k, e);
+      }
+      expPool = [...lastPerWeek.values()];
+    }
+  }
   const scored = expPool
     .map((e) => {
       const populated = orderedStrikes.reduce(
