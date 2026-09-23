@@ -45,9 +45,6 @@ export const WATCHED_TICKERS = [
   "GLD",
   "GDX",
   "SLV",
-  "XBI",
-  "XLE",
-  "XLK",
 ] as const;
 
 export type WatchedTicker = (typeof WATCHED_TICKERS)[number];
