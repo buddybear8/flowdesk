@@ -54,6 +54,23 @@ const TICKER_PATTERNS: Record<string, ExpiryPattern> = {
   XBI: "FRIDAY",
   XLE: "FRIDAY",
   XLK: "FRIDAY",
+  // 2026-09-23 additions
+  DELL: "FRIDAY",
+  SMCI: "FRIDAY",
+  IREN: "FRIDAY",
+  AVGO: "FRIDAY",
+  BE: "FRIDAY",
+  ARM: "FRIDAY",
+  CVNA: "FRIDAY",
+  DDOG: "FRIDAY",
+  PANW: "FRIDAY",
+  RDDT: "FRIDAY",
+  PDD: "FRIDAY",
+  CRWD: "FRIDAY",
+  VALE: "FRIDAY",
+  IWM: "MWF", // Mon/Wed/Fri weeklies
+  DIA: "FRIDAY",
+  USO: "FRIDAY",
 };
 
 function isExpirationDay(date: Date, pattern: ExpiryPattern): boolean {

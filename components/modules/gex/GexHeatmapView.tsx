@@ -47,7 +47,7 @@ function useReplayGrid(): string[] {
   return grid;
 }
 
-const TICKERS = ["AAPL", "AMD", "AMZN", "APP", "ASTS", "BABA", "COIN", "DRAM", "ENPH", "GDX", "GLD", "GOOGL", "HOOD", "INTC", "META", "MRVL", "MSFT", "MU", "NBIS", "NFLX", "NOW", "NVDA", "ORCL", "PLTR", "QCOM", "QQQ", "SLV", "SMH", "SNDK", "SNOW", "SOXX", "SPCX", "SPX", "SPY", "TSLA", "VIX"];
+const TICKERS = ["AAPL", "AMD", "AMZN", "APP", "ARM", "ASTS", "AVGO", "BABA", "BE", "COIN", "CRWD", "CVNA", "DDOG", "DELL", "DIA", "DRAM", "ENPH", "GDX", "GLD", "GOOGL", "HOOD", "INTC", "IREN", "IWM", "META", "MRVL", "MSFT", "MU", "NBIS", "NFLX", "NOW", "NVDA", "ORCL", "PANW", "PDD", "PLTR", "QCOM", "QQQ", "RDDT", "SLV", "SMCI", "SMH", "SNDK", "SNOW", "SOXX", "SPCX", "SPX", "SPY", "TSLA", "USO", "VALE", "VIX"];
 
 export function GexHeatmapView() {
   const { ticker, setTicker, restored: tickerRestored } = useGexTicker(TICKERS, "SPY");

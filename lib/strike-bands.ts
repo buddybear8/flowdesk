@@ -53,6 +53,23 @@ const BAND: Record<string, number> = {
   XBI: 0.15,
   XLE: 0.12,
   XLK: 0.10,
+  // 2026-09-23 additions
+  DELL: 0.20,
+  SMCI: 0.30,
+  IREN: 0.35,
+  AVGO: 0.15,
+  BE: 0.30,
+  ARM: 0.25,
+  CVNA: 0.30,
+  DDOG: 0.20,
+  PANW: 0.15,
+  RDDT: 0.30,
+  PDD: 0.20,
+  CRWD: 0.15,
+  VALE: 0.15,
+  IWM: 0.10,
+  DIA: 0.10,
+  USO: 0.15,
 };
 
 const DEFAULT_BAND = 0.15;

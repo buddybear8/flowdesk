@@ -143,11 +143,14 @@ export function useNow(): number {
 }
 
 // Worker polling cadence per ticker (mirror of worker/src/lib/watched-tickers
-// tiers + index.ts crons): SPX every 60s, hot names 120s, extended 600s.
-const HOT_120 = new Set(["SPY", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT", "AAPL", "MU", "DRAM", "SPCX"]);
+// tiers + index.ts crons): SPX/SPY/QQQ every 60s, hot names 120s, warm 180s, extended 600s.
+const TURBO_60 = new Set(["SPX", "SPY", "QQQ"]);
+const HOT_120 = new Set(["TSLA", "NVDA", "AMD", "META", "AMZN", "GOOGL", "NFLX", "MSFT", "AAPL", "MU", "DRAM", "SPCX"]);
+const WARM_180 = new Set(["DELL", "SMCI", "IREN", "AVGO", "BE", "ARM", "CVNA", "DDOG", "PANW", "RDDT", "PDD", "CRWD", "VALE", "IWM", "DIA", "USO"]);
 export function pollIntervalMs(ticker: string): number {
-  if (ticker === "SPX") return 60_000;
+  if (TURBO_60.has(ticker)) return 60_000;
   if (HOT_120.has(ticker)) return 120_000;
+  if (WARM_180.has(ticker)) return 180_000;
   return 600_000;
 }
 

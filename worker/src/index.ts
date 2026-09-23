@@ -14,7 +14,7 @@ import {
   pollMarketTide,
   computeNetImpact,
 } from "./jobs/uw.js";
-import { TURBO_TICKERS as GEX_TURBO_TICKERS, HOT_TICKERS as GEX_HOT_TICKERS, EXTENDED_TICKERS as GEX_EXTENDED_TICKERS } from "./lib/watched-tickers.js";
+import { TURBO_TICKERS as GEX_TURBO_TICKERS, HOT_TICKERS as GEX_HOT_TICKERS, WARM_TICKERS as GEX_WARM_TICKERS, EXTENDED_TICKERS as GEX_EXTENDED_TICKERS } from "./lib/watched-tickers.js";
 import { runFlowRetentionSweep, runDpRetentionSweep, runGexHeatmapRetentionSweep, runFlowSentimentRetentionSweep, runWatchesRetentionSweep } from "./jobs/retention.js";
 import { runArchiveSweep } from "./jobs/archive.js";
 import { pollFlowSentiment } from "./jobs/flow-sentiment.js";
@@ -63,6 +63,7 @@ cron.schedule("0 */5 0-8,16-23 * * 1-5", safe("uw-poll-off", async () => {
 // extended names on a 10-min rotation offset to minute :01.
 cron.schedule("30 * 9-15 * * 1-5", safe("gex-poll-turbo", () => pollGex(GEX_TURBO_TICKERS)));
 cron.schedule("0 */2 9-15 * * 1-5", safe("gex-poll-hot", () => pollGex(GEX_HOT_TICKERS)));
+cron.schedule("15 */3 9-15 * * 1-5", safe("gex-poll-warm", () => pollGex(GEX_WARM_TICKERS)));
 cron.schedule("0 1-59/10 9-15 * * 1-5", safe("gex-poll-extended", () => pollGex(GEX_EXTENDED_TICKERS)));
 cron.schedule("0 */5 9-15 * * 1-5", safe("market-tide", pollMarketTide));
 cron.schedule("30 */5 9-15 * * 1-5", safe("net-impact", computeNetImpact));

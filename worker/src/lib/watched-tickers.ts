@@ -45,19 +45,40 @@ export const WATCHED_TICKERS = [
   "GLD",
   "GDX",
   "SLV",
+  // 2026-09-23 additions (community requests, warm tier)
+  "DELL",
+  "SMCI",
+  "IREN",
+  "AVGO",
+  "BE",
+  "ARM",
+  "CVNA",
+  "DDOG",
+  "PANW",
+  "RDDT",
+  "PDD",
+  "CRWD",
+  "VALE",
+  "IWM",
+  "DIA",
+  "USO",
 ] as const;
 
 export type WatchedTicker = (typeof WATCHED_TICKERS)[number];
 
 // Cadence tiers (2026-07-13 quota incident: 31 tickers × 2-min polling plus
 // the earnings sweeps exhausted UW's daily budget by early afternoon).
-// HOT keeps the original 2-minute cadence; everything else polls on a
-// 10-minute rotation.
-// TURBO: once per minute (SPX per 2026-09-03 request).
-export const TURBO_TICKERS = ["SPX"] as const;
+// TURBO: once per minute (SPX 2026-09-03; SPY/QQQ joined 2026-09-23).
+// HOT: 2-minute cadence. WARM: 3-minute cadence (2026-09-23 additions).
+// Everything else polls on a 10-minute rotation.
+export const TURBO_TICKERS = ["SPX", "SPY", "QQQ"] as const;
 export const HOT_TICKERS = [
-  "SPY", "QQQ", "TSLA", "NVDA", "AMD", "META", "AMZN",
+  "TSLA", "NVDA", "AMD", "META", "AMZN",
   "GOOGL", "NFLX", "MSFT", "AAPL", "MU", "DRAM", "SPCX",
 ] as const;
-const FAST_SET: Set<string> = new Set([...TURBO_TICKERS, ...HOT_TICKERS]);
+export const WARM_TICKERS = [
+  "DELL", "SMCI", "IREN", "AVGO", "BE", "ARM", "CVNA", "DDOG",
+  "PANW", "RDDT", "PDD", "CRWD", "VALE", "IWM", "DIA", "USO",
+] as const;
+const FAST_SET: Set<string> = new Set([...TURBO_TICKERS, ...HOT_TICKERS, ...WARM_TICKERS]);
 export const EXTENDED_TICKERS: string[] = WATCHED_TICKERS.filter((t) => !FAST_SET.has(t));
