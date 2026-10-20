@@ -21,6 +21,11 @@ import {
 import { useTimeZone, tzOffsetSec } from "@/lib/timezone";
 
 const TICKERS = ["AAPL", "AMD", "AMZN", "APP", "ARM", "ASTS", "AVGO", "BABA", "BE", "COIN", "CRWD", "CVNA", "DDOG", "DELL", "DIA", "DRAM", "ENPH", "GDX", "GLD", "GOOGL", "HOOD", "INTC", "IREN", "IWM", "META", "MRVL", "MSFT", "MU", "NBIS", "NFLX", "NOW", "NVDA", "ORCL", "PANW", "PDD", "PLTR", "QCOM", "QQQ", "RDDT", "SLV", "SMCI", "SMH", "SNDK", "SNOW", "SOXX", "SPCX", "SPX", "SPY", "TSLA", "USO", "VALE", "VIX"];
+
+// Worker live endpoint (Railway service domain, CORS-open): serves the
+// forming 1m bar from Polygon's per-second stream so the current candle
+// grows tick-by-tick instead of printing once per minute.
+const LIVE_BASE = process.env.NEXT_PUBLIC_GEX_LIVE_URL ?? "https://flowdesk-production-2bb8.up.railway.app";
 const TFS = ["1m", "5m", "10m", "1h"] as const;
 type Tf = (typeof TFS)[number];
 
@@ -232,6 +237,47 @@ export function GexChartView() {
     };
   }, [buckets, scope, showNodes, dense, tz, data]);
 
+  // ── live forming bar: 1s poll of the worker's per-second stream ──
+  // Merges the forming 1m bar (plus the recent completed ring, which covers
+  // the gap before the 10s DB poll catches up) into the current TF bucket and
+  // series.update()s it, so the candle grows tick-by-tick like TradingView.
+  useEffect(() => {
+    if (!data) return;
+    const tfMin = tf === "1h" ? 60 : tf === "1m" ? 1 : tf === "5m" ? 5 : 10;
+    const bucketMs = tfMin * 60_000;
+    let cancelled = false;
+
+    const tick = async () => {
+      if (document.hidden || cancelled) return;
+      try {
+        const r = await fetch(`${LIVE_BASE}/live?ticker=${ticker}`);
+        if (!r.ok) return;
+        const live: { forming: Candle | null; recent: { t: number; o: number; h: number; l: number; c: number; v: number }[] } & { forming: { t: number; o: number; h: number; l: number; c: number; v: number } | null } = await r.json();
+        if (cancelled || !candleSeriesRef.current) return;
+        const oneMin = [...(live.recent ?? []), ...(live.forming ? [live.forming] : [])];
+        if (!oneMin.length) return;
+        const curBucket = Math.floor(oneMin[oneMin.length - 1].t / bucketMs) * bucketMs;
+        // base: server candles already in this bucket (e.g. 1h bucket opened an hour ago)
+        const base = data.candles.filter((c) => Math.floor(c.t / bucketMs) * bucketMs === curBucket && tf === "1h");
+        const parts = [...base, ...oneMin.filter((b) => Math.floor(b.t / bucketMs) * bucketMs === curBucket)];
+        if (!parts.length) return;
+        parts.sort((a, b) => a.t - b.t);
+        const agg = parts.reduce((acc, b) => acc
+          ? { t: acc.t, o: acc.o, h: Math.max(acc.h, b.h), l: Math.min(acc.l, b.l), c: b.c, v: acc.v + b.v }
+          : { t: curBucket, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }, null as Candle | null)!;
+        const time = (agg.t / 1000 + tzOffsetSec(tz, new Date(agg.t))) as UTCTimestamp;
+        // never update() earlier than the last set() bar — lightweight-charts throws
+        const lastT = data.candles.length ? data.candles[data.candles.length - 1].t : 0;
+        if (agg.t >= Math.floor(lastT / bucketMs) * bucketMs) {
+          candleSeriesRef.current.update({ time, open: agg.o, high: agg.h, low: agg.l, close: agg.c });
+        }
+      } catch { /* worker restarting / offline — the 10s poll still updates */ }
+    };
+    const id = setInterval(tick, 1_000);
+    tick();
+    return () => { cancelled = true; clearInterval(id); };
+  }, [data, ticker, tf, tz]);
+
   const stale = data && Date.now() - data.asOf > 60_000;
 
   return (
@@ -250,7 +296,7 @@ export function GexChartView() {
         <Pill active={showNodes} onClick={() => setShowNodes(!showNodes)}>Nodes</Pill>
         <Pill active={dense} onClick={() => setDense(!dense)}>Dense</Pill>
         <span className="text-[10px] text-text-tertiary" style={{ marginLeft: "auto" }}>
-          Candles delayed 15 min · dotted tail = live spot · nodes live
+          Tape delayed 15 min, ticking live · dotted tail = true-now spot · nodes live
           {stale ? " · STALE" : ""}
         </span>
       </div>

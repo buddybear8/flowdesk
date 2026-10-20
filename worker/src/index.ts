@@ -29,6 +29,7 @@ import { syncEarningsCalendar, backfillEarningsHistory, runEarningsAiBriefs, run
 import { scoreShadowModel } from "./jobs/model-shadow-score.js";
 import { startPolygonStream, appendIndexPseudoCandles } from "./jobs/polygon-stream.js";
 import { appendGexNodeBuckets, runGexNodeRetentionSweep, runMinuteCandleRetentionSweep } from "./jobs/gex-nodes.js";
+import { startLiveServer } from "./lib/live-server.js";
 import { importPolygonDailyFlatFile } from "./jobs/polygon-daily-flatfile.js";
 import { pollPolygonIntraday } from "./jobs/polygon-hourly-intraday.js";
 import { pollCandles } from "./jobs/candles.js";
@@ -138,6 +139,7 @@ cron.schedule("0 5 8 * * 1-5", safe("model-shadow-score-retry", () => scoreShado
 // Live 1m candles over Polygon's delayed websocket (equities/ETFs), SPX/VIX
 // pseudo-candles from GEX snapshot spot, and the compact node time-series.
 startPolygonStream();
+startLiveServer();
 cron.schedule("50 * 9-15 * * 1-5", safe("index-pseudo-candles", appendIndexPseudoCandles));
 cron.schedule("20 */2 9-15 * * 1-5", safe("gex-node-buckets", appendGexNodeBuckets));
 

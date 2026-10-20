@@ -57,6 +57,53 @@ interface AmBar {
   s: number; // bar start epoch ms
 }
 
+// ─── Live forming bars (per-second A.* channel) ─────────────────────────────
+// In-memory only: the forming 1m bar per ticker, built from per-second
+// aggregates as they stream, plus a short ring of completed 1m bars (so the
+// live HTTP endpoint can hand clients the current TF bucket without a DB
+// round-trip). Served by lib/live-server.ts; never persisted per-second.
+
+export interface LiveBar { t: number; o: number; h: number; l: number; c: number; v: number }
+
+const forming = new Map<string, LiveBar>();
+const recentDone = new Map<string, LiveBar[]>(); // last RECENT_KEEP completed 1m bars
+const RECENT_KEEP = 15;
+let lastSecondAt = 0;
+
+export function liveSnapshot(ticker: string): { forming: LiveBar | null; recent: LiveBar[]; lastEventAt: number } {
+  return {
+    forming: forming.get(ticker) ?? null,
+    recent: recentDone.get(ticker) ?? [],
+    lastEventAt: lastSecondAt,
+  };
+}
+
+function onSecondBar(m: AmBar): void {
+  lastSecondAt = Date.now();
+  const minuteStart = Math.floor(m.s / 60_000) * 60_000;
+  const cur = forming.get(m.sym);
+  if (!cur || cur.t !== minuteStart) {
+    forming.set(m.sym, { t: minuteStart, o: m.o, h: m.h, l: m.l, c: m.c, v: m.v });
+  } else {
+    cur.h = Math.max(cur.h, m.h);
+    cur.l = Math.min(cur.l, m.l);
+    cur.c = m.c;
+    cur.v += m.v;
+  }
+}
+
+function onMinuteDone(m: AmBar): void {
+  const bar: LiveBar = { t: m.s, o: m.o, h: m.h, l: m.l, c: m.c, v: m.v };
+  const ring = recentDone.get(m.sym) ?? [];
+  if (ring.length && ring[ring.length - 1].t === bar.t) ring[ring.length - 1] = bar;
+  else ring.push(bar);
+  while (ring.length > RECENT_KEEP) ring.shift();
+  recentDone.set(m.sym, ring);
+  // drop the forming bar for that minute — it's finalized now
+  const f = forming.get(m.sym);
+  if (f && f.t <= bar.t) forming.delete(m.sym);
+}
+
 async function storeBar(b: AmBar): Promise<void> {
   const barTime = new Date(b.s);
   await prisma.candleBar.upsert({
@@ -84,13 +131,18 @@ function connect(): void {
       if (m.ev === "status") {
         if (m.status === "auth_success") {
           reconnectDelay = 2_000;
-          const params = STREAM_TICKERS.map((t) => `AM.${t}`).join(",");
+          // AM = completed minute bars (persisted); A = per-second aggregates
+          // (in-memory forming bar for the live endpoint).
+          const params = STREAM_TICKERS.flatMap((t) => [`AM.${t}`, `A.${t}`]).join(",");
           ws?.send(JSON.stringify({ action: "subscribe", params }));
-          console.log(`[poly-stream] ${ts()} authenticated — subscribing ${STREAM_TICKERS.length} tickers`);
+          console.log(`[poly-stream] ${ts()} authenticated — subscribing ${STREAM_TICKERS.length} tickers (AM+A)`);
         } else if (m.status === "auth_failed") {
           console.error(`[poly-stream] ${ts()} auth failed: ${m.message}`);
         }
+      } else if (m.ev === "A") {
+        onSecondBar(m as AmBar);
       } else if (m.ev === "AM") {
+        onMinuteDone(m as AmBar);
         storeBar(m as AmBar).then(() => {
           barsSinceLog++;
         }).catch((e) => console.error(`[poly-stream] ${ts()} upsert failed ${m.sym}: ${String(e).slice(0, 120)}`));
