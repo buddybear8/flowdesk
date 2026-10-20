@@ -1,16 +1,17 @@
 # CLI deploys (railway up): the worker Dockerfile only needs worker/ and
-# prisma/ from the repo root — exclude everything heavy or irrelevant.
-node_modules
-.next
-.git
-app
-components
-lib
-public
-ta_pipeline
+# prisma/ from the repo root. PATTERNS MUST BE ANCHORED (/) — an unanchored
+# "lib" also matches worker/src/lib and breaks the worker (2026-10-20).
+/node_modules
+/.next
+/.git
+/app
+/components
+/lib
+/public
+/ta_pipeline
+/discord_extractor
+/x_extractor
+/mobile
+/docs
 *.log
-worker/node_modules
-discord_extractor
-x_extractor
-mobile
-docs
+/worker/node_modules
