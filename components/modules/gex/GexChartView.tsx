@@ -157,23 +157,43 @@ export function GexChartView() {
       if (maxG === 0) return;
 
       const topK = st.dense ? 12 : 4;
+      // One crisp dot per (bar, strike): buckets land between bars (2-min
+      // captures vs 5m bars), so aggregate each bar's strongest reading per
+      // strike first — overlapping translucent dots read as smears otherwise.
+      const cells = new Map<string, { barT: number; k: number; g: number }>();
       for (const b of st.buckets) {
-        // Snap each bucket to its containing bar: timeToCoordinate only maps
-        // times that exist as bars — raw capture timestamps fall between bars
-        // and return null (the original "no dots anywhere" bug).
+        // Snap to the containing bar: timeToCoordinate only maps bar times.
         const barT = Math.min(Math.floor(b.ts / st.bucketMs) * st.bucketMs, st.lastCandleT);
-        const x = tsApi.timeToCoordinate(((barT / 1000) + st.tzOff) as UTCTimestamp);
-        if (x == null || x < 0 || x > plotW) continue;
         const nodes = [...b[st.scope]].sort((a, z) => Math.abs(z.g) - Math.abs(a.g)).slice(0, topK);
         for (const n of nodes) {
-          const y = series.priceToCoordinate(n.k);
-          if (y == null || y < 0 || y > h) continue;
-          const mag = Math.abs(n.g) / maxG;
-          ctx.beginPath();
-          ctx.arc(x, y, 1.5 + 2.5 * mag, 0, Math.PI * 2);
-          ctx.fillStyle = n.g >= 0 ? `rgba(201,165,90,${0.18 + 0.55 * mag})` : `rgba(185,138,230,${0.18 + 0.55 * mag})`;
-          ctx.fill();
+          const key = `${barT}|${n.k}`;
+          const cur = cells.get(key);
+          if (!cur || Math.abs(n.g) > Math.abs(cur.g)) cells.set(key, { barT, k: n.k, g: n.g });
         }
+      }
+      const xCache = new Map<number, number | null>();
+      for (const cell of cells.values()) {
+        let x = xCache.get(cell.barT);
+        if (x === undefined) {
+          const coord = tsApi.timeToCoordinate(((cell.barT / 1000) + st.tzOff) as UTCTimestamp);
+          x = coord == null ? null : coord;
+          xCache.set(cell.barT, x);
+        }
+        if (x == null || x < 0 || x > plotW) continue;
+        const y = series.priceToCoordinate(cell.k);
+        if (y == null || y < 0 || y > h) continue;
+        const mag = Math.abs(cell.g) / maxG;
+        const col = cell.g >= 0 ? "201,165,90" : "185,138,230";
+        // Skylit-style beads: size + opacity + glow all carry strength.
+        const r = 2.5 + 4.5 * Math.pow(mag, 0.7);
+        ctx.save();
+        ctx.shadowColor = `rgba(${col},${0.5 * mag})`;
+        ctx.shadowBlur = 10 * mag;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${col},${0.35 + 0.6 * mag})`;
+        ctx.fill();
+        ctx.restore();
       }
 
       // current nodes: band + right-edge label pill, crown on the strongest
@@ -195,7 +215,9 @@ export function GexChartView() {
         const side = n.k >= last.s ? "NODE" : "NODE · SUP";
         const label = `${n.k === kingK ? "♛ " : ""}${n.k} ${side}`;
         const tw = ctx.measureText(label).width + 10;
-        const px = plotW - tw - 6;
+        // Mid-chart placement (Skylit-style) — right-edge pills collide with
+        // the axis labels for walls/flip at the same price.
+        const px = Math.max(10, plotW * 0.55 - tw / 2);
         ctx.fillStyle = "rgba(10,20,36,0.92)";
         ctx.strokeStyle = col;
         ctx.lineWidth = 1;
