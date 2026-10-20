@@ -38,6 +38,25 @@ type Payload = {
   asOf: number;
 };
 
+// One shared heatmap payload per pane (ladder + heatmap panels both read it).
+function useHeatPayload(ticker: string, enabled: boolean) {
+  const [payload, setPayload] = useState<HeatmapPayload | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    setPayload(null);
+    const load = () =>
+      fetch(`/api/gex/heatmap?ticker=${ticker}`)
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .then((p: HeatmapPayload) => { if (!cancelled) setPayload(p); })
+        .catch(() => { /* keep last */ });
+    load();
+    const id = setInterval(() => { if (!document.hidden) load(); }, pollIntervalMs(ticker));
+    return () => { cancelled = true; clearInterval(id); };
+  }, [ticker, enabled]);
+  return payload;
+}
+
 function useChartData(ticker: string, tf: Tf) {
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState(false);
@@ -66,7 +85,14 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
   // Live-tick telemetry shown in the toolbar: proves the 1s loop is running
   // and which source feeds it ("worker" stream / "snap" snapshot / "none").
   const [tick, setTick] = useState<{ p: number; at: number; src: string } | null>(null);
+  const [showHeat, setShowHeat] = useState(false);
+  // Strikes picked in the ladder/heatmap, pinned on the chart as level lines.
+  const [selStrikes, setSelStrikes] = useState<number[]>([]);
+  const togglePick = (k: number) =>
+    setSelStrikes((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
+  useEffect(() => { setSelStrikes([]); }, [ticker]);
   const { data, error } = useChartData(ticker, tf);
+  const heat = useHeatPayload(ticker, ladder || showHeat);
   const { tz } = useTimeZone();
 
   const chartElRef = useRef<HTMLDivElement>(null);
@@ -75,8 +101,9 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const spotSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const wallLinesRef = useRef<IPriceLine[]>([]);
-  const stateRef = useRef<{ buckets: Bucket[]; scope: "front" | "all"; showNodes: boolean; dense: boolean; tzOff: number; lastCandleT: number; bucketMs: number }>({
-    buckets: [], scope: "front", showNodes: true, dense: false, tzOff: 0, lastCandleT: 0, bucketMs: 300_000,
+  const selLinesRef = useRef<IPriceLine[]>([]);
+  const stateRef = useRef<{ buckets: Bucket[]; scope: "front" | "all"; showNodes: boolean; dense: boolean; tzOff: number; lastCandleT: number; bucketMs: number; pinned: number[] }>({
+    buckets: [], scope: "front", showNodes: true, dense: false, tzOff: 0, lastCandleT: 0, bucketMs: 300_000, pinned: [],
   });
 
   // Flatten buckets across days; thin for 1h so a month of dots stays light.
@@ -106,14 +133,17 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
       autoscaleInfoProvider: (orig: () => { priceRange: { minValue: number; maxValue: number } } | null) => {
         const base = orig();
         const st = stateRef.current;
-        if (!base || !st.showNodes || !st.buckets.length) return base;
+        if (!base) return base;
         const last = st.buckets[st.buckets.length - 1];
-        const spot = last.s;
-        const ks = [...last[st.scope]]
-          .sort((a, z) => Math.abs(z.g) - Math.abs(a.g))
-          .slice(0, st.dense ? 12 : 4)
-          .map((n) => n.k)
-          .filter((k) => spot > 0 && Math.abs(k / spot - 1) <= 0.06);
+        const spot = last?.s ?? 0;
+        const ks: number[] = [...st.pinned]; // user-pinned strikes always stay on screen
+        if (st.showNodes && last) {
+          ks.push(...[...last[st.scope]]
+            .sort((a, z) => Math.abs(z.g) - Math.abs(a.g))
+            .slice(0, st.dense ? 12 : 4)
+            .map((n) => n.k)
+            .filter((k) => spot > 0 && Math.abs(k / spot - 1) <= 0.06));
+        }
         if (!ks.length) return base;
         return {
           ...base,
@@ -284,6 +314,19 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
     }
   }, [data, tz, tf, ticker, buckets]);
 
+  // picked strikes → pinned level lines on the chart
+  useEffect(() => {
+    const series = candleSeriesRef.current;
+    if (!series) return;
+    for (const l of selLinesRef.current) series.removePriceLine(l);
+    selLinesRef.current = selStrikes.map((k) =>
+      series.createPriceLine({
+        price: k, title: `${k}`, color: GOLD2, lineWidth: 1,
+        lineStyle: LineStyle.Solid, axisLabelVisible: true,
+      }),
+    );
+  }, [selStrikes, data]);
+
   // mirror paint inputs
   useEffect(() => {
     stateRef.current = {
@@ -291,8 +334,9 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
       tzOff: tzOffsetSec(tz, new Date()),
       lastCandleT: data?.candles.length ? data.candles[data.candles.length - 1].t : 0,
       bucketMs: (tf === "1h" ? 60 : tf === "1m" ? 1 : tf === "5m" ? 5 : 10) * 60_000,
+      pinned: selStrikes,
     };
-  }, [buckets, scope, showNodes, dense, tz, data, tf]);
+  }, [buckets, scope, showNodes, dense, tz, data, tf, selStrikes]);
 
   // ── live forming bar: 1s poll of /api/gex/live ──
   // Source A ("worker"): true per-second forming 1m OHLCV + recent ring.
@@ -385,6 +429,10 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
         <Pill active={showNodes} onClick={() => setShowNodes(!showNodes)}>Nodes</Pill>
         <Pill active={dense} onClick={() => setDense(!dense)}>Dense</Pill>
         <Pill active={ladder} onClick={() => setLadder(!ladder)}>Ladder</Pill>
+        <Pill active={showHeat} onClick={() => setShowHeat(!showHeat)}>Heatmap</Pill>
+        {selStrikes.length > 0 && (
+          <Pill active onClick={() => setSelStrikes([])}>Clear {selStrikes.length} pinned</Pill>
+        )}
         <span className="text-[10px]" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           {tick && tick.src !== "none" && (
             <span style={{ color: GOLD2, fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
@@ -409,30 +457,21 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
           <div ref={chartElRef} className="absolute inset-0" />
           <canvas ref={canvasRef} className="pointer-events-none absolute inset-0" style={{ width: "100%", height: "100%" }} />
         </div>
-        {ladder && <LadderPanel ticker={ticker} scope={scope} />}
+        {showHeat && <HeatmapPanel ticker={ticker} payload={heat} selected={selStrikes} onPick={togglePick} />}
+        {ladder && <LadderPanel ticker={ticker} scope={scope} payload={heat} selected={selStrikes} onPick={togglePick} />}
       </div>
     </div>
   );
 }
 
 // ─── Skylit-style per-strike GEX ladder ─────────────────────────────────────
-// Reuses the heatmap API (50 strikes around spot, per-expiration net GEX).
-// front scope = nearest expiration column; all = sum across expirations.
-function LadderPanel({ ticker, scope }: { ticker: string; scope: "front" | "all" }) {
-  const [payload, setPayload] = useState<HeatmapPayload | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    setPayload(null);
-    const load = () =>
-      fetch(`/api/gex/heatmap?ticker=${ticker}`)
-        .then((r) => (r.ok ? r.json() : Promise.reject()))
-        .then((p: HeatmapPayload) => { if (!cancelled) setPayload(p); })
-        .catch(() => { /* keep last */ });
-    load();
-    const id = setInterval(() => { if (!document.hidden) load(); }, pollIntervalMs(ticker));
-    return () => { cancelled = true; clearInterval(id); };
-  }, [ticker]);
-
+// Renders the shared heatmap payload (50 strikes around spot). front scope =
+// nearest expiration column; all = sum across expirations. Clicking a row
+// pins/unpins that strike as a level line on the chart.
+function LadderPanel({ ticker, scope, payload, selected, onPick }: {
+  ticker: string; scope: "front" | "all"; payload: HeatmapPayload | null;
+  selected: number[]; onPick: (k: number) => void;
+}) {
   const rows = useMemo(() => {
     if (!payload) return [];
     const frontExp = [...payload.expirations].sort((a, b) => a.dte - b.dte)[0]?.date;
@@ -483,12 +522,106 @@ function LadderPanel({ ticker, scope }: { ticker: string; scope: "front" | "all"
                   <div style={{ flex: 1, height: 1, background: "rgba(90,169,230,.55)" }} />
                 </div>
               )}
-              <div className="relative flex items-center justify-between px-[9px]" style={{ height: 19 }}>
+              <div
+                className="relative flex cursor-pointer items-center justify-between px-[9px]"
+                style={{ height: 19, outline: selected.includes(r.k) ? `1px solid ${GOLD2}` : undefined, outlineOffset: -1 }}
+                onClick={() => onPick(r.k)}
+                title={selected.includes(r.k) ? "Unpin from chart" : "Pin on chart"}
+              >
                 <div className="absolute inset-y-[2px] left-0" style={{ width: `${8 + 90 * mag}%`, background: `rgba(${col},${0.08 + 0.22 * mag})` }} />
                 <span className="relative text-[10px]" style={{ color: r.k === kingK ? GOLD2 : "var(--color-text-secondary)", fontWeight: r.k === kingK ? 700 : 400, fontVariantNumeric: "tabular-nums" }}>
                   {r.k === kingK ? "♛ " : ""}{r.k}
                 </span>
                 <span className="relative text-[10px]" style={{ color: `rgb(${col})`, fontVariantNumeric: "tabular-nums" }}>{fmtG(r.g)}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Embedded strike × expiration heatmap ───────────────────────────────────
+// Compact version of the Heatmap tab's matrix, sharing the pane's payload.
+// Click any row to pin/unpin that strike on the chart.
+function HeatmapPanel({ ticker, payload, selected, onPick }: {
+  ticker: string; payload: HeatmapPayload | null;
+  selected: number[]; onPick: (k: number) => void;
+}) {
+  const grid = useMemo(() => {
+    if (!payload) return null;
+    const exps = payload.expirations.slice(0, 5);
+    const cell = new Map<string, number>();
+    let maxAbs = 1;
+    for (const c of payload.cells) {
+      cell.set(`${c.strike}|${c.exp}`, c.netOI);
+      maxAbs = Math.max(maxAbs, Math.abs(c.netOI));
+    }
+    return { exps, cell, maxAbs, strikes: payload.strikes };
+  }, [payload]);
+
+  if (!payload || !grid) {
+    return (
+      <div className="flex w-[330px] flex-shrink-0 items-center justify-center rounded-md text-[11px] text-text-tertiary" style={{ border: "0.5px solid var(--color-border-tertiary)", background: "var(--color-background-primary)" }}>
+        Heatmap loading…
+      </div>
+    );
+  }
+  const fmtCell = (g: number) => {
+    const a = Math.abs(g);
+    if (a < 1e4) return "";
+    const s = a >= 1e9 ? `${(a / 1e9).toFixed(1)}B` : a >= 1e6 ? `${(a / 1e6).toFixed(1)}M` : `${(a / 1e3).toFixed(0)}K`;
+    return g < 0 ? `-${s}` : s;
+  };
+
+  return (
+    <div className="flex w-[330px] flex-shrink-0 flex-col overflow-hidden rounded-md" style={{ border: "0.5px solid var(--color-border-tertiary)", background: "var(--color-background-primary)" }}>
+      <div className="flex items-center justify-between px-[9px] py-[6px]" style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
+        <span className="text-[11px] font-semibold" style={{ color: GOLD2 }}>{ticker} · heatmap</span>
+        <span className="text-[10px] text-text-tertiary" style={{ fontVariantNumeric: "tabular-nums" }}>{payload.spot.toFixed(2)}</span>
+      </div>
+      <div className="flex px-[6px]" style={{ paddingTop: 4, paddingBottom: 2 }}>
+        <span className="w-[48px] flex-shrink-0" />
+        {grid.exps.map((e) => (
+          <span key={e.date} className="flex-1 text-center text-[8px] text-text-tertiary">{e.label.replace(" ", " ")}</span>
+        ))}
+      </div>
+      <div className="flex-1 overflow-y-auto px-[6px] pb-[6px]">
+        {grid.strikes.map((k, i) => {
+          const prev = grid.strikes[i - 1];
+          const spotDivider = prev != null && prev >= payload.spot && k < payload.spot;
+          return (
+            <div key={k}>
+              {spotDivider && <div style={{ height: 1, background: "rgba(90,169,230,.55)", margin: "1px 0" }} />}
+              <div
+                className="flex cursor-pointer items-center"
+                style={{ height: 15, outline: selected.includes(k) ? `1px solid ${GOLD2}` : undefined, outlineOffset: -1 }}
+                onClick={() => onPick(k)}
+                title={selected.includes(k) ? "Unpin from chart" : "Pin on chart"}
+              >
+                <span className="w-[48px] flex-shrink-0 text-[9px]" style={{ color: selected.includes(k) ? GOLD2 : "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums", fontWeight: selected.includes(k) ? 700 : 400 }}>
+                  {k}
+                </span>
+                {grid.exps.map((e) => {
+                  const g = grid.cell.get(`${k}|${e.date}`) ?? 0;
+                  const mag = Math.abs(g) / grid.maxAbs;
+                  const col = g >= 0 ? "201,165,90" : "185,138,230";
+                  return (
+                    <span
+                      key={e.date}
+                      className="flex-1 text-center text-[7.5px]"
+                      style={{
+                        margin: "0 1px", borderRadius: 2, lineHeight: "15px",
+                        background: mag > 0.003 ? `rgba(${col},${0.10 + 0.6 * Math.pow(mag, 0.5)})` : "transparent",
+                        color: mag > 0.2 ? "#0A1424" : "var(--color-text-tertiary)",
+                        fontVariantNumeric: "tabular-nums", overflow: "hidden", whiteSpace: "nowrap",
+                      }}
+                    >
+                      {fmtCell(g)}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           );
