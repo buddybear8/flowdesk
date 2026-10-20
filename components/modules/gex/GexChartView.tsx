@@ -21,11 +21,6 @@ import {
 import { useTimeZone, tzOffsetSec } from "@/lib/timezone";
 
 const TICKERS = ["AAPL", "AMD", "AMZN", "APP", "ARM", "ASTS", "AVGO", "BABA", "BE", "COIN", "CRWD", "CVNA", "DDOG", "DELL", "DIA", "DRAM", "ENPH", "GDX", "GLD", "GOOGL", "HOOD", "INTC", "IREN", "IWM", "META", "MRVL", "MSFT", "MU", "NBIS", "NFLX", "NOW", "NVDA", "ORCL", "PANW", "PDD", "PLTR", "QCOM", "QQQ", "RDDT", "SLV", "SMCI", "SMH", "SNDK", "SNOW", "SOXX", "SPCX", "SPX", "SPY", "TSLA", "USO", "VALE", "VIX"];
-
-// Worker live endpoint (Railway service domain, CORS-open): serves the
-// forming 1m bar from Polygon's per-second stream so the current candle
-// grows tick-by-tick instead of printing once per minute.
-const LIVE_BASE = process.env.NEXT_PUBLIC_GEX_LIVE_URL ?? "https://flowdesk-production-2bb8.up.railway.app";
 const TFS = ["1m", "5m", "10m", "1h"] as const;
 type Tf = (typeof TFS)[number];
 
@@ -237,12 +232,16 @@ export function GexChartView() {
     };
   }, [buckets, scope, showNodes, dense, tz, data]);
 
-  // ── live forming bar: 1s poll of the worker's per-second stream ──
-  // Merges the forming 1m bar (plus the recent completed ring, which covers
-  // the gap before the 10s DB poll catches up) into the current TF bucket and
-  // series.update()s it, so the candle grows tick-by-tick like TradingView.
+  // ── live forming bar: 1s poll of /api/gex/live ──
+  // Source A ("worker"): true per-second forming 1m OHLCV + recent ring.
+  // Source B ("snap"): Polygon snapshot — lastTrade ticks each second; we
+  // accumulate them into a client-held forming bar. Either way the current
+  // TF bucket is rebuilt from {server candles ∪ live 1m bars ∪ forming} and
+  // series.update()d, so the candle grows tick-by-tick like TradingView.
+  const accRef = useRef<Candle | null>(null); // snapshot-mode forming accumulator
   useEffect(() => {
     if (!data) return;
+    accRef.current = null;
     const tfMin = tf === "1h" ? 60 : tf === "1m" ? 1 : tf === "5m" ? 5 : 10;
     const bucketMs = tfMin * 60_000;
     let cancelled = false;
@@ -250,18 +249,43 @@ export function GexChartView() {
     const tick = async () => {
       if (document.hidden || cancelled) return;
       try {
-        const r = await fetch(`${LIVE_BASE}/live?ticker=${ticker}`);
+        const r = await fetch(`/api/gex/live?ticker=${ticker}`);
         if (!r.ok) return;
-        const live: { forming: Candle | null; recent: { t: number; o: number; h: number; l: number; c: number; v: number }[] } & { forming: { t: number; o: number; h: number; l: number; c: number; v: number } | null } = await r.json();
+        const live: { src: string; forming: Candle | null; recent: Candle[]; last: { p: number; t: number } | null } = await r.json();
         if (cancelled || !candleSeriesRef.current) return;
-        const oneMin = [...(live.recent ?? []), ...(live.forming ? [live.forming] : [])];
+
+        let oneMin: Candle[] = [...(live.recent ?? [])];
+        if (live.forming) {
+          oneMin.push(live.forming);
+        } else if (live.last) {
+          // accumulate ticks into a forming bar (snapshot mode)
+          const minute = Math.floor(live.last.t / 60_000) * 60_000;
+          const acc = accRef.current;
+          if (!acc || acc.t !== minute) {
+            accRef.current = { t: minute, o: live.last.p, h: live.last.p, l: live.last.p, c: live.last.p, v: 0 };
+          } else {
+            acc.h = Math.max(acc.h, live.last.p);
+            acc.l = Math.min(acc.l, live.last.p);
+            acc.c = live.last.p;
+          }
+          oneMin.push({ ...accRef.current! });
+        }
         if (!oneMin.length) return;
+
         const curBucket = Math.floor(oneMin[oneMin.length - 1].t / bucketMs) * bucketMs;
-        // base: server candles already in this bucket (e.g. 1h bucket opened an hour ago)
-        const base = data.candles.filter((c) => Math.floor(c.t / bucketMs) * bucketMs === curBucket && tf === "1h");
-        const parts = [...base, ...oneMin.filter((b) => Math.floor(b.t / bucketMs) * bucketMs === curBucket)];
+        // merge: server candles in this bucket + live 1m bars (live wins on dup minutes)
+        const byMinute = new Map<number, Candle>();
+        if (tf === "1m") {
+          for (const b of oneMin) byMinute.set(b.t, b);
+        } else {
+          for (const c of data.candles) {
+            // server candles are TF-aggregated; only the 1m-equivalent case matters
+            if (Math.floor(c.t / bucketMs) * bucketMs === curBucket) byMinute.set(c.t, c);
+          }
+          for (const b of oneMin) if (Math.floor(b.t / bucketMs) * bucketMs === curBucket) byMinute.set(b.t, b);
+        }
+        const parts = [...byMinute.values()].filter((b) => Math.floor(b.t / bucketMs) * bucketMs === curBucket).sort((a, b) => a.t - b.t);
         if (!parts.length) return;
-        parts.sort((a, b) => a.t - b.t);
         const agg = parts.reduce((acc, b) => acc
           ? { t: acc.t, o: acc.o, h: Math.max(acc.h, b.h), l: Math.min(acc.l, b.l), c: b.c, v: acc.v + b.v }
           : { t: curBucket, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }, null as Candle | null)!;
@@ -271,7 +295,7 @@ export function GexChartView() {
         if (agg.t >= Math.floor(lastT / bucketMs) * bucketMs) {
           candleSeriesRef.current.update({ time, open: agg.o, high: agg.h, low: agg.l, close: agg.c });
         }
-      } catch { /* worker restarting / offline — the 10s poll still updates */ }
+      } catch { /* transient — the 10s poll still updates */ }
     };
     const id = setInterval(tick, 1_000);
     tick();
