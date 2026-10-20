@@ -264,16 +264,22 @@ export function GexChartView() {
       mk(lastBucket.fl, "Flip", "#5AA9E6");
     }
 
-    // default zoom: ~1 session for 1m, ~2 for 5m/10m, fit for 1h
-    const fitBars = tf === "1m" ? 390 : tf === "5m" ? 78 : tf === "10m" ? 39 : 0; // ~one RTH session
-    if (fitBars > 0 && data.candles.length > fitBars) {
-      const from = off(data.candles[data.candles.length - fitBars].t);
-      const to = off(data.candles[data.candles.length - 1].t) + 1800;
-      chartRef.current.timeScale().setVisibleRange({ from: from as UTCTimestamp, to: to as UTCTimestamp });
-    } else {
-      chartRef.current.timeScale().fitContent();
+    // Default zoom (~one RTH session) applies ONCE per ticker/tf selection —
+    // never on the 10s refreshes, which would stomp the user's pan/zoom.
+    // Double-clicking an axis restores the library's auto fit (built-in).
+    const fitKey = `${ticker}|${tf}|${tz}`;
+    if (fitDoneRef.current !== fitKey) {
+      fitDoneRef.current = fitKey;
+      const fitBars = tf === "1m" ? 390 : tf === "5m" ? 78 : tf === "10m" ? 39 : 0;
+      if (fitBars > 0 && data.candles.length > fitBars) {
+        const from = off(data.candles[data.candles.length - fitBars].t);
+        const to = off(data.candles[data.candles.length - 1].t) + 1800;
+        chartRef.current.timeScale().setVisibleRange({ from: from as UTCTimestamp, to: to as UTCTimestamp });
+      } else {
+        chartRef.current.timeScale().fitContent();
+      }
     }
-  }, [data, tz, tf, buckets]);
+  }, [data, tz, tf, ticker, buckets]);
 
   // mirror paint inputs
   useEffect(() => {
@@ -291,6 +297,7 @@ export function GexChartView() {
   // accumulate them into a client-held forming bar. Either way the current
   // TF bucket is rebuilt from {server candles ∪ live 1m bars ∪ forming} and
   // series.update()d, so the candle grows tick-by-tick like TradingView.
+  const fitDoneRef = useRef(""); // "ticker|tf|tz" that last received the default zoom
   const accRef = useRef<Candle | null>(null); // snapshot-mode forming accumulator
   useEffect(() => { accRef.current = null; }, [ticker, tf]); // keep across 10s data refetches
   useEffect(() => {
