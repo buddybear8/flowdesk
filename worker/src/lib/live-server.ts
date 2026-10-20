@@ -7,9 +7,10 @@
 //   GET /live?ticker=SPY → { ticker, forming, recent, lastEventAt, asOf }
 //   GET /health          → ok
 //
-// Listens on 8787 — the Railway service domain is bound to that port
-// explicitly (railway domain --port 8787), so we do NOT follow Railway's
-// injected $PORT. LIVE_PORT overrides for local runs.
+// Listens on Railway's injected $PORT when present — despite the domain
+// being created with --port 8787, Railway's edge routes to the injected
+// PORT (observed: PORT=8080, edge 502s on anything else). LIVE_PORT
+// overrides for local runs; 8787 is the local fallback.
 
 import { createServer } from "node:http";
 import { liveSnapshot } from "../jobs/polygon-stream.js";
@@ -19,7 +20,7 @@ const ts = () => new Date().toISOString();
 const VALID = new Set<string>(WATCHED_TICKERS);
 
 export function startLiveServer(): void {
-  const port = Number(process.env.LIVE_PORT ?? 8787);
+  const port = Number(process.env.LIVE_PORT ?? process.env.PORT ?? 8787);
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://x");
     const headers = {
