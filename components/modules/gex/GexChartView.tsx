@@ -72,8 +72,8 @@ export function GexChartView() {
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const spotSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const wallLinesRef = useRef<IPriceLine[]>([]);
-  const stateRef = useRef<{ buckets: Bucket[]; scope: "front" | "all"; showNodes: boolean; dense: boolean; tzOff: number; lastCandleT: number }>({
-    buckets: [], scope: "front", showNodes: true, dense: false, tzOff: 0, lastCandleT: 0,
+  const stateRef = useRef<{ buckets: Bucket[]; scope: "front" | "all"; showNodes: boolean; dense: boolean; tzOff: number; lastCandleT: number; bucketMs: number }>({
+    buckets: [], scope: "front", showNodes: true, dense: false, tzOff: 0, lastCandleT: 0, bucketMs: 300_000,
   });
 
   // Flatten buckets across days; thin for 1h so a month of dots stays light.
@@ -97,6 +97,29 @@ export function GexChartView() {
     });
     const candles = chart.addCandlestickSeries({
       upColor: UP, downColor: DOWN, wickUpColor: UP, wickDownColor: DOWN, borderVisible: false,
+      // Expand autoscale so the current top nodes stay on screen (within ±6%
+      // of spot — TSLA's 385/400 walls were being clipped by candle-only
+      // autoscale and the node bands never showed).
+      autoscaleInfoProvider: (orig: () => { priceRange: { minValue: number; maxValue: number } } | null) => {
+        const base = orig();
+        const st = stateRef.current;
+        if (!base || !st.showNodes || !st.buckets.length) return base;
+        const last = st.buckets[st.buckets.length - 1];
+        const spot = last.s;
+        const ks = [...last[st.scope]]
+          .sort((a, z) => Math.abs(z.g) - Math.abs(a.g))
+          .slice(0, st.dense ? 12 : 4)
+          .map((n) => n.k)
+          .filter((k) => spot > 0 && Math.abs(k / spot - 1) <= 0.06);
+        if (!ks.length) return base;
+        return {
+          ...base,
+          priceRange: {
+            minValue: Math.min(base.priceRange.minValue, ...ks),
+            maxValue: Math.max(base.priceRange.maxValue, ...ks),
+          },
+        };
+      },
     });
     const spot = chart.addLineSeries({
       color: GOLD2, lineWidth: 1, lineStyle: LineStyle.Dotted,
@@ -135,7 +158,11 @@ export function GexChartView() {
 
       const topK = st.dense ? 12 : 4;
       for (const b of st.buckets) {
-        const x = tsApi.timeToCoordinate(((b.ts / 1000) + st.tzOff) as UTCTimestamp);
+        // Snap each bucket to its containing bar: timeToCoordinate only maps
+        // times that exist as bars — raw capture timestamps fall between bars
+        // and return null (the original "no dots anywhere" bug).
+        const barT = Math.min(Math.floor(b.ts / st.bucketMs) * st.bucketMs, st.lastCandleT);
+        const x = tsApi.timeToCoordinate(((barT / 1000) + st.tzOff) as UTCTimestamp);
         if (x == null || x < 0 || x > plotW) continue;
         const nodes = [...b[st.scope]].sort((a, z) => Math.abs(z.g) - Math.abs(a.g)).slice(0, topK);
         for (const n of nodes) {
@@ -216,7 +243,7 @@ export function GexChartView() {
     }
 
     // default zoom: ~1 session for 1m, ~2 for 5m/10m, fit for 1h
-    const fitBars = tf === "1m" ? 390 : tf === "5m" ? 156 : tf === "10m" ? 78 : 0;
+    const fitBars = tf === "1m" ? 390 : tf === "5m" ? 78 : tf === "10m" ? 39 : 0; // ~one RTH session
     if (fitBars > 0 && data.candles.length > fitBars) {
       const from = off(data.candles[data.candles.length - fitBars].t);
       const to = off(data.candles[data.candles.length - 1].t) + 1800;
@@ -232,8 +259,9 @@ export function GexChartView() {
       buckets, scope, showNodes, dense,
       tzOff: tzOffsetSec(tz, new Date()),
       lastCandleT: data?.candles.length ? data.candles[data.candles.length - 1].t : 0,
+      bucketMs: (tf === "1h" ? 60 : tf === "1m" ? 1 : tf === "5m" ? 5 : 10) * 60_000,
     };
-  }, [buckets, scope, showNodes, dense, tz, data]);
+  }, [buckets, scope, showNodes, dense, tz, data, tf]);
 
   // ── live forming bar: 1s poll of /api/gex/live ──
   // Source A ("worker"): true per-second forming 1m OHLCV + recent ring.

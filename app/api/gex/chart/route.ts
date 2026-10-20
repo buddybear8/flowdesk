@@ -65,7 +65,15 @@ export async function GET(req: NextRequest) {
     o: Number(r.open), h: Number(r.high), l: Number(r.low), c: Number(r.close),
     v: Number(r.volume),
   }));
-  const candles = tf === "1h" ? raw : aggregate(raw, TF[tf]);
+  // Minute timeframes: RTH only (09:30–16:00 ET) — extended-hours bars turn
+  // the chart into mostly-flat noise and push the GEX session off-screen.
+  const rth = tf === "1h" ? raw : raw.filter((b) => {
+    const p = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date(b.t));
+    const g = (k: string) => Number(p.find((x) => x.type === k)?.value ?? "0");
+    const hm = (g("hour") === 24 ? 0 : g("hour")) * 100 + g("minute");
+    return hm >= 930 && hm < 1600;
+  });
+  const candles = tf === "1h" ? raw : aggregate(rth, TF[tf]);
 
   // Node buckets for the covered days
   const sinceDate = new Date(since.toISOString().slice(0, 10) + "T00:00:00.000Z");
