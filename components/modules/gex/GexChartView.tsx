@@ -87,6 +87,7 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
   const [tick, setTick] = useState<{ p: number; at: number; src: string } | null>(null);
   const [showHeat, setShowHeat] = useState(false);
   // Heatmap panel width — draggable via the divider, persisted per browser.
+  // (Strike-pinning via panel clicks was removed 2026-10-21 per user request.)
   const [heatW, setHeatW] = useState(() => {
     try { const v = Number(localStorage.getItem("cs-gex-heatw")); return v >= 240 && v <= 900 ? v : 330; } catch { return 330; }
   });
@@ -107,11 +108,6 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up, { once: true });
   };
-  // Strikes picked in the ladder/heatmap, pinned on the chart as level lines.
-  const [selStrikes, setSelStrikes] = useState<number[]>([]);
-  const togglePick = (k: number) =>
-    setSelStrikes((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
-  useEffect(() => { setSelStrikes([]); }, [ticker]);
   const { data, error } = useChartData(ticker, tf);
   const heat = useHeatPayload(ticker, ladder || showHeat);
   const { tz } = useTimeZone();
@@ -122,9 +118,8 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const spotSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const wallLinesRef = useRef<IPriceLine[]>([]);
-  const selLinesRef = useRef<IPriceLine[]>([]);
-  const stateRef = useRef<{ buckets: Bucket[]; scope: "front" | "all"; showNodes: boolean; dense: boolean; tzOff: number; lastCandleT: number; bucketMs: number; pinned: number[] }>({
-    buckets: [], scope: "front", showNodes: true, dense: false, tzOff: 0, lastCandleT: 0, bucketMs: 300_000, pinned: [],
+  const stateRef = useRef<{ buckets: Bucket[]; scope: "front" | "all"; showNodes: boolean; dense: boolean; tzOff: number; lastCandleT: number; bucketMs: number }>({
+    buckets: [], scope: "front", showNodes: true, dense: false, tzOff: 0, lastCandleT: 0, bucketMs: 300_000,
   });
 
   // Flatten buckets across days; thin for 1h so a month of dots stays light.
@@ -157,14 +152,12 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
         if (!base) return base;
         const last = st.buckets[st.buckets.length - 1];
         const spot = last?.s ?? 0;
-        const ks: number[] = [...st.pinned]; // user-pinned strikes always stay on screen
-        if (st.showNodes && last) {
-          ks.push(...[...last[st.scope]]
-            .sort((a, z) => Math.abs(z.g) - Math.abs(a.g))
-            .slice(0, st.dense ? 12 : 4)
-            .map((n) => n.k)
-            .filter((k) => spot > 0 && Math.abs(k / spot - 1) <= 0.06));
-        }
+        if (!st.showNodes || !last) return base;
+        const ks = [...last[st.scope]]
+          .sort((a, z) => Math.abs(z.g) - Math.abs(a.g))
+          .slice(0, st.dense ? 12 : 4)
+          .map((n) => n.k)
+          .filter((k) => spot > 0 && Math.abs(k / spot - 1) <= 0.06);
         if (!ks.length) return base;
         return {
           ...base,
@@ -335,19 +328,6 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
     }
   }, [data, tz, tf, ticker, buckets]);
 
-  // picked strikes → pinned level lines on the chart
-  useEffect(() => {
-    const series = candleSeriesRef.current;
-    if (!series) return;
-    for (const l of selLinesRef.current) series.removePriceLine(l);
-    selLinesRef.current = selStrikes.map((k) =>
-      series.createPriceLine({
-        price: k, title: `${k}`, color: GOLD2, lineWidth: 1,
-        lineStyle: LineStyle.Solid, axisLabelVisible: true,
-      }),
-    );
-  }, [selStrikes, data]);
-
   // mirror paint inputs
   useEffect(() => {
     stateRef.current = {
@@ -355,9 +335,8 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
       tzOff: tzOffsetSec(tz, new Date()),
       lastCandleT: data?.candles.length ? data.candles[data.candles.length - 1].t : 0,
       bucketMs: (tf === "1h" ? 60 : tf === "1m" ? 1 : tf === "5m" ? 5 : 10) * 60_000,
-      pinned: selStrikes,
     };
-  }, [buckets, scope, showNodes, dense, tz, data, tf, selStrikes]);
+  }, [buckets, scope, showNodes, dense, tz, data, tf]);
 
   // ── live forming bar: 1s poll of /api/gex/live ──
   // Source A ("worker"): true per-second forming 1m OHLCV + recent ring.
@@ -451,9 +430,6 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
         <Pill active={dense} onClick={() => setDense(!dense)}>Dense</Pill>
         <Pill active={ladder} onClick={() => setLadder(!ladder)}>Ladder</Pill>
         <Pill active={showHeat} onClick={() => setShowHeat(!showHeat)}>Heatmap</Pill>
-        {selStrikes.length > 0 && (
-          <Pill active onClick={() => setSelStrikes([])}>Clear {selStrikes.length} pinned</Pill>
-        )}
         <span className="text-[10px]" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           {tick && tick.src !== "none" && (
             <span style={{ color: GOLD2, fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
@@ -488,8 +464,8 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
             <div style={{ width: 2, height: 46, borderRadius: 1, background: "var(--color-border-secondary)" }} />
           </div>
         )}
-        {showHeat && <HeatmapPanel ticker={ticker} payload={heat} selected={selStrikes} onPick={togglePick} width={heatW} />}
-        {ladder && <LadderPanel ticker={ticker} scope={scope} payload={heat} selected={selStrikes} onPick={togglePick} />}
+        {showHeat && <HeatmapPanel ticker={ticker} payload={heat} width={heatW} />}
+        {ladder && <LadderPanel ticker={ticker} scope={scope} payload={heat} />}
       </div>
     </div>
   );
@@ -497,11 +473,9 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
 
 // ─── Skylit-style per-strike GEX ladder ─────────────────────────────────────
 // Renders the shared heatmap payload (50 strikes around spot). front scope =
-// nearest expiration column; all = sum across expirations. Clicking a row
-// pins/unpins that strike as a level line on the chart.
-function LadderPanel({ ticker, scope, payload, selected, onPick }: {
+// nearest expiration column; all = sum across expirations.
+function LadderPanel({ ticker, scope, payload }: {
   ticker: string; scope: "front" | "all"; payload: HeatmapPayload | null;
-  selected: number[]; onPick: (k: number) => void;
 }) {
   const rows = useMemo(() => {
     if (!payload) return [];
@@ -553,12 +527,7 @@ function LadderPanel({ ticker, scope, payload, selected, onPick }: {
                   <div style={{ flex: 1, height: 1, background: "rgba(90,169,230,.55)" }} />
                 </div>
               )}
-              <div
-                className="relative flex cursor-pointer items-center justify-between px-[9px]"
-                style={{ height: 19, outline: selected.includes(r.k) ? `1px solid ${GOLD2}` : undefined, outlineOffset: -1 }}
-                onClick={() => onPick(r.k)}
-                title={selected.includes(r.k) ? "Unpin from chart" : "Pin on chart"}
-              >
+              <div className="relative flex items-center justify-between px-[9px]" style={{ height: 19 }}>
                 <div className="absolute inset-y-[2px] left-0" style={{ width: `${8 + 90 * mag}%`, background: `rgba(${col},${0.08 + 0.22 * mag})` }} />
                 <span className="relative text-[10px]" style={{ color: r.k === kingK ? GOLD2 : "var(--color-text-secondary)", fontWeight: r.k === kingK ? 700 : 400, fontVariantNumeric: "tabular-nums" }}>
                   {r.k === kingK ? "♛ " : ""}{r.k}
@@ -575,10 +544,8 @@ function LadderPanel({ ticker, scope, payload, selected, onPick }: {
 
 // ─── Embedded strike × expiration heatmap ───────────────────────────────────
 // Compact version of the Heatmap tab's matrix, sharing the pane's payload.
-// Click any row to pin/unpin that strike on the chart.
-function HeatmapPanel({ ticker, payload, selected, onPick, width = 330 }: {
-  ticker: string; payload: HeatmapPayload | null;
-  selected: number[]; onPick: (k: number) => void; width?: number;
+function HeatmapPanel({ ticker, payload, width = 330 }: {
+  ticker: string; payload: HeatmapPayload | null; width?: number;
 }) {
   const grid = useMemo(() => {
     if (!payload) return null;
@@ -625,13 +592,8 @@ function HeatmapPanel({ ticker, payload, selected, onPick, width = 330 }: {
           return (
             <div key={k}>
               {spotDivider && <div style={{ height: 1, background: "rgba(90,169,230,.55)", margin: "1px 0" }} />}
-              <div
-                className="flex cursor-pointer items-center"
-                style={{ height: 15, outline: selected.includes(k) ? `1px solid ${GOLD2}` : undefined, outlineOffset: -1 }}
-                onClick={() => onPick(k)}
-                title={selected.includes(k) ? "Unpin from chart" : "Pin on chart"}
-              >
-                <span className="w-[48px] flex-shrink-0 text-[9px]" style={{ color: selected.includes(k) ? GOLD2 : "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums", fontWeight: selected.includes(k) ? 700 : 400 }}>
+              <div className="flex items-center" style={{ height: 17 }}>
+                <span className="w-[48px] flex-shrink-0 text-[9.5px]" style={{ color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums" }}>
                   {k}
                 </span>
                 {grid.exps.map((e) => {
@@ -641,11 +603,12 @@ function HeatmapPanel({ ticker, payload, selected, onPick, width = 330 }: {
                   return (
                     <span
                       key={e.date}
-                      className="flex-1 text-center text-[7.5px]"
+                      className="flex-1 text-center text-[9px]"
                       style={{
-                        margin: "0 1px", borderRadius: 2, lineHeight: "15px",
-                        background: mag > 0.003 ? `rgba(${col},${0.10 + 0.6 * Math.pow(mag, 0.5)})` : "transparent",
-                        color: mag > 0.2 ? "#0A1424" : "var(--color-text-tertiary)",
+                        margin: "0 1px", borderRadius: 2, lineHeight: "17px",
+                        background: mag > 0.003 ? `rgba(${col},${0.22 + 0.68 * Math.pow(mag, 0.4)})` : "transparent",
+                        color: mag > 0.3 ? "#0A1424" : mag > 0.003 ? "#E8EDF6" : "var(--color-text-tertiary)",
+                        fontWeight: mag > 0.3 ? 600 : 400,
                         fontVariantNumeric: "tabular-nums", overflow: "hidden", whiteSpace: "nowrap",
                       }}
                     >
