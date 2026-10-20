@@ -19,6 +19,8 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { useTimeZone, tzOffsetSec } from "@/lib/timezone";
+import { pollIntervalMs } from "@/components/modules/gex/heatmap-shared";
+import type { HeatmapPayload } from "@/lib/types";
 
 const TICKERS = ["AAPL", "AMD", "AMZN", "APP", "ARM", "ASTS", "AVGO", "BABA", "BE", "COIN", "CRWD", "CVNA", "DDOG", "DELL", "DIA", "DRAM", "ENPH", "GDX", "GLD", "GOOGL", "HOOD", "INTC", "IREN", "IWM", "META", "MRVL", "MSFT", "MU", "NBIS", "NFLX", "NOW", "NVDA", "ORCL", "PANW", "PDD", "PLTR", "QCOM", "QQQ", "RDDT", "SLV", "SMCI", "SMH", "SNDK", "SNOW", "SOXX", "SPCX", "SPX", "SPY", "TSLA", "USO", "VALE", "VIX"];
 const TFS = ["1m", "5m", "10m", "1h"] as const;
@@ -54,9 +56,10 @@ function useChartData(ticker: string, tf: Tf) {
   return { data, error };
 }
 
-export function GexChartView() {
-  const [ticker, setTicker] = useState("SPY");
+export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: { defaultTicker?: string; defaultLadder?: boolean } = {}) {
+  const [ticker, setTicker] = useState(defaultTicker);
   const [tf, setTf] = useState<Tf>("5m");
+  const [ladder, setLadder] = useState(defaultLadder);
   const [scope, setScope] = useState<"front" | "all">("front"); // expiry scope (Skylit "Expirations: Front")
   const [showNodes, setShowNodes] = useState(true);
   const [dense, setDense] = useState(false); // false = top 4 strikes (strong), true = all 12
@@ -381,6 +384,7 @@ export function GexChartView() {
         <Seg options={["front", "all"]} labels={["Front expiry", "All expiries"]} value={scope} onChange={(v) => setScope(v as "front" | "all")} />
         <Pill active={showNodes} onClick={() => setShowNodes(!showNodes)}>Nodes</Pill>
         <Pill active={dense} onClick={() => setDense(!dense)}>Dense</Pill>
+        <Pill active={ladder} onClick={() => setLadder(!ladder)}>Ladder</Pill>
         <span className="text-[10px]" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           {tick && tick.src !== "none" && (
             <span style={{ color: GOLD2, fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
@@ -398,11 +402,97 @@ export function GexChartView() {
           </span>
         </span>
       </div>
-      <div className="relative flex-1 overflow-hidden rounded-md" style={{ border: "0.5px solid var(--color-border-tertiary)", background: "var(--color-background-primary)" }}>
-        {error && <div className="absolute inset-0 z-10 flex items-center justify-center text-[12px] text-text-tertiary">Chart data unavailable</div>}
-        {!data && !error && <div className="absolute inset-0 z-10 flex items-center justify-center text-[12px] text-text-tertiary">Loading…</div>}
-        <div ref={chartElRef} className="absolute inset-0" />
-        <canvas ref={canvasRef} className="pointer-events-none absolute inset-0" style={{ width: "100%", height: "100%" }} />
+      <div className="flex flex-1 gap-[10px] overflow-hidden">
+        <div className="relative flex-1 overflow-hidden rounded-md" style={{ border: "0.5px solid var(--color-border-tertiary)", background: "var(--color-background-primary)" }}>
+          {error && <div className="absolute inset-0 z-10 flex items-center justify-center text-[12px] text-text-tertiary">Chart data unavailable</div>}
+          {!data && !error && <div className="absolute inset-0 z-10 flex items-center justify-center text-[12px] text-text-tertiary">Loading…</div>}
+          <div ref={chartElRef} className="absolute inset-0" />
+          <canvas ref={canvasRef} className="pointer-events-none absolute inset-0" style={{ width: "100%", height: "100%" }} />
+        </div>
+        {ladder && <LadderPanel ticker={ticker} scope={scope} />}
+      </div>
+    </div>
+  );
+}
+
+// ─── Skylit-style per-strike GEX ladder ─────────────────────────────────────
+// Reuses the heatmap API (50 strikes around spot, per-expiration net GEX).
+// front scope = nearest expiration column; all = sum across expirations.
+function LadderPanel({ ticker, scope }: { ticker: string; scope: "front" | "all" }) {
+  const [payload, setPayload] = useState<HeatmapPayload | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setPayload(null);
+    const load = () =>
+      fetch(`/api/gex/heatmap?ticker=${ticker}`)
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .then((p: HeatmapPayload) => { if (!cancelled) setPayload(p); })
+        .catch(() => { /* keep last */ });
+    load();
+    const id = setInterval(() => { if (!document.hidden) load(); }, pollIntervalMs(ticker));
+    return () => { cancelled = true; clearInterval(id); };
+  }, [ticker]);
+
+  const rows = useMemo(() => {
+    if (!payload) return [];
+    const frontExp = [...payload.expirations].sort((a, b) => a.dte - b.dte)[0]?.date;
+    const byStrike = new Map<number, number>();
+    for (const c of payload.cells) {
+      if (scope === "front" && c.exp !== frontExp) continue;
+      byStrike.set(c.strike, (byStrike.get(c.strike) ?? 0) + c.netOI);
+    }
+    return [...byStrike.entries()]
+      .map(([k, g]) => ({ k, g }))
+      .filter((r) => r.g !== 0)
+      .sort((a, b) => b.k - a.k);
+  }, [payload, scope]);
+
+  if (!payload) {
+    return (
+      <div className="flex w-[235px] flex-shrink-0 items-center justify-center rounded-md text-[11px] text-text-tertiary" style={{ border: "0.5px solid var(--color-border-tertiary)", background: "var(--color-background-primary)" }}>
+        Ladder loading…
+      </div>
+    );
+  }
+  const maxG = Math.max(1, ...rows.map((r) => Math.abs(r.g)));
+  const kingK = rows.length ? rows.reduce((a, b) => (Math.abs(b.g) > Math.abs(a.g) ? b : a)).k : null;
+  const fmtG = (g: number) => {
+    const a = Math.abs(g);
+    const s = a >= 1e9 ? `$${(a / 1e9).toFixed(1)}B` : a >= 1e6 ? `$${(a / 1e6).toFixed(1)}M` : `$${(a / 1e3).toFixed(0)}K`;
+    return g < 0 ? `-${s}` : s;
+  };
+
+  return (
+    <div className="flex w-[235px] flex-shrink-0 flex-col overflow-hidden rounded-md" style={{ border: "0.5px solid var(--color-border-tertiary)", background: "var(--color-background-primary)" }}>
+      <div className="flex items-center justify-between px-[9px] py-[6px]" style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
+        <span className="text-[11px] font-semibold" style={{ color: GOLD2 }}>{ticker} · GEX ladder</span>
+        <span className="text-[10px] text-text-tertiary" style={{ fontVariantNumeric: "tabular-nums" }}>{payload.spot.toFixed(2)}</span>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {rows.map((r, i) => {
+          const mag = Math.abs(r.g) / maxG;
+          const col = r.g >= 0 ? "201,165,90" : "185,138,230";
+          const prev = rows[i - 1];
+          const spotDivider = prev && prev.k >= payload.spot && r.k < payload.spot;
+          return (
+            <div key={r.k}>
+              {spotDivider && (
+                <div className="flex items-center gap-[5px] px-[9px]" style={{ padding: "1px 9px" }}>
+                  <div style={{ flex: 1, height: 1, background: "rgba(90,169,230,.55)" }} />
+                  <span className="text-[8.5px]" style={{ color: "#5AA9E6", fontVariantNumeric: "tabular-nums" }}>{payload.spot.toFixed(2)}</span>
+                  <div style={{ flex: 1, height: 1, background: "rgba(90,169,230,.55)" }} />
+                </div>
+              )}
+              <div className="relative flex items-center justify-between px-[9px]" style={{ height: 19 }}>
+                <div className="absolute inset-y-[2px] left-0" style={{ width: `${8 + 90 * mag}%`, background: `rgba(${col},${0.08 + 0.22 * mag})` }} />
+                <span className="relative text-[10px]" style={{ color: r.k === kingK ? GOLD2 : "var(--color-text-secondary)", fontWeight: r.k === kingK ? 700 : 400, fontVariantNumeric: "tabular-nums" }}>
+                  {r.k === kingK ? "♛ " : ""}{r.k}
+                </span>
+                <span className="relative text-[10px]" style={{ color: `rgb(${col})`, fontVariantNumeric: "tabular-nums" }}>{fmtG(r.g)}</span>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
