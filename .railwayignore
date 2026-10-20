@@ -1,0 +1,16 @@
+# CLI deploys (railway up): the worker Dockerfile only needs worker/ and
+# prisma/ from the repo root — exclude everything heavy or irrelevant.
+node_modules
+.next
+.git
+app
+components
+lib
+public
+ta_pipeline
+*.log
+worker/node_modules
+discord_extractor
+x_extractor
+mobile
+docs
