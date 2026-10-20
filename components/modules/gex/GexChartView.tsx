@@ -60,6 +60,9 @@ export function GexChartView() {
   const [scope, setScope] = useState<"front" | "all">("front"); // expiry scope (Skylit "Expirations: Front")
   const [showNodes, setShowNodes] = useState(true);
   const [dense, setDense] = useState(false); // false = top 4 strikes (strong), true = all 12
+  // Live-tick telemetry shown in the toolbar: proves the 1s loop is running
+  // and which source feeds it ("worker" stream / "snap" snapshot / "none").
+  const [tick, setTick] = useState<{ p: number; at: number; src: string } | null>(null);
   const { data, error } = useChartData(ticker, tf);
   const { tz } = useTimeZone();
 
@@ -239,9 +242,9 @@ export function GexChartView() {
   // TF bucket is rebuilt from {server candles ∪ live 1m bars ∪ forming} and
   // series.update()d, so the candle grows tick-by-tick like TradingView.
   const accRef = useRef<Candle | null>(null); // snapshot-mode forming accumulator
+  useEffect(() => { accRef.current = null; }, [ticker, tf]); // keep across 10s data refetches
   useEffect(() => {
     if (!data) return;
-    accRef.current = null;
     const tfMin = tf === "1h" ? 60 : tf === "1m" ? 1 : tf === "5m" ? 5 : 10;
     const bucketMs = tfMin * 60_000;
     let cancelled = false;
@@ -253,6 +256,7 @@ export function GexChartView() {
         if (!r.ok) return;
         const live: { src: string; forming: Candle | null; recent: Candle[]; last: { p: number; t: number } | null } = await r.json();
         if (cancelled || !candleSeriesRef.current) return;
+        if (live.src === "none") { setTick({ p: 0, at: Date.now(), src: "none" }); return; }
 
         let oneMin: Candle[] = [...(live.recent ?? [])];
         if (live.forming) {
@@ -294,6 +298,7 @@ export function GexChartView() {
         const lastT = data.candles.length ? data.candles[data.candles.length - 1].t : 0;
         if (agg.t >= Math.floor(lastT / bucketMs) * bucketMs) {
           candleSeriesRef.current.update({ time, open: agg.o, high: agg.h, low: agg.l, close: agg.c });
+          setTick({ p: agg.c, at: Date.now(), src: live.src });
         }
       } catch { /* transient — the 10s poll still updates */ }
     };
@@ -319,9 +324,21 @@ export function GexChartView() {
         <Seg options={["front", "all"]} labels={["Front expiry", "All expiries"]} value={scope} onChange={(v) => setScope(v as "front" | "all")} />
         <Pill active={showNodes} onClick={() => setShowNodes(!showNodes)}>Nodes</Pill>
         <Pill active={dense} onClick={() => setDense(!dense)}>Dense</Pill>
-        <span className="text-[10px] text-text-tertiary" style={{ marginLeft: "auto" }}>
-          Tape delayed 15 min, ticking live · dotted tail = true-now spot · nodes live
-          {stale ? " · STALE" : ""}
+        <span className="text-[10px]" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          {tick && tick.src !== "none" && (
+            <span style={{ color: GOLD2, fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
+              <span style={{
+                display: "inline-block", width: 6, height: 6, borderRadius: 3, marginRight: 5,
+                background: Date.now() - tick.at < 4_000 ? UP : DOWN,
+              }} />
+              LIVE {tick.src} · {tick.p.toFixed(2)}
+            </span>
+          )}
+          {tick?.src === "none" && <span style={{ color: DOWN, fontWeight: 600 }}>NO LIVE SOURCE</span>}
+          <span className="text-text-tertiary">
+            Tape delayed 15 min, ticking live · dotted tail = true-now spot
+            {stale ? " · STALE" : ""}
+          </span>
         </span>
       </div>
       <div className="relative flex-1 overflow-hidden rounded-md" style={{ border: "0.5px solid var(--color-border-tertiary)", background: "var(--color-background-primary)" }}>
