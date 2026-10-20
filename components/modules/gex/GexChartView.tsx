@@ -86,6 +86,27 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
   // and which source feeds it ("worker" stream / "snap" snapshot / "none").
   const [tick, setTick] = useState<{ p: number; at: number; src: string } | null>(null);
   const [showHeat, setShowHeat] = useState(false);
+  // Heatmap panel width — draggable via the divider, persisted per browser.
+  const [heatW, setHeatW] = useState(() => {
+    try { const v = Number(localStorage.getItem("cs-gex-heatw")); return v >= 240 && v <= 900 ? v : 330; } catch { return 330; }
+  });
+  const heatWRef = useRef(heatW);
+  heatWRef.current = heatW;
+  const onDividerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = heatWRef.current;
+    const move = (ev: PointerEvent) => {
+      const w = Math.min(900, Math.max(240, startW + (startX - ev.clientX)));
+      setHeatW(w);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      try { localStorage.setItem("cs-gex-heatw", String(heatWRef.current)); } catch { /* ignore */ }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up, { once: true });
+  };
   // Strikes picked in the ladder/heatmap, pinned on the chart as level lines.
   const [selStrikes, setSelStrikes] = useState<number[]>([]);
   const togglePick = (k: number) =>
@@ -457,7 +478,17 @@ export function GexChartView({ defaultTicker = "SPY", defaultLadder = false }: {
           <div ref={chartElRef} className="absolute inset-0" />
           <canvas ref={canvasRef} className="pointer-events-none absolute inset-0" style={{ width: "100%", height: "100%" }} />
         </div>
-        {showHeat && <HeatmapPanel ticker={ticker} payload={heat} selected={selStrikes} onPick={togglePick} />}
+        {showHeat && (
+          <div
+            onPointerDown={onDividerDown}
+            title="Drag to resize heatmap"
+            className="flex-shrink-0 cursor-col-resize"
+            style={{ width: 7, margin: "0 -3px", zIndex: 5, display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+            <div style={{ width: 2, height: 46, borderRadius: 1, background: "var(--color-border-secondary)" }} />
+          </div>
+        )}
+        {showHeat && <HeatmapPanel ticker={ticker} payload={heat} selected={selStrikes} onPick={togglePick} width={heatW} />}
         {ladder && <LadderPanel ticker={ticker} scope={scope} payload={heat} selected={selStrikes} onPick={togglePick} />}
       </div>
     </div>
@@ -545,9 +576,9 @@ function LadderPanel({ ticker, scope, payload, selected, onPick }: {
 // ─── Embedded strike × expiration heatmap ───────────────────────────────────
 // Compact version of the Heatmap tab's matrix, sharing the pane's payload.
 // Click any row to pin/unpin that strike on the chart.
-function HeatmapPanel({ ticker, payload, selected, onPick }: {
+function HeatmapPanel({ ticker, payload, selected, onPick, width = 330 }: {
   ticker: string; payload: HeatmapPayload | null;
-  selected: number[]; onPick: (k: number) => void;
+  selected: number[]; onPick: (k: number) => void; width?: number;
 }) {
   const grid = useMemo(() => {
     if (!payload) return null;
@@ -563,7 +594,7 @@ function HeatmapPanel({ ticker, payload, selected, onPick }: {
 
   if (!payload || !grid) {
     return (
-      <div className="flex w-[330px] flex-shrink-0 items-center justify-center rounded-md text-[11px] text-text-tertiary" style={{ border: "0.5px solid var(--color-border-tertiary)", background: "var(--color-background-primary)" }}>
+      <div className="flex flex-shrink-0 items-center justify-center rounded-md text-[11px] text-text-tertiary" style={{ width, border: "0.5px solid var(--color-border-tertiary)", background: "var(--color-background-primary)" }}>
         Heatmap loading…
       </div>
     );
@@ -576,7 +607,7 @@ function HeatmapPanel({ ticker, payload, selected, onPick }: {
   };
 
   return (
-    <div className="flex w-[330px] flex-shrink-0 flex-col overflow-hidden rounded-md" style={{ border: "0.5px solid var(--color-border-tertiary)", background: "var(--color-background-primary)" }}>
+    <div className="flex flex-shrink-0 flex-col overflow-hidden rounded-md" style={{ width, border: "0.5px solid var(--color-border-tertiary)", background: "var(--color-background-primary)" }}>
       <div className="flex items-center justify-between px-[9px] py-[6px]" style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
         <span className="text-[11px] font-semibold" style={{ color: GOLD2 }}>{ticker} · heatmap</span>
         <span className="text-[10px] text-text-tertiary" style={{ fontVariantNumeric: "tabular-nums" }}>{payload.spot.toFixed(2)}</span>
