@@ -14,17 +14,20 @@ type NavEntry = {
 };
 
 const MODULES: NavEntry[] = [
-  { href: "/watches",     label: "Daily watches",     icon: "🔥" },
+  // Temporarily removed 2026-10-20 (user request): Daily watches, Market
+  // Pulse, Flow alerts (incl. Lottos/Opening Sweeps tabs). Routes, pages,
+  // and worker jobs remain live — un-comment to restore.
+  // { href: "/watches",     label: "Daily watches",     icon: "🔥" },
+  // { href: "/market-tide", label: "Market Pulse",       icon: "🌀" },
+  // { href: "/flow",        label: "Flow alerts",       icon: "📈",   badge: { text: "18", variant: "red" } },
   // Sentiment tracker — archived from V1 (PRD §7 archive banner). Route, page,
   // and component remain in the repo; un-comment this entry to re-enable.
   // { href: "/sentiment",   label: "Sentiment tracker", icon: "👑" },
-  { href: "/market-tide", label: "Market Pulse",       icon: "🌀" },
   { href: "/gex",         label: "Options GEX",       icon: "⚡" },
   { href: "/flow-sentiment", label: "Options sentiment", icon: "🎯" },
   { href: "/trade-alerts", label: "Trade alerts",     icon: "🔔" },
   { href: "/earnings",    label: "Earnings Analyst",  icon: "📅" },
   { href: "/charts",      label: "Charts",            icon: "📊" },
-  { href: "/flow",        label: "Flow alerts",       icon: "📈",   badge: { text: "18", variant: "red" } },
   { href: "/darkpool",    label: "Dark pools",        icon: "🌊" },
 ];
 

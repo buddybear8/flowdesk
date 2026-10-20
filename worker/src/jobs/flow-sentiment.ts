@@ -126,13 +126,22 @@ async function fetchChain(
   }
 }
 
+// UW silently dropped the daily-count headers in Oct 2026; a missing header
+// must read as "unknown" (null), NOT 0 — Number(null) === 0 made the guard
+// below treat absent headers as zero headroom and abort every sweep at 1/52.
+function headerNum(res: Response, key: string): number | null {
+  const v = res.headers.get(key);
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 function readQuota(res: Response): UwQuota {
-  const limit = Number(res.headers.get("x-uw-token-req-limit"));
-  const used = Number(res.headers.get("x-uw-daily-req-count"));
-  const minuteRemaining = Number(res.headers.get("x-uw-req-per-minute-remaining"));
+  const limit = headerNum(res, "x-uw-token-req-limit");
+  const used = headerNum(res, "x-uw-daily-req-count");
   return {
-    dailyRemaining: Number.isFinite(limit) && Number.isFinite(used) ? limit - used : null,
-    minuteRemaining: Number.isFinite(minuteRemaining) ? minuteRemaining : null,
+    dailyRemaining: limit != null && used != null ? limit - used : null,
+    minuteRemaining: headerNum(res, "x-uw-req-per-minute-remaining"),
   };
 }
 

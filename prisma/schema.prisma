@@ -522,3 +522,22 @@ model VerificationToken {
 //   @@index([ticker])
 //   @@map("sentiment_snapshots")
 // }
+
+// Shadow scores for the ML direction model (px-cand2-dir5, frozen 2026-10-20;
+// study: ta_pipeline/data/reports/model_restudy_2026-10.md §8). Written daily
+// by worker jobs/model-shadow-score.ts after the 07:30 hit-list compute.
+// NEVER displayed anywhere — pre-registered confirmation window runs on idea
+// dates 2026-10-20..12-04, scored ~2026-12-11. Do not peek before then.
+model ModelScore {
+  id        BigInt   @id @default(autoincrement())
+  date      DateTime @db.Date
+  rank      Int
+  ticker    String   @db.VarChar(10)
+  model     String   @db.VarChar(40) // "cand2-dir5-tradable-nopvr"
+  pDir5     Decimal? @map("p_dir5") @db.Decimal(8, 6) // null = no candle history
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([date, rank, model])
+  @@index([date(sort: Desc)])
+  @@map("model_scores")
+}

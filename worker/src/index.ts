@@ -24,7 +24,9 @@ import { runAiSummarizerGex } from "./jobs/ai-summarizer-gex.js";
 import { runAiSummarizerWatches } from "./jobs/ai-summarizer-watches.js";
 import { computeHitList, priceWatchContracts } from "./jobs/hit-list-compute.js";
 import { syncEarningsCalendar, backfillEarningsHistory, runEarningsAiBriefs, runEarningsResultsBriefs } from "./jobs/earnings.js";
-import { postWatchesToDiscord } from "./jobs/watches-discord.js";
+// watches-discord paused 2026-10-20 (Daily Watches temporarily removed):
+// import { postWatchesToDiscord } from "./jobs/watches-discord.js";
+import { scoreShadowModel } from "./jobs/model-shadow-score.js";
 import { importPolygonDailyFlatFile } from "./jobs/polygon-daily-flatfile.js";
 import { pollPolygonIntraday } from "./jobs/polygon-hourly-intraday.js";
 import { pollCandles } from "./jobs/candles.js";
@@ -118,8 +120,17 @@ cron.schedule("0 0 9 * * 1-5", safe("earnings-results-am", runEarningsResultsBri
 cron.schedule("0 45 7 * * 1-5", safe("ai-summarizer-watches", runAiSummarizerWatches));
 // Daily Watches → Discord card (no-op until DISCORD_WATCHES_* env is set);
 // 8:10 retry covers a slow/watchdog-recovered compute. Dedupes per day.
-cron.schedule("0 50 7 * * 1-5", safe("watches-discord", postWatchesToDiscord));
-cron.schedule("0 10 8 * * 1-5", safe("watches-discord-retry", postWatchesToDiscord));
+// 2026-10-20: Daily Watches temporarily removed from the platform (module
+// hidden, Discord card paused). Hit-list compute keeps running — it feeds the
+// labeled ML corpus and the shadow scorer. Un-comment to resume posting.
+// cron.schedule("0 50 7 * * 1-5", safe("watches-discord", postWatchesToDiscord));
+// cron.schedule("0 10 8 * * 1-5", safe("watches-discord-retry", postWatchesToDiscord));
+
+// ML shadow scorer (jobs/model-shadow-score.ts) — scores the day's hit-list
+// ideas with the frozen cand2-dir5 model after the 07:30 compute. Silent:
+// nothing in the product reads model_scores until the December test.
+cron.schedule("0 35 7 * * 1-5", safe("model-shadow-score", () => scoreShadowModel()));
+cron.schedule("0 5 8 * * 1-5", safe("model-shadow-score-retry", () => scoreShadowModel()));
 
 // Daily-watches watchdog — recurring self-heal (replaces the boot-only
 // catch-up). Two incidents motivated this: 2026-07-08 (worker down over the
