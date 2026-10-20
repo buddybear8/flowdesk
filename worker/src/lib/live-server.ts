@@ -47,5 +47,9 @@ export function startLiveServer(): void {
     res.writeHead(404, headers);
     res.end(JSON.stringify({ error: "not found" }));
   });
-  server.listen(port, () => console.log(`[live-server] ${ts()} listening on :${port}`));
+  server.on("error", (e) => console.error(`[live-server] ${ts()} server error: ${String(e)}`));
+  // Bind "::" explicitly — Railway's edge reaches containers over IPv6; a
+  // 0.0.0.0-only listener answers nothing and the edge returns 502.
+  server.listen(port, "::", () =>
+    console.log(`[live-server] ${ts()} listening on [::]:${port} (env PORT=${process.env.PORT ?? "unset"})`));
 }
