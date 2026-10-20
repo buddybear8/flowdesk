@@ -27,6 +27,8 @@ import { syncEarningsCalendar, backfillEarningsHistory, runEarningsAiBriefs, run
 // watches-discord paused 2026-10-20 (Daily Watches temporarily removed):
 // import { postWatchesToDiscord } from "./jobs/watches-discord.js";
 import { scoreShadowModel } from "./jobs/model-shadow-score.js";
+import { startPolygonStream, appendIndexPseudoCandles } from "./jobs/polygon-stream.js";
+import { appendGexNodeBuckets, runGexNodeRetentionSweep, runMinuteCandleRetentionSweep } from "./jobs/gex-nodes.js";
 import { importPolygonDailyFlatFile } from "./jobs/polygon-daily-flatfile.js";
 import { pollPolygonIntraday } from "./jobs/polygon-hourly-intraday.js";
 import { pollCandles } from "./jobs/candles.js";
@@ -132,6 +134,13 @@ cron.schedule("0 45 7 * * 1-5", safe("ai-summarizer-watches", runAiSummarizerWat
 cron.schedule("0 35 7 * * 1-5", safe("model-shadow-score", () => scoreShadowModel()));
 cron.schedule("0 5 8 * * 1-5", safe("model-shadow-score-retry", () => scoreShadowModel()));
 
+// ─── GEX Chart tab (jobs/polygon-stream.ts + jobs/gex-nodes.ts) ──────────────
+// Live 1m candles over Polygon's delayed websocket (equities/ETFs), SPX/VIX
+// pseudo-candles from GEX snapshot spot, and the compact node time-series.
+startPolygonStream();
+cron.schedule("50 * 9-15 * * 1-5", safe("index-pseudo-candles", appendIndexPseudoCandles));
+cron.schedule("20 */2 9-15 * * 1-5", safe("gex-node-buckets", appendGexNodeBuckets));
+
 // Daily-watches watchdog — recurring self-heal (replaces the boot-only
 // catch-up). Two incidents motivated this: 2026-07-08 (worker down over the
 // 07:00-07:45 window, cron skipped) and 2026-07-09 (cron fired but the job
@@ -174,6 +183,7 @@ cron.schedule("0 0 2 * * *", safe("archive-sweep", () => runArchiveSweep()));
 cron.schedule("0 0 3 * * 1-5", safe("retention-sweeps", async () => {
   await Promise.all([runFlowRetentionSweep(), runDpRetentionSweep(), runGexHeatmapRetentionSweep(), runFlowSentimentRetentionSweep()]);
   await runWatchesRetentionSweep();
+  await Promise.all([runGexNodeRetentionSweep(), runMinuteCandleRetentionSweep()]);
 }));
 
 // ─── 🗄 Archived in v1.4 (do NOT re-add in V1) ────────────────────────────────

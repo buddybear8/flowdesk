@@ -541,3 +541,23 @@ model ModelScore {
   @@index([date(sort: Desc)])
   @@map("model_scores")
 }
+
+// GEX node time-series feeding the GEX Chart tab (nodes-on-price-chart view).
+// One row per (ticker, tradingDate); a worker cron appends one bucket per
+// capture to `buckets` (mirrors FlowSentimentDay.minutes). Bucket shape:
+//   { t: "13:35", s: spot,
+//     front: [{k: strike, g: netGexOI$}],   // nearest expiration only
+//     all:   [{k, g}],                      // summed across stored expirations
+//     cw: callWall, pw: putWall, fl: gammaFlip }
+// Top-12 strikes by |g| per scope. 30-day retention (gex-node retention sweep).
+model GexNodeDay {
+  id          BigInt   @id @default(autoincrement())
+  ticker      String   @db.VarChar(10)
+  tradingDate DateTime @map("trading_date") @db.Date
+  capturedAt  DateTime @map("captured_at")
+  buckets     Json
+
+  @@unique([ticker, tradingDate])
+  @@index([ticker, tradingDate(sort: Desc)])
+  @@map("gex_node_days")
+}
