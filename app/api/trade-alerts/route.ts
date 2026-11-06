@@ -9,10 +9,26 @@ function dteOf(expiry: Date | null): number | null {
   return Math.round((expiry.getTime() - Date.now()) / 86_400_000);
 }
 
+// Displayed realized % = the BEST single exit (highest of any scale-out or
+// the final close, from the events log), NOT the position-weighted average
+// (2026-11-06 request). The stored realizedPct remains the weighted average
+// and still drives the book-faithful equity curve below.
+function bestExitPct(events: unknown, fallback: number): number {
+  if (!Array.isArray(events)) return fallback;
+  const exits = events
+    .filter((e): e is { action: string; pct: number } =>
+      !!e && typeof e === "object"
+      && ((e as { action?: string }).action === "trim" || (e as { action?: string }).action === "close")
+      && Number.isFinite((e as { pct?: number }).pct))
+    .map((e) => e.pct);
+  return exits.length ? Math.max(...exits) : fallback;
+}
+
 function toRow(r: {
   id: bigint; assetType: string; ticker: string; side: string; strike: unknown; expiry: Date | null;
   expiryLabel: string | null; moderator: string; sizeLabel: string; entryPrice: unknown; entryAt: Date;
   status: string; remainingFrac: unknown; realizedPct: unknown; livePct: unknown; lastMark: unknown; bookDelta: unknown;
+  events: unknown;
 }): TradeAlertRow {
   const remainingFrac = Number(r.remainingFrac);
   return {
@@ -29,7 +45,7 @@ function toRow(r: {
     entryAt: r.entryAt.toISOString(),
     status: r.status as "OPEN" | "CLOSED",
     remainingFrac,
-    realizedPct: remainingFrac < 1 ? Number(r.realizedPct) : null,
+    realizedPct: remainingFrac < 1 ? bestExitPct(r.events, Number(r.realizedPct)) : null,
     livePct: r.livePct != null ? Number(r.livePct) : null,
     lastMark: r.lastMark != null ? Number(r.lastMark) : null,
     bookDelta: Number(r.bookDelta),
@@ -59,12 +75,16 @@ export async function GET(req: NextRequest) {
   const winRate = closed.length ? closedNet.filter((v) => v > 0).length / closed.length : 0;
 
   // Equity curve — cumulative size-weighted realized book Δ across closed
-  // positions in entry order (the "illustrative equity curve").
-  const byTime = [...closed].sort((a, b) => a.entryAt.localeCompare(b.entryAt));
+  // positions in entry order (the "illustrative equity curve"). Deliberately
+  // uses the STORED position-weighted realizedPct, not the best-exit display
+  // number — the curve models what the scaled book actually did.
+  const closedRaw = rows
+    .filter((r) => r.status === "CLOSED")
+    .sort((a, b) => a.entryAt.getTime() - b.entryAt.getTime());
   let cum = 0;
-  const equityCurve = byTime.map((r) => {
-    cum += (SIZE_WEIGHT[r.sizeLabel] ?? 0.01) * (r.realizedPct ?? 0);
-    return { t: r.entryAt, cum: Number(cum.toFixed(3)) };
+  const equityCurve = closedRaw.map((r) => {
+    cum += (SIZE_WEIGHT[r.sizeLabel] ?? 0.01) * Number(r.realizedPct);
+    return { t: r.entryAt.toISOString(), cum: Number(cum.toFixed(3)) };
   });
 
   const payload: TradeAlertsPayload = {
